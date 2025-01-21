@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant
 from .zones import get_zones
 
 
-def zones_to_geojson(zones: pd.DataFrame):
+def zones_to_geojson(zones: pd.DataFrame) -> str:
     """Convert the zones to GeoJSON."""
     return json.dumps(
         {
@@ -33,7 +33,7 @@ def zones_to_geojson(zones: pd.DataFrame):
 
 async def download_zones(
     source_uris: list[str], dest_uri: Path, prioritize: bool, hass: HomeAssistant
-):
+) -> None:
     """Download the zones in sources_uris to."""
     zones = await get_zones(source_uris, hass, prioritize)
     geo_json = zones_to_geojson(zones)
@@ -43,7 +43,7 @@ async def download_zones(
     await save_zones(geo_json, dest_uri, hass)
 
 
-async def save_zones(geojson: str, destination: Path, hass: HomeAssistant):
+async def save_zones(geojson: str, destination: Path, hass: HomeAssistant) -> None:
     """Save the GeoJSON string to a file. This will overwrite the entire file.
 
     Args:

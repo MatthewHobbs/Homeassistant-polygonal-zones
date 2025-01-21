@@ -1,0 +1,9 @@
+{
+    "services": {
+      "reload_zones": "mdi:reload",
+      "replace_all_zones": "mdi:map-marker-multiple",
+      "add_new_zone": "mdi:plus-circle",
+      "edit_zone": "mdi:pencil",
+      "delete_zone": "mdi:delete"
+    }
+  }

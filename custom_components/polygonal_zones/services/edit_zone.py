@@ -1,23 +1,21 @@
 """definition file for the edit zone action."""
 
+from collections.abc import Callable
 import json
 from pathlib import Path
 
 from homeassistant.core import HomeAssistant, ServiceCall
 
-from .errors import (
-    ZoneDoesNotExists,
-    ZoneFileNotEditable,
-)
 from ..utils.general import load_data
 from ..utils.local_zones import save_zones
+from .errors import ZoneDoesNotExists, ZoneFileNotEditable
 from .helpers import get_entities_from_device_id, get_zone_idx
 
 
-def edit_zone_action_builder(hass: HomeAssistant):
+def action_builder(hass: HomeAssistant) -> Callable[[ServiceCall], None]:
     """Builder for the edit zone action."""
 
-    async def add_new_zone(call: ServiceCall):
+    async def add_new_zone(call: ServiceCall) -> None:
         """Handle the service action call."""
         device_id = call.data.get("device_id")[0]
         entity = get_entities_from_device_id(device_id, hass)[0]

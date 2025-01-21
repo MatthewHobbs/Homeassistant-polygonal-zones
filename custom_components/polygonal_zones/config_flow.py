@@ -4,64 +4,70 @@ import logging
 from types import MappingProxyType
 from typing import Any
 
-from voluptuous import Required, Schema
+import voluptuous as vol
 
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow as EntryConfigFlow,
+    ConfigFlowResult,
     OptionsFlow,
 )
-from homeassistant.data_entry_flow import FlowResult, callback
+from homeassistant.const import CONF_ENTITIES
+from homeassistant.data_entry_flow import callback
 from homeassistant.helpers import selector
+from homeassistant.helpers.selector import TextSelectorType
 
 from .const import DOMAIN
-from .utils import validate_data
+from .utils.config_validation import are_urls_or_files
 
 _LOGGER = logging.getLogger(__name__)
 
 
 def build_create_flow(
     defaults: dict[str, Any] | MappingProxyType[str, Any] | None = None,
-) -> Schema:
+) -> vol.Schema:
     """Create the schema for the configuration flow."""
-    return Schema(
+    defaults = defaults or {}
+
+    # Basic section
+    return vol.Schema(
         {
-            Required(
+            vol.Required(
                 "zone_urls",
                 default=defaults.get("zone_urls", ["http://localhost:8000/zones.json"]),
             ): selector.TextSelector(
-                selector.TextSelectorConfig(
-                    multiple=True,
-                )
+                selector.TextSelectorConfig(multiple=True, type=TextSelectorType.URL),
             ),
-            Required(
-                "prioritize_zone_files",
-                default=defaults.get("prioritize_zone_files", False),
-            ): selector.BooleanSelector(selector.BooleanSelectorConfig()),
-            Required(
-                "download_zones",
-                default=defaults.get("download_zones", False),
-            ): selector.BooleanSelector(selector.BooleanSelectorConfig()),
-            Required(
-                "registered_entities",
-                default=defaults.get("registered_entities", []),
+            vol.Required(
+                CONF_ENTITIES,
+                default=defaults.get(CONF_ENTITIES, []),
             ): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain=["device_tracker"], multiple=True)
             ),
+            vol.Optional(
+                "prioritize_zone_files",
+                default=defaults.get("prioritize_zone_files", False),
+                description={"advanced": True},
+            ): selector.BooleanSelector(),
+            vol.Optional(
+                "download_zones",
+                default=defaults.get("download_zones", False),
+                description={"advanced": True},
+            ): selector.BooleanSelector(),
         }
     )
 
 
 def build_options_flow(
     defaults: dict[str, Any] | MappingProxyType[str, Any] | None = None,
-) -> Schema:
+) -> vol.Schema:
     """Create the schema for the options flow.
 
     This function differs from the config schema by not adding the options for the entities.
     """
-    return Schema(
+    return vol.Schema(
         {
-            Required(
+            vol.Required(
                 "zone_urls",
                 default=defaults.get("zone_urls", ["http://localhost:8000/zones.json"]),
             ): selector.TextSelector(
@@ -69,7 +75,7 @@ def build_options_flow(
                     multiple=True,
                 )
             ),
-            Required(
+            vol.Required(
                 "prioritize_zone_files",
                 default=defaults.get("prioritize_zone_files", False),
             ): selector.BooleanSelector(selector.BooleanSelectorConfig()),
@@ -82,14 +88,12 @@ class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
-    async def async_step_user(self, user_input=None) -> FlowResult:
+    async def async_step_user(self, user_input=None) -> ConfigFlowResult:
         """Perform the initial step of the configuration flow, handling user input."""
         errors = {}
         if user_input is not None:
-            # validate the input data. If it is valid, create the entry
-
-            errors = await validate_data(user_input, self.hass.config.config_dir)
-            if not errors:
+            errors = are_urls_or_files(user_input["zone_urls"])
+            if errors:
                 return self.async_create_entry(title="Polygonal Zones", data=user_input)
 
         user_input = user_input or {}
@@ -116,12 +120,10 @@ class OptionsFlowHandler(OptionsFlow):
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Perform the initial step of the options flow, handling user input."""
-        errors = {}
-
-        if user_input is not None and errors == {}:
-            errors = await validate_data(user_input, self.hass.config.config_dir)
+        if user_input is not None:
+            errors = are_urls_or_files(user_input["zone_urls"])
             if not errors:
                 self.hass.config_entries.async_update_entry(
                     self.config_entry, data=user_input

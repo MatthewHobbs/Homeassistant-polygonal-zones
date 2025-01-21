@@ -1,13 +1,20 @@
 """module root for the services for the polygonal zones integration."""
 
-from .add_new_zone import add_new_zone_action_builder
-from .delete_zone import delete_zone_action_builder
-from .edit_zone import edit_zone_action_builder
-from .replace_all_zones import replace_all_zones_action_builder
+import importlib
 
-__all__ = [
-    "add_new_zone_action_builder",
-    "delete_zone_action_builder",
-    "edit_zone_action_builder",
-    "replace_all_zones_action_builder",
-]
+from homeassistant.core import HomeAssistant
+
+from ..const import DOMAIN
+
+
+async def register_services(hass: HomeAssistant, names: list[str]) -> None:
+    """Register the services for the polygonal zones integration."""
+    for name in names:
+        # load the builder
+        module = await hass.async_add_executor_job(
+            importlib.import_module, f".{name}", __package__
+        )
+        func = getattr(module, "action_builder")
+
+        # register the action
+        hass.services.async_register(DOMAIN, name, func(hass))

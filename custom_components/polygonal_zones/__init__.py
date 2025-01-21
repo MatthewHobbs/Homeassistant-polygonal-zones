@@ -1,48 +1,31 @@
 """The polygonal_zones integration."""
 
-from __future__ import annotations
-
+import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
 
-from .const import DOMAIN, PLATFORM
-from .services import (
-    add_new_zone_action_builder,
-    delete_zone_action_builder,
-    edit_zone_action_builder,
-    replace_all_zones_action_builder,
-)
+from .const import DOMAIN
+from .services import register_services
 
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 PLATFORMS: list[Platform] = [Platform.DEVICE_TRACKER]
-
+_LOGGER = logging.getLogger(__name__)
 
 async def async_setup(hass: HomeAssistant, _config: dict) -> bool:
     """Set up the polygonal_zones component."""
     hass.data.setdefault(DOMAIN, {})
 
-    hass.services.async_register(
-        DOMAIN,
-        "add_zone",
-        add_new_zone_action_builder(hass),
-    )
-
-    hass.services.async_register(
-        DOMAIN,
-        "delete_zone",
-        delete_zone_action_builder(hass),
-    )
-
-    hass.services.async_register(
-        DOMAIN,
-        "edit_zone",
-        edit_zone_action_builder(hass),
-    )
-
-    hass.services.async_register(
-        DOMAIN,
-        "replace_all_zones",
-        replace_all_zones_action_builder(hass),
+    # register all the actions
+    await register_services(
+        hass,
+        [
+            "add_new_zone",
+            "delete_zone",
+            "edit_zone",
+            "replace_all_zones",
+        ],
     )
 
     return True
@@ -53,7 +36,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if entry.entry_id in hass.data[DOMAIN]:
         return True
 
-    await hass.config_entries.async_forward_entry_setups(entry, [PLATFORM])
+    await hass.config_entries.async_forward_entry_setups(
+        entry, [Platform.DEVICE_TRACKER]
+    )
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
     return True
 

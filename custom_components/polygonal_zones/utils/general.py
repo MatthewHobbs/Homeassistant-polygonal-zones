@@ -2,7 +2,7 @@
 
 import aiohttp
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Event, HomeAssistant, State
 
 
 async def load_data(uri: str, hass: HomeAssistant) -> str:
@@ -27,7 +27,10 @@ async def load_data(uri: str, hass: HomeAssistant) -> str:
         return data
 
 
-def event_should_trigger(event, entity_id) -> bool:
+REQUIRED_ATTRIBUTES = {"latitude", "longitude", "gps_accuracy"}
+
+
+def event_should_trigger(event: Event, entity_id: str) -> bool:
     """Decide if the event should trigger the sensor.
 
     Args:
@@ -38,19 +41,22 @@ def event_should_trigger(event, entity_id) -> bool:
         True if the event should trigger the sensor, False otherwise.
 
     """
-    # check if it is the entity we should listen to.
-    if event.data["entity_id"] != entity_id:
+    if event.data.get("entity_id") != entity_id:
         return False
 
-    if event.data["new_state"] is None or event.data["old_state"] is None:
+    old_state: State | None = event.data.get("old_state")
+    new_state: State | None = event.data.get("new_state")
+
+    if not (old_state and new_state):
         return False
+    if not all(attr in new_state.attributes for attr in REQUIRED_ATTRIBUTES):
+        return False
+    # the old state is none when it is the first update of the entity
+    if not all(attr in old_state.attributes for attr in REQUIRED_ATTRIBUTES):
+        return True
 
-    old_state = event.data["old_state"].attributes
-    new_state = event.data["new_state"].attributes
-
-    # check if one or more of the important data has been updated
-    return (
-        old_state["latitude"] != new_state["latitude"]
-        or old_state["longitude"] != new_state["longitude"]
-        or old_state["gps_accuracy"] != new_state["gps_accuracy"]
+    # Check if any location attributes changed
+    return any(
+        new_state.attributes[attr] != old_state.attributes[attr]
+        for attr in REQUIRED_ATTRIBUTES
     )

@@ -1,4 +1,4 @@
-"""Helper functions for the services for the polygonal zones integration"""
+"""Helper functions for the services for the polygonal zones integration."""
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
