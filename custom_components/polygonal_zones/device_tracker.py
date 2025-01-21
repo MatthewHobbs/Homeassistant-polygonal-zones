@@ -15,6 +15,7 @@ from homeassistant.helpers import entity_platform
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import (
     CONF_DOWNLOAD_ZONES,
@@ -94,7 +95,7 @@ async def async_setup_entry(
     hass.data[DOMAIN][entry.entry_id] = entities
 
 
-class PolygonalZoneEntity(TrackerEntity):
+class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
     """Representation of a polygonal zone entity."""
 
     _zones: pd.DataFrame = pd.DataFrame([])
@@ -132,6 +133,16 @@ class PolygonalZoneEntity(TrackerEntity):
         This function registers the listener and sets the initial known state.
         If the entities state is None, it will stay in the unknown state.
         """
+        last_state = await self.async_get_last_state()
+
+        if last_state is not None:
+            _LOGGER.warning(
+                "Restoring previous state for '%s': %s", self._entity_id, last_state
+            )
+            # Restore attributes like location, latitude, longitude, etc.
+            self._attr_location_name = last_state.state
+            self._attr_extra_state_attributes = last_state.attributes
+
         async def handle_hass_started(event):
             _LOGGER.info("Home Assistant started, initializing entity: %s", self._entity_id)
             self._zones = await get_zones(
