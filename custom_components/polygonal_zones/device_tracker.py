@@ -136,7 +136,7 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         last_state = await self.async_get_last_state()
 
         if last_state is not None:
-            _LOGGER.warning(
+            _LOGGER.info(
                 "Restoring previous state for '%s': %s", self._entity_id, last_state
             )
             # Restore attributes like location, latitude, longitude, etc.
