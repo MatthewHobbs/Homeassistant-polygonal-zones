@@ -122,6 +122,7 @@ class OptionsFlowHandler(OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Perform the initial step of the options flow, handling user input."""
+        errors = {}
         if user_input is not None:
             errors = are_urls_or_files(user_input["zone_urls"])
             if not errors:
