@@ -1,3 +1,11 @@
+> ⚠️ **Deprecation Notice**
+>
+> This project is no longer actively maintained.  
+> No further updates, bug fixes, or security patches will be provided.
+> Use at your own risk — issues and pull requests may not receive a response.
+>
+> Please consider using alternative or updated solutions for future development.
+
 # Polygonal Zones
 
 This homeassistant integration provides tha ability to create polygonal zones and use them in automations.
