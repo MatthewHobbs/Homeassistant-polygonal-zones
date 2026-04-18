@@ -1,24 +1,34 @@
 """The config validation helpers for the polygonal zones integration."""
 
-import os
 from urllib.parse import urlparse
 
+from homeassistant.core import HomeAssistant
 
-def are_urls_or_files(value: list[str]) -> bool:
-    """Validate that all values are either a URL or valid file path."""
-    return any(is_url_or_file(item) for item in value)
+from .general import safe_config_path
 
 
-def is_url_or_file(value: str) -> bool:
-    """Validate that value is either a URL or valid file path."""
-    try:
-        result = urlparse(value)
-        if all([result.scheme, result.netloc]):
-            return True
-    except ValueError:
-        pass
+async def validate_zone_urls(
+    value: list[str], hass: HomeAssistant
+) -> dict[str, str]:
+    """Validate every non-empty entry is either an http(s) URL or a file under config_dir.
 
-    if os.path.isfile(value):
-        return True
-
-    return False
+    Returns a Home Assistant-style errors dict keyed by the ``zone_urls`` field,
+    or an empty dict when validation passes.
+    """
+    for item in value:
+        if not item:
+            continue
+        parsed = urlparse(item)
+        if parsed.scheme in ("http", "https"):
+            if not parsed.hostname:
+                return {"zone_urls": "invalid_url"}
+            continue
+        if parsed.scheme:
+            return {"zone_urls": "invalid_url"}
+        try:
+            path = safe_config_path(hass.config.config_dir, item)
+        except ValueError:
+            return {"zone_urls": "invalid_path"}
+        if not await hass.async_add_executor_job(path.is_file):
+            return {"zone_urls": "invalid_path"}
+    return {}

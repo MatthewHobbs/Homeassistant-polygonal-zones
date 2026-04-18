@@ -5,53 +5,81 @@ reload_zones:
 
 replace_all_zones:
   target:
-    entity:
+    device:
       integration: "polygonal_zones"
-
   fields:
     zone:
       required: true
+      example: |
+        {
+          "type": "FeatureCollection",
+          "features": [
+            {
+              "type": "Feature",
+              "properties": {"name": "Home", "priority": 0},
+              "geometry": {
+                "type": "Polygon",
+                "coordinates": [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]]
+              }
+            }
+          ]
+        }
       selector:
         text:
           multiline: true
 
 add_new_zone:
   target:
-    entity:
+    device:
       integration: "polygonal_zones"
   fields:
     zone:
       required: true
+      example: |
+        {
+          "type": "Feature",
+          "properties": {"name": "Shopping mall", "priority": 0},
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]]
+          }
+        }
       selector:
         text:
           multiline: true
 
 edit_zone:
   target:
-    entity:
+    device:
       integration: "polygonal_zones"
-
   fields:
     zone_name:
-      example: "Shopping mall"
       required: true
+      example: "Shopping mall"
       selector:
         text:
-
     zone:
       required: true
+      example: |
+        {
+          "type": "Feature",
+          "properties": {"name": "Shopping mall", "priority": 0},
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]]
+          }
+        }
       selector:
         text:
           multiline: true
 
 delete_zone:
   target:
-    entity:
-      integration: polygonal_zones
-
+    device:
+      integration: "polygonal_zones"
   fields:
     zone_name:
-      example: "Shopping mall"
       required: true
+      example: "Shopping mall"
       selector:
         text: {}

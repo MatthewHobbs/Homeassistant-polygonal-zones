@@ -1,36 +1,40 @@
-"""definition file for the add new zone action."""
+"""definition file for the replace all zones action."""
 
 from collections.abc import Callable
 import json
-from pathlib import Path
 
 from homeassistant.core import HomeAssistant, ServiceCall
 
-from ..utils.local_zones import save_zones
+from ..utils.general import safe_config_path
+from ..utils.local_zones import get_file_lock, save_zones
 from .errors import ZoneFileNotEditable
-from .helpers import get_entities_from_device_id
+from .helpers import (
+    get_entities_from_device_id,
+    parse_zone_collection,
+    require_device_id,
+)
 
 
 def action_builder(
     hass: HomeAssistant,
 ) -> Callable[[ServiceCall], None]:
-    """Builder for the add new zone action."""
+    """Builder for the replace all zones action."""
 
     async def replace_all_zones(call: ServiceCall) -> None:
         """Handle the service action call."""
-        device_id = call.data.get("device_id")[0]
+        device_id = require_device_id(call.data)
         entity = get_entities_from_device_id(device_id, hass)[0]
 
         if not entity.editable_file:
             raise ZoneFileNotEditable("Zone files of entity are not editable")
 
-        # get the source path for the zones
         filename = entity.zone_urls[0]
-        filepath = Path(f"{hass.config.config_dir}/{filename}")
+        filepath = safe_config_path(hass.config.config_dir, filename)
 
-        # get the name and data of the new zone
-        new_zone = json.loads(call.data.get("zone"))
-        new_content = json.dumps(new_zone)
-        await save_zones(new_content, filepath, hass)
+        collection = parse_zone_collection(call.data.get("zone"))
+        new_content = json.dumps(collection)
+
+        async with get_file_lock(filepath):
+            await save_zones(new_content, filepath, hass)
 
     return replace_all_zones

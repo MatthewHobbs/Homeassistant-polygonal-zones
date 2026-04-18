@@ -18,7 +18,7 @@ from homeassistant.helpers import selector
 from homeassistant.helpers.selector import TextSelectorType
 
 from .const import DOMAIN
-from .utils.config_validation import are_urls_or_files
+from .utils.config_validation import validate_zone_urls
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -29,12 +29,11 @@ def build_create_flow(
     """Create the schema for the configuration flow."""
     defaults = defaults or {}
 
-    # Basic section
     return vol.Schema(
         {
             vol.Required(
                 "zone_urls",
-                default=defaults.get("zone_urls", ["http://localhost:8000/zones.json"]),
+                default=defaults.get("zone_urls", []),
             ): selector.TextSelector(
                 selector.TextSelectorConfig(multiple=True, type=TextSelectorType.URL),
             ),
@@ -65,14 +64,15 @@ def build_options_flow(
 
     This function differs from the config schema by not adding the options for the entities.
     """
+    defaults = defaults or {}
     return vol.Schema(
         {
             vol.Required(
                 "zone_urls",
-                default=defaults.get("zone_urls", ["http://localhost:8000/zones.json"]),
+                default=defaults.get("zone_urls", []),
             ): selector.TextSelector(
                 selector.TextSelectorConfig(
-                    multiple=True,
+                    multiple=True, type=TextSelectorType.URL
                 )
             ),
             vol.Required(
@@ -90,11 +90,13 @@ class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
 
     async def async_step_user(self, user_input=None) -> ConfigFlowResult:
         """Perform the initial step of the configuration flow, handling user input."""
-        errors = {}
+        errors: dict[str, str] = {}
         if user_input is not None:
-            errors = are_urls_or_files(user_input["zone_urls"])
-            if errors:
-                return self.async_create_entry(title="Polygonal Zones", data=user_input)
+            errors = await validate_zone_urls(user_input["zone_urls"], self.hass)
+            if not errors:
+                return self.async_create_entry(
+                    title="Polygonal Zones", data=user_input
+                )
 
         user_input = user_input or {}
 
@@ -122,9 +124,9 @@ class OptionsFlowHandler(OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Perform the initial step of the options flow, handling user input."""
-        errors = {}
+        errors: dict[str, str] = {}
         if user_input is not None:
-            errors = are_urls_or_files(user_input["zone_urls"])
+            errors = await validate_zone_urls(user_input["zone_urls"], self.hass)
             if not errors:
                 self.hass.config_entries.async_update_entry(
                     self.config_entry, data=user_input

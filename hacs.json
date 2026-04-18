@@ -1,10 +1,6 @@
-{ 
-  "name": "Polyognal Zones",
+{
+  "name": "Polygonal Zones",
   "render_readme": true,
   "content_in_root": false,
-  "domains": ["polygonal_zones"],
-  "development" : {
-    "branch": "dev",
-    "enabled": true
-  }
+  "domains": ["polygonal_zones"]
 }

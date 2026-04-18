@@ -62,13 +62,14 @@ def get_distance_to_centroid(polygon: Polygon, point: Point) -> float:
         point: A shapely Point object
 
     Returns:
-        The distance in kilometers.
+        The distance in meters as a plain ``float`` (JSON-serialisable).
 
     """
-    polygon_centroid = np.array(polygon.centroid.xy).reshape(1, -1)[0]
-    point = np.array([point.x, point.y])
+    centroid = polygon.centroid
+    point_coords = np.array([point.x, point.y])
+    centroid_coords = np.array([[centroid.x, centroid.y]])
 
-    return haversine_distances(point, polygon_centroid)
+    return float(haversine_distances(point_coords, centroid_coords)[0])
 
 
 async def get_zones(
@@ -94,13 +95,13 @@ async def get_zones(
         # parse the geojson file into a pandas DataFrame.
         # We only want the relevant information.
         for feature in data["features"]:
-            if "priority" in feature:
-                priority = data["priority"]
+            properties = feature["properties"]
+            if "priority" in properties:
+                priority = properties["priority"]
             else:
                 priority = idx if prioritize else 0
 
             geometry = shape(feature["geometry"])
-            properties = feature["properties"]
             zones.append(
                 {
                     "geometry": geometry,

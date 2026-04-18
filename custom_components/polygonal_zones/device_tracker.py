@@ -16,6 +16,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.helpers.start import async_at_started
 
 from .const import (
     CONF_DOWNLOAD_ZONES,
@@ -98,13 +99,10 @@ async def async_setup_entry(
 class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
     """Representation of a polygonal zone entity."""
 
-    _zones: pd.DataFrame = pd.DataFrame([])
-    _unsub: callable = None
-
-    _attr_location_name: str = None
-    _attr_latitude: float = None
-    _attr_longitude: float = None
-    _attr_gps_accuracy: float = None
+    _attr_location_name: str | None = None
+    _attr_latitude: float | None = None
+    _attr_longitude: float | None = None
+    _attr_gps_accuracy: float | None = None
 
     def __init__(
         self,
@@ -121,6 +119,10 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         self._zones_urls = zone_urls
         self._prioritize_zone_files = prioritized_zone_files
 
+        self._zones: pd.DataFrame = pd.DataFrame([])
+        self._unsub: Callable[[], None] | None = None
+        self._unsub_at_started: Callable[[], None] | None = None
+
         self.entity_id = own_id
         self._attr_unique_id = own_id
 
@@ -130,40 +132,41 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
     async def async_added_to_hass(self) -> None:
         """Run when the entity is added to homeassistant.
 
-        This function registers the listener and sets the initial known state.
-        If the entities state is None, it will stay in the unknown state.
+        Registers the state listener and schedules zone initialization via
+        ``async_at_started``, which fires immediately if Home Assistant is
+        already running and otherwise waits for the start event. This avoids
+        the race where ``hass.is_running`` flips between check and
+        subscription.
         """
         last_state = await self.async_get_last_state()
 
         if last_state is not None:
-            _LOGGER.info(
-                "Restoring previous state for '%s': %s", self._entity_id, last_state
+            _LOGGER.debug(
+                "Restoring previous state for '%s'", self._entity_id
             )
-            # Restore attributes like location, latitude, longitude, etc.
             self._attr_location_name = last_state.state
             self._attr_extra_state_attributes = last_state.attributes
 
-        async def handle_hass_started(event):
-            _LOGGER.info("Home Assistant started, initializing entity: %s", self._entity_id)
-            self._zones = await get_zones(
-                self._zones_urls, self.hass, self._prioritize_zone_files
+        async def _initialize_zones(_hass: HomeAssistant) -> None:
+            _LOGGER.debug(
+                "Initializing zones for entity: %s", self._entity_id
             )
+            try:
+                self._zones = await get_zones(
+                    self._zones_urls, self.hass, self._prioritize_zone_files
+                )
+            except Exception:
+                _LOGGER.warning(
+                    "Failed to load zones for entry=%s entity=%s; entity will have no zones until reload",
+                    self._config_entry_id,
+                    self._entity_id,
+                    exc_info=True,
+                )
+                return
             await self._update_state()
 
-        # If Home Assistant is already running, initialize immediately
-        if self.hass.is_running:
-            _LOGGER.info("Home Assistant is already running, initializing entity: %s", self._entity_id)
-            self._zones = await get_zones(
-                self._zones_urls, self.hass, self._prioritize_zone_files
-            )
-            await self._update_state()
-        else:
-            # Wait for Home Assistant to start
-            self.hass.bus.async_listen_once(
-                "homeassistant_started", handle_hass_started
-            )
+        self._unsub_at_started = async_at_started(self.hass, _initialize_zones)
 
-        # Register state listener
         self._unsub = self.hass.bus.async_listen(
             "state_changed", self._handle_state_change_builder()
         )
@@ -173,9 +176,18 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         self._zones_urls = config_entry.data.get(CONF_ZONES_URL)
         self._prioritize_zone_files = config_entry.data.get(CONF_PRIORITIZE_ZONE_FILES)
 
-        self._zones = await get_zones(
-            self._zones_urls, self.hass, self._prioritize_zone_files
-        )
+        try:
+            self._zones = await get_zones(
+                self._zones_urls, self.hass, self._prioritize_zone_files
+            )
+        except Exception:
+            _LOGGER.warning(
+                "Failed to reload zones for entry=%s entity=%s; keeping previous zones",
+                self._config_entry_id,
+                self._entity_id,
+                exc_info=True,
+            )
+            return
 
         await self._update_state()
 
@@ -183,6 +195,10 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         """Handle cleanup when the entity is removed."""
         if self._unsub:
             self._unsub()
+            self._unsub = None
+        if self._unsub_at_started:
+            self._unsub_at_started()
+            self._unsub_at_started = None
 
     def update_location(self, latitude, longitude, gps_accuracy) -> None:
         """Update the location of the entity.
@@ -197,7 +213,7 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         """
 
         zone = get_locations_zone(latitude, longitude, gps_accuracy, self._zones)
-        _LOGGER.info(
+        _LOGGER.debug(
             "State of entity '%s' changed. new zone: %s", self._attr_unique_id, zone
         )
         self._attr_location_name = zone["name"] if zone is not None else "away"
@@ -240,10 +256,21 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
 
     async def async_reload_zones(self, call) -> None | dict:
         """Reload the zones."""
-        self._zones = await get_zones(
-            self._zones_urls, self.hass, self._prioritize_zone_files
-        )
-        _LOGGER.info("Reloaded zones of entity: %s", self._attr_unique_id)
+        try:
+            self._zones = await get_zones(
+                self._zones_urls, self.hass, self._prioritize_zone_files
+            )
+        except Exception:
+            _LOGGER.warning(
+                "Failed to reload zones for entry=%s entity=%s",
+                self._config_entry_id,
+                self._attr_unique_id,
+                exc_info=True,
+            )
+            if call.return_response:
+                return None
+            return None
+        _LOGGER.debug("Reloaded zones of entity: %s", self._attr_unique_id)
 
         await self._update_state()
         if call.return_response:
@@ -285,7 +312,7 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         return {
             "identifiers": {("polygonal_zones", self._config_entry_id)},
             "name": "Polygonal Zones",
-            "manufacturer": "Michel Gerding",
+            "manufacturer": "Polygonal Zones Community",
         }
 
     @property
