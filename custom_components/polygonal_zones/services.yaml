@@ -4,10 +4,12 @@ reload_zones:
       integration: "polygonal_zones"
 
 replace_all_zones:
-  target:
-    device:
-      integration: "polygonal_zones"
   fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: "polygonal_zones"
     zone:
       required: true
       example: |
@@ -29,10 +31,12 @@ replace_all_zones:
           multiline: true
 
 add_new_zone:
-  target:
-    device:
-      integration: "polygonal_zones"
   fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: "polygonal_zones"
     zone:
       required: true
       example: |
@@ -49,10 +53,12 @@ add_new_zone:
           multiline: true
 
 edit_zone:
-  target:
-    device:
-      integration: "polygonal_zones"
   fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: "polygonal_zones"
     zone_name:
       required: true
       example: "Shopping mall"
@@ -74,10 +80,12 @@ edit_zone:
           multiline: true
 
 delete_zone:
-  target:
-    device:
-      integration: "polygonal_zones"
   fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: "polygonal_zones"
     zone_name:
       required: true
       example: "Shopping mall"

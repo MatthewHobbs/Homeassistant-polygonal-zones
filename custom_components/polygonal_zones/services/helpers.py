@@ -65,10 +65,12 @@ def parse_zone_collection(raw: str | None) -> dict:
 
 def require_device_id(call_data: dict) -> str:
     """Extract a device_id from a service call, raising on missing/empty input."""
-    device_ids = call_data.get("device_id")
-    if not device_ids:
+    device_id = call_data.get("device_id")
+    if not device_id:
         raise InvalidZoneData("Service call is missing 'device_id'")
-    return device_ids[0]
+    if isinstance(device_id, list):
+        return device_id[0]
+    return device_id
 
 
 def get_zone_idx(name: str, existing_zones: dict[str, any]) -> int | None:

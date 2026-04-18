@@ -1,6 +1,5 @@
 {
   "name": "Polygonal Zones",
   "render_readme": true,
-  "content_in_root": false,
-  "domains": ["polygonal_zones"]
+  "content_in_root": false
 }
