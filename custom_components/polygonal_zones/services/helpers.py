@@ -24,9 +24,7 @@ def _validate_feature(feature: object) -> None:
     if not isinstance(name, str) or not name.strip():
         raise InvalidZoneData("Feature must have a non-empty 'name' property")
     if len(name) > MAX_ZONE_NAME_LEN:
-        raise InvalidZoneData(
-            f"Zone name exceeds {MAX_ZONE_NAME_LEN} characters"
-        )
+        raise InvalidZoneData(f"Zone name exceeds {MAX_ZONE_NAME_LEN} characters")
     if "geometry" not in feature:
         raise InvalidZoneData("Feature must have a geometry")
 
@@ -36,9 +34,7 @@ def parse_zone_feature(raw: str | None) -> dict:
     if not raw:
         raise InvalidZoneData("Missing zone payload")
     if len(raw) > MAX_ZONE_JSON_BYTES:
-        raise InvalidZoneData(
-            f"Zone payload exceeds {MAX_ZONE_JSON_BYTES} bytes"
-        )
+        raise InvalidZoneData(f"Zone payload exceeds {MAX_ZONE_JSON_BYTES} bytes")
     try:
         feature = json.loads(raw)
     except ValueError as err:
@@ -52,23 +48,16 @@ def parse_zone_collection(raw: str | None) -> dict:
     if not raw:
         raise InvalidZoneData("Missing zone payload")
     if len(raw) > MAX_ZONE_JSON_BYTES:
-        raise InvalidZoneData(
-            f"Zone payload exceeds {MAX_ZONE_JSON_BYTES} bytes"
-        )
+        raise InvalidZoneData(f"Zone payload exceeds {MAX_ZONE_JSON_BYTES} bytes")
     try:
         collection = json.loads(raw)
     except ValueError as err:
         raise InvalidZoneData(f"Zone payload is not valid JSON: {err}") from err
-    if (
-        not isinstance(collection, dict)
-        or collection.get("type") != "FeatureCollection"
-    ):
+    if not isinstance(collection, dict) or collection.get("type") != "FeatureCollection":
         raise InvalidZoneData("Payload must be a GeoJSON FeatureCollection")
     features = collection.get("features")
     if not isinstance(features, list):
-        raise InvalidZoneData(
-            "FeatureCollection must have a 'features' array"
-        )
+        raise InvalidZoneData("FeatureCollection must have a 'features' array")
     for feature in features:
         _validate_feature(feature)
     return collection
@@ -110,16 +99,10 @@ def zone_already_defined(name: str, existing_zones: dict[str, any]) -> bool:
          boolean: true if the zone already exists. false if it doesn't
 
     """
-    for zone in existing_zones["features"]:
-        if zone["properties"]["name"] == name:
-            return True
-
-    return False
+    return any(zone["properties"]["name"] == name for zone in existing_zones["features"])
 
 
-def get_entities_from_device_id(
-    device_id: str, hass: HomeAssistant
-) -> list["PolygonalZoneEntity"]:
+def get_entities_from_device_id(device_id: str, hass: HomeAssistant) -> list["PolygonalZoneEntity"]:
     """Get the entities from the provided device_id."""
     device_entry = dr.async_get(hass)
     device = device_entry.async_get(device_id)
@@ -127,7 +110,5 @@ def get_entities_from_device_id(
         raise InvalidZoneData(f"Unknown device_id: {device_id}")
     entry_id = device.primary_config_entry
     if entry_id is None or entry_id not in hass.data.get(DOMAIN, {}):
-        raise InvalidZoneData(
-            f"Device '{device_id}' is not registered to polygonal_zones"
-        )
+        raise InvalidZoneData(f"Device '{device_id}' is not registered to polygonal_zones")
     return hass.data[DOMAIN][entry_id]

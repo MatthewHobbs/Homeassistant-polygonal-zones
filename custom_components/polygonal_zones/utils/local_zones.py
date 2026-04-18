@@ -1,14 +1,14 @@
 """Helper functions to handle local zones."""
 
 import asyncio
+import contextlib
 import json
 import os
 from pathlib import Path
 
+from homeassistant.core import HomeAssistant
 import pandas as pd
 from shapely import to_geojson
-
-from homeassistant.core import HomeAssistant
 
 from .zones import get_zones
 
@@ -75,10 +75,8 @@ async def save_zones(geojson: str, destination: Path, hass: HomeAssistant) -> No
                 f.write(geojson)
             os.replace(tmp, destination)
         except Exception:
-            try:
+            with contextlib.suppress(FileNotFoundError):
                 os.unlink(tmp)
-            except FileNotFoundError:
-                pass
             raise
 
     await hass.async_add_executor_job(_write)

@@ -2,12 +2,11 @@
 
 import ipaddress
 import logging
-import socket
 from pathlib import Path
+import socket
 from urllib.parse import urlparse
 
 import aiohttp
-
 from homeassistant.core import Event, HomeAssistant, State
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -27,9 +26,7 @@ def safe_config_path(config_dir: str, user_path: str) -> Path:
     try:
         candidate.relative_to(base)
     except ValueError as err:
-        raise ValueError(
-            f"Path '{user_path}' resolves outside config directory"
-        ) from err
+        raise ValueError(f"Path '{user_path}' resolves outside config directory") from err
     return candidate
 
 
@@ -49,9 +46,7 @@ async def _validate_public_host(hass: HomeAssistant, hostname: str) -> None:
             or ip.is_reserved
             or ip.is_unspecified
         ):
-            raise ValueError(
-                f"Refusing to fetch '{hostname}': resolves to non-public address {ip}"
-            )
+            raise ValueError(f"Refusing to fetch '{hostname}': resolves to non-public address {ip}")
 
 
 async def load_data(uri: str, hass: HomeAssistant) -> str:
@@ -64,26 +59,18 @@ async def load_data(uri: str, hass: HomeAssistant) -> str:
         await _validate_public_host(hass, parsed.hostname)
 
         session = async_get_clientsession(hass)
-        async with session.get(
-            uri, timeout=FETCH_TIMEOUT, allow_redirects=False
-        ) as response:
+        async with session.get(uri, timeout=FETCH_TIMEOUT, allow_redirects=False) as response:
             response.raise_for_status()
-            if (
-                response.content_length is not None
-                and response.content_length > MAX_RESPONSE_BYTES
-            ):
+            if response.content_length is not None and response.content_length > MAX_RESPONSE_BYTES:
                 raise ValueError(
-                    f"Response from '{uri}' too large: "
-                    f"{response.content_length} bytes"
+                    f"Response from '{uri}' too large: {response.content_length} bytes"
                 )
             chunks: list[bytes] = []
             total = 0
             async for chunk in response.content.iter_chunked(65536):
                 total += len(chunk)
                 if total > MAX_RESPONSE_BYTES:
-                    raise ValueError(
-                        f"Response from '{uri}' exceeded max size"
-                    )
+                    raise ValueError(f"Response from '{uri}' exceeded max size")
                 chunks.append(chunk)
             return b"".join(chunks).decode(response.charset or "utf-8")
 
@@ -129,6 +116,5 @@ def event_should_trigger(event: Event, entity_id: str) -> bool:
 
     # Check if any location attributes changed
     return any(
-        new_state.attributes[attr] != old_state.attributes[attr]
-        for attr in REQUIRED_ATTRIBUTES
+        new_state.attributes[attr] != old_state.attributes[attr] for attr in REQUIRED_ATTRIBUTES
     )
