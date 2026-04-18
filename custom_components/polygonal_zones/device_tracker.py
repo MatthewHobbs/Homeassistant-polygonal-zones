@@ -13,6 +13,7 @@ from homeassistant.helpers import entity_platform
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.start import async_at_started
 import pandas as pd
@@ -28,6 +29,9 @@ from .utils.local_zones import download_zones
 from .utils.zones import get_zones
 
 _LOGGER = logging.getLogger(__name__)
+
+_MAX_LOAD_ATTEMPTS = 5
+_BASE_RETRY_DELAY = 30  # seconds; doubles on each attempt, capped at 10 min
 
 
 async def async_setup_entry(
@@ -117,6 +121,7 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         self._zones: pd.DataFrame = pd.DataFrame([])
         self._unsub: Callable[[], None] | None = None
         self._unsub_at_started: Callable[[], None] | None = None
+        self._unsub_retry: Callable[[], None] | None = None
 
         self.entity_id = own_id
         self._attr_unique_id = own_id
@@ -140,19 +145,43 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
             self._attr_location_name = last_state.state
             self._attr_extra_state_attributes = last_state.attributes
 
-        async def _initialize_zones(_hass: HomeAssistant) -> None:
-            _LOGGER.debug("Initializing zones for entity: %s", self._entity_id)
+        async def _initialize_zones(_hass: HomeAssistant, attempt: int = 1) -> None:
+            _LOGGER.debug(
+                "Initializing zones for entity: %s (attempt %d)",
+                self._entity_id,
+                attempt,
+            )
             try:
                 self._zones = await get_zones(
                     self._zones_urls, self.hass, self._prioritize_zone_files
                 )
             except Exception:
-                _LOGGER.warning(
-                    "Failed to load zones for entry=%s entity=%s; entity will have no zones until reload",
-                    self._config_entry_id,
-                    self._entity_id,
-                    exc_info=True,
-                )
+                if attempt < _MAX_LOAD_ATTEMPTS:
+                    delay = min(600, _BASE_RETRY_DELAY * (2 ** (attempt - 1)))
+                    _LOGGER.warning(
+                        "Failed to load zones for entry=%s entity=%s (attempt %d/%d); retrying in %ds",
+                        self._config_entry_id,
+                        self._entity_id,
+                        attempt,
+                        _MAX_LOAD_ATTEMPTS,
+                        delay,
+                        exc_info=True,
+                    )
+
+                    def _retry(_now, _next_attempt=attempt + 1):
+                        self._unsub_retry = None
+                        self.hass.async_create_task(_initialize_zones(self.hass, _next_attempt))
+
+                    self._unsub_retry = async_call_later(self.hass, delay, _retry)
+                else:
+                    _LOGGER.error(
+                        "Giving up loading zones for entry=%s entity=%s after %d attempts; "
+                        "call the reload_zones service or reload the integration to retry",
+                        self._config_entry_id,
+                        self._entity_id,
+                        _MAX_LOAD_ATTEMPTS,
+                        exc_info=True,
+                    )
                 return
             await self._update_state()
 
@@ -188,6 +217,9 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         if self._unsub_at_started:
             self._unsub_at_started()
             self._unsub_at_started = None
+        if self._unsub_retry:
+            self._unsub_retry()
+            self._unsub_retry = None
 
     def update_location(self, latitude, longitude, gps_accuracy) -> None:
         """Update the location of the entity.

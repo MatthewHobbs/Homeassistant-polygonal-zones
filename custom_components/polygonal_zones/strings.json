@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Polygonal Zones Configuration",
-        "description": "Select GeoJSON file location",
+        "description": "Select GeoJSON file location. {consent_notice}",
         "data": {
           "zone_urls": "URLs of GeoJSON files",
           "prioritize_zone_files": "Prioritize order of zone files",
@@ -30,7 +30,7 @@
     "step": {
       "init": {
         "title": "Polygonal Zones Options",
-        "description": "Select GeoJSON file location",
+        "description": "Update the zone sources and priority settings for this integration.",
         "data": {
           "zone_urls": "URLs of GeoJSON files",
           "prioritize_zone_files": "Prioritize order of zone files"
@@ -42,7 +42,9 @@
       }
     },
     "error": {
-      "invalid_url": "One or more URLs or file paths are invalid"
+      "invalid_url": "One or more URLs or file paths are invalid",
+      "unreachable_url": "One or more URLs cannot be reached",
+      "invalid_path": "The file could not be found"
     }
   },
   "services": {
@@ -52,45 +54,61 @@
     },
     "replace_all_zones": {
       "name": "Replace All Zones",
-      "description": "Replace all existing zones with new ones defined in GeoJSON format",
+      "description": "Replace all existing zones with new ones defined in GeoJSON format.",
       "fields": {
+        "device_id": {
+          "name": "Device",
+          "description": "The Polygonal Zones device whose zone file should be replaced."
+        },
         "zone": {
           "name": "GeoJSON Data",
-          "description": "The GeoJSON representation of all zones to replace the existing ones"
+          "description": "The GeoJSON FeatureCollection representing all zones to replace the existing ones."
         }
       }
     },
     "add_new_zone": {
       "name": "Add Zone",
-      "description": "Add a new zone to the existing zones",
+      "description": "Add a new zone to the existing zones.",
       "fields": {
+        "device_id": {
+          "name": "Device",
+          "description": "The Polygonal Zones device to add the zone to."
+        },
         "zone": {
           "name": "Zone Data",
-          "description": "The GeoJSON representation of the new zone to add"
+          "description": "The GeoJSON Feature representing the new zone to add."
         }
       }
     },
     "edit_zone": {
       "name": "Edit Zone",
-      "description": "Modify an existing zone's boundaries",
+      "description": "Modify an existing zone's boundaries.",
       "fields": {
+        "device_id": {
+          "name": "Device",
+          "description": "The Polygonal Zones device whose zone should be edited."
+        },
         "zone_name": {
           "name": "Zone Name",
-          "description": "The name of the zone to edit"
+          "description": "The name of the zone to edit."
         },
         "zone": {
           "name": "Zone Data",
-          "description": "The GeoJSON representation of the modified zone"
+          "description": "The GeoJSON Feature representing the modified zone."
         }
       }
     },
     "delete_zone": {
       "name": "Delete Zone",
-      "description": "Remove a zone from the system",
+      "description": "Remove a zone from the system.",
       "fields": {
+        "device_id": {
+          "name": "Device",
+          "description": "The Polygonal Zones device whose zone should be deleted."
+        },
         "zone_name": {
           "name": "Zone Name",
-          "description": "The name of the zone to delete"
+          "description": "The name of the zone to delete."
         }
       }
     }

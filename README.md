@@ -135,6 +135,10 @@ recorder:
       - device_tracker.polygonal_zones_*
 ```
 
+If you use Nabu Casa cloud backup (or any other backup that includes the recorder database), the location history above will be included in the backup. Apply the `recorder` exclude block before the next backup if you do not want that data leaving the local network.
+
+The `polygonal_zones.reload_zones` service accepts an optional `return_response: true`. When set, it returns the loaded zone names and polygon coordinates to the caller. This is intended for debugging — be careful not to forward that response to external services (e.g. a notification body), as zone names and shapes are sensitive location data.
+
 Note that any person whose `device_tracker` entity you select will have their location continuously monitored. Please make sure they are aware before tracking them.
 
 ## Roadmap

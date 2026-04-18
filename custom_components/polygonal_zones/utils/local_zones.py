@@ -14,6 +14,8 @@ from .zones import get_zones
 
 _FILE_LOCKS: dict[str, asyncio.Lock] = {}
 
+LOCK_ACQUIRE_TIMEOUT = 15  # seconds
+
 
 def get_file_lock(path: Path) -> asyncio.Lock:
     """Return a shared ``asyncio.Lock`` keyed by the absolute path.
