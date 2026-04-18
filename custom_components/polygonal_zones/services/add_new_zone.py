@@ -2,14 +2,18 @@
 
 from collections.abc import Callable
 import json
-from pathlib import Path
 
 from homeassistant.core import HomeAssistant, ServiceCall
 
-from ..utils.general import load_data
-from ..utils.local_zones import save_zones
+from ..utils.general import load_data, safe_config_path
+from ..utils.local_zones import get_file_lock, save_zones
 from .errors import ZoneAlreadyExists, ZoneFileNotEditable
-from .helpers import get_entities_from_device_id, zone_already_defined
+from .helpers import (
+    get_entities_from_device_id,
+    parse_zone_feature,
+    require_device_id,
+    zone_already_defined,
+)
 
 
 def action_builder(hass: HomeAssistant) -> Callable[[ServiceCall], None]:
@@ -17,30 +21,33 @@ def action_builder(hass: HomeAssistant) -> Callable[[ServiceCall], None]:
 
     async def add_new_zone(call: ServiceCall) -> None:
         """Handle the service action call."""
-        device_id = call.data.get("device_id")[0]
+        device_id = require_device_id(call.data)
         entity = get_entities_from_device_id(device_id, hass)[0]
 
         if not entity.editable_file:
             raise ZoneFileNotEditable("Zone files of entity are not editable")
 
-        # get the source path for the zones
-        filename = entity.zone_urls[0]
-        filepath = Path(f"{hass.config.config_dir}/{filename}")
-        existing_zones = json.loads(await load_data(str(filename), hass))
-
-        # get the name and data of the new zone
-        new_zone = json.loads(call.data.get("zone"))
+        new_zone = parse_zone_feature(call.data.get("zone"))
         new_name = new_zone["properties"]["name"]
 
-        # check if the zone already exists
-        if zone_already_defined(new_name, existing_zones):
-            raise ZoneAlreadyExists(f'The zone with name "{new_name}" already exists')
+        filename = entity.zone_urls[0]
+        filepath = safe_config_path(hass.config.config_dir, filename)
 
-        # append the zone and save it
-        existing_zones["features"].append(new_zone)
-        new_content = json.dumps(
-            {"type": "FeatureCollection", "features": existing_zones["features"]}
-        )
-        await save_zones(new_content, filepath, hass)
+        async with get_file_lock(filepath):
+            existing_zones = json.loads(await load_data(filename, hass))
+
+            if zone_already_defined(new_name, existing_zones):
+                raise ZoneAlreadyExists(
+                    f'The zone with name "{new_name}" already exists'
+                )
+
+            existing_zones["features"].append(new_zone)
+            new_content = json.dumps(
+                {
+                    "type": "FeatureCollection",
+                    "features": existing_zones["features"],
+                }
+            )
+            await save_zones(new_content, filepath, hass)
 
     return add_new_zone

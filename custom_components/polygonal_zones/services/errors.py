@@ -13,3 +13,7 @@ class ZoneAlreadyExists(HomeAssistantError):
 
 class ZoneDoesNotExists(HomeAssistantError):
     """Error to signal that the zone already exists in that file."""
+
+
+class InvalidZoneData(HomeAssistantError):
+    """Error to signal that the supplied zone payload failed validation."""

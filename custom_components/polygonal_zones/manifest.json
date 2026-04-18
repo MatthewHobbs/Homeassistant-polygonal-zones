@@ -1,20 +1,18 @@
 {
   "domain": "polygonal_zones",
   "name": "Polygonal Zones",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "codeowners": [
-    "@MichelGerding"
+    "@MatthewHobbs"
   ],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://www.home-assistant.io/integrations/polygonal_zones",
-  "homekit": {},
+  "documentation": "https://github.com/MatthewHobbs/Homeassistant-polygonal-zones",
+  "integration_type": "hub",
+  "issue_tracker": "https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues",
   "iot_class": "calculated",
   "requirements": [
-    "shapely",
-    "pandas",
-    "aiohttp"
-  ],
-  "ssdp": [],
-  "zeroconf": []
+    "shapely==2.0.6",
+    "pandas==2.2.3"
+  ]
 }
