@@ -4,18 +4,19 @@ import logging
 from types import MappingProxyType
 from typing import Any
 
-import voluptuous as vol
-
 from homeassistant.config_entries import (
     ConfigEntry,
-    ConfigFlow as EntryConfigFlow,
     ConfigFlowResult,
     OptionsFlow,
+)
+from homeassistant.config_entries import (
+    ConfigFlow as EntryConfigFlow,
 )
 from homeassistant.const import CONF_ENTITIES
 from homeassistant.data_entry_flow import callback
 from homeassistant.helpers import selector
 from homeassistant.helpers.selector import TextSelectorType
+import voluptuous as vol
 
 from .const import DOMAIN
 from .utils.config_validation import validate_zone_urls
@@ -71,9 +72,7 @@ def build_options_flow(
                 "zone_urls",
                 default=defaults.get("zone_urls", []),
             ): selector.TextSelector(
-                selector.TextSelectorConfig(
-                    multiple=True, type=TextSelectorType.URL
-                )
+                selector.TextSelectorConfig(multiple=True, type=TextSelectorType.URL)
             ),
             vol.Required(
                 "prioritize_zone_files",
@@ -94,9 +93,7 @@ class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
         if user_input is not None:
             errors = await validate_zone_urls(user_input["zone_urls"], self.hass)
             if not errors:
-                return self.async_create_entry(
-                    title="Polygonal Zones", data=user_input
-                )
+                return self.async_create_entry(title="Polygonal Zones", data=user_input)
 
         user_input = user_input or {}
 
@@ -120,17 +117,13 @@ class OptionsFlowHandler(OptionsFlow):
         """Initialize the OptionsFlowHandler with configuration data."""
         self.config_entry = config_entry
 
-    async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Perform the initial step of the options flow, handling user input."""
         errors: dict[str, str] = {}
         if user_input is not None:
             errors = await validate_zone_urls(user_input["zone_urls"], self.hass)
             if not errors:
-                self.hass.config_entries.async_update_entry(
-                    self.config_entry, data=user_input
-                )
+                self.hass.config_entries.async_update_entry(self.config_entry, data=user_input)
                 return self.async_create_entry(title="", data=user_input)
 
         return self.async_show_form(

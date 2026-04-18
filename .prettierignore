@@ -1,0 +1,6 @@
+.git
+.github
+LICENSE
+*.py
+*.pyc
+__pycache__

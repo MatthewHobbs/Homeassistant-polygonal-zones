@@ -7,9 +7,7 @@ from homeassistant.core import HomeAssistant
 from .general import safe_config_path
 
 
-async def validate_zone_urls(
-    value: list[str], hass: HomeAssistant
-) -> dict[str, str]:
+async def validate_zone_urls(value: list[str], hass: HomeAssistant) -> dict[str, str]:
     """Validate every non-empty entry is either an http(s) URL or a file under config_dir.
 
     Returns a Home Assistant-style errors dict keyed by the ``zone_urls`` field,

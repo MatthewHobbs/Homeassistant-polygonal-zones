@@ -5,18 +5,17 @@ import logging
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
-
 from homeassistant.components.device_tracker import SourceType, TrackerEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ENTITIES
-from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
+from homeassistant.core import HomeAssistant, SupportsResponse
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.start import async_at_started
+import pandas as pd
 
 from .const import (
     CONF_DOWNLOAD_ZONES,
@@ -29,6 +28,7 @@ from .utils.local_zones import download_zones
 from .utils.zones import get_zones
 
 _LOGGER = logging.getLogger(__name__)
+
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
@@ -45,18 +45,15 @@ async def async_setup_entry(
 
     """
     zone_uris = entry.data.get(CONF_ZONES_URL)
-    zone_uris = [
-        zone_uri for zone_uri in zone_uris if zone_uri is not None and zone_uri != ""
-    ]
+    zone_uris = [zone_uri for zone_uri in zone_uris if zone_uri is not None and zone_uri != ""]
 
     editable_file = False
 
     if entry.data.get(CONF_DOWNLOAD_ZONES):
-        download_path = Path(
-            f"{hass.config.config_dir}/polygonal_zones/{entry.entry_id}.json"
-        )
+        download_path = Path(f"{hass.config.config_dir}/polygonal_zones/{entry.entry_id}.json")
 
-        if not download_path.exists():
+        exists = await hass.async_add_executor_job(download_path.exists)
+        if not exists:
             await download_zones(
                 zone_uris,
                 download_path,
@@ -70,9 +67,7 @@ async def async_setup_entry(
     entities = []
     for entity_id in entry.data.get(CONF_ENTITIES, []):
         entitiy_name = entity_id.split(".")[-1]
-        base_id = generate_entity_id(
-            "device_tracker.polygonal_zones_{}", entitiy_name, hass=hass
-        )
+        base_id = generate_entity_id("device_tracker.polygonal_zones_{}", entitiy_name, hass=hass)
 
         entity = PolygonalZoneEntity(
             entity_id,
@@ -141,16 +136,12 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         last_state = await self.async_get_last_state()
 
         if last_state is not None:
-            _LOGGER.debug(
-                "Restoring previous state for '%s'", self._entity_id
-            )
+            _LOGGER.debug("Restoring previous state for '%s'", self._entity_id)
             self._attr_location_name = last_state.state
             self._attr_extra_state_attributes = last_state.attributes
 
         async def _initialize_zones(_hass: HomeAssistant) -> None:
-            _LOGGER.debug(
-                "Initializing zones for entity: %s", self._entity_id
-            )
+            _LOGGER.debug("Initializing zones for entity: %s", self._entity_id)
             try:
                 self._zones = await get_zones(
                     self._zones_urls, self.hass, self._prioritize_zone_files
@@ -177,9 +168,7 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         self._prioritize_zone_files = config_entry.data.get(CONF_PRIORITIZE_ZONE_FILES)
 
         try:
-            self._zones = await get_zones(
-                self._zones_urls, self.hass, self._prioritize_zone_files
-            )
+            self._zones = await get_zones(self._zones_urls, self.hass, self._prioritize_zone_files)
         except Exception:
             _LOGGER.warning(
                 "Failed to reload zones for entry=%s entity=%s; keeping previous zones",
@@ -213,9 +202,7 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         """
 
         zone = get_locations_zone(latitude, longitude, gps_accuracy, self._zones)
-        _LOGGER.debug(
-            "State of entity '%s' changed. new zone: %s", self._attr_unique_id, zone
-        )
+        _LOGGER.debug("State of entity '%s' changed. new zone: %s", self._attr_unique_id, zone)
         self._attr_location_name = zone["name"] if zone is not None else "away"
         self._attr_extra_state_attributes = {
             "source_entity": self._entity_id,
@@ -243,8 +230,7 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
     async def _update_state(self) -> None:
         entity_state = self.hass.states.get(self._entity_id)
         if entity_state is not None and all(
-            key in entity_state.attributes
-            for key in ["latitude", "longitude", "gps_accuracy"]
+            key in entity_state.attributes for key in ["latitude", "longitude", "gps_accuracy"]
         ):
             self.update_location(
                 entity_state.attributes["latitude"],
@@ -257,9 +243,7 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
     async def async_reload_zones(self, call) -> None | dict:
         """Reload the zones."""
         try:
-            self._zones = await get_zones(
-                self._zones_urls, self.hass, self._prioritize_zone_files
-            )
+            self._zones = await get_zones(self._zones_urls, self.hass, self._prioritize_zone_files)
         except Exception:
             _LOGGER.warning(
                 "Failed to reload zones for entry=%s entity=%s",

@@ -30,9 +30,7 @@ def action_builder(hass: HomeAssistant) -> Callable[[ServiceCall], None]:
             existing_zones = json.loads(await load_data(filename, hass))
 
             if (idx := get_zone_idx(new_name, existing_zones)) is None:
-                raise ZoneDoesNotExists(
-                    f'The zone with name "{new_name}" does not exists'
-                )
+                raise ZoneDoesNotExists(f'The zone with name "{new_name}" does not exists')
 
             del existing_zones["features"][idx]
             new_content = json.dumps(

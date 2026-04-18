@@ -37,9 +37,7 @@ def action_builder(hass: HomeAssistant) -> Callable[[ServiceCall], None]:
             existing_zones = json.loads(await load_data(filename, hass))
 
             if zone_already_defined(new_name, existing_zones):
-                raise ZoneAlreadyExists(
-                    f'The zone with name "{new_name}" already exists'
-                )
+                raise ZoneAlreadyExists(f'The zone with name "{new_name}" already exists')
 
             existing_zones["features"].append(new_zone)
             new_content = json.dumps(

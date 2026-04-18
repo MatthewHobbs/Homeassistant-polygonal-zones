@@ -2,12 +2,11 @@
 
 import json
 
+from homeassistant.core import HomeAssistant
 import numpy as np
 import pandas as pd
 from shapely.geometry import Point, shape
 from shapely.geometry.polygon import Polygon
-
-from homeassistant.core import HomeAssistant
 
 from .general import load_data
 
@@ -72,9 +71,7 @@ def get_distance_to_centroid(polygon: Polygon, point: Point) -> float:
     return float(haversine_distances(point_coords, centroid_coords)[0])
 
 
-async def get_zones(
-    uris: list[str], hass: HomeAssistant, prioritize: bool
-) -> pd.DataFrame:
+async def get_zones(uris: list[str], hass: HomeAssistant, prioritize: bool) -> pd.DataFrame:
     """Get the zones from the geojson file.
 
     Args:
@@ -113,9 +110,7 @@ async def get_zones(
     return pd.DataFrame(zones)
 
 
-def get_locations_zone(
-    lat: float, lon: float, acc: float, zones: pd.DataFrame
-) -> dict | None:
+def get_locations_zone(lat: float, lon: float, acc: float, zones: pd.DataFrame) -> dict | None:
     """Determine the closest zone to the given GPS coordinates.
 
     Args:
@@ -151,9 +146,7 @@ def get_locations_zone(
         }
 
     # filter to the lowest priority zones
-    posible_zones = posible_zones[
-        posible_zones["priority"] == posible_zones["priority"].min()
-    ]
+    posible_zones = posible_zones[posible_zones["priority"] == posible_zones["priority"].min()]
 
     # get the distances to the potential zones using the uclidean distance to the cetnroid
     distances = posible_zones["geometry"].apply(
