@@ -10,8 +10,21 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: read
     steps:
       - uses: actions/checkout@v4
+
+      - name: Verify Validate workflow succeeded on this SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eo pipefail
+          STATUS=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/validate.yml/runs?head_sha=$GITHUB_SHA" \
+            --jq '.workflow_runs | map(select(.conclusion == "success")) | length')
+          if [ "$STATUS" -eq 0 ]; then
+            echo "::error::Validate workflow has not completed successfully on $GITHUB_SHA. Refusing to release."
+            exit 1
+          fi
 
       - name: Verify manifest version matches tag
         run: |

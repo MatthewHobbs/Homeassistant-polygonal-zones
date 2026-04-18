@@ -7,8 +7,8 @@ import socket
 from urllib.parse import urlparse
 
 import aiohttp
+from aiohttp.resolver import DefaultResolver
 from homeassistant.core import Event, HomeAssistant, State
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,23 +30,39 @@ def safe_config_path(config_dir: str, user_path: str) -> Path:
     return candidate
 
 
-async def _validate_public_host(hass: HomeAssistant, hostname: str) -> None:
-    """Reject hostnames that resolve to private, loopback, or metadata IPs."""
-    try:
-        infos = await hass.loop.getaddrinfo(hostname, None)
-    except socket.gaierror as err:
-        raise ValueError(f"Cannot resolve host '{hostname}'") from err
-    for info in infos:
-        ip = ipaddress.ip_address(info[4][0])
-        if (
-            ip.is_private
-            or ip.is_loopback
-            or ip.is_link_local
-            or ip.is_multicast
-            or ip.is_reserved
-            or ip.is_unspecified
-        ):
-            raise ValueError(f"Refusing to fetch '{hostname}': resolves to non-public address {ip}")
+def _is_public_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Return True if the address is on the public internet (not private/loopback/etc.)."""
+    return not (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+    )
+
+
+class _PublicOnlyResolver(DefaultResolver):
+    """Resolver that rejects addresses on private/loopback/metadata ranges.
+
+    Applying the check inside the aiohttp resolver closes the DNS-rebinding
+    TOCTOU window: aiohttp's own connect path goes through ``resolve`` and
+    therefore every IP the socket actually connects to has passed the check.
+    """
+
+    async def resolve(self, host: str, port: int = 0, family: int = socket.AF_INET) -> list[dict]:
+        infos = await super().resolve(host, port, family)
+        filtered: list[dict] = []
+        for info in infos:
+            try:
+                ip = ipaddress.ip_address(info["host"])
+            except ValueError:
+                continue
+            if _is_public_ip(ip):
+                filtered.append(info)
+        if not filtered:
+            raise OSError(f"Refusing to connect to '{host}': no public addresses available")
+        return filtered
 
 
 async def load_data(uri: str, hass: HomeAssistant) -> str:
@@ -56,10 +72,14 @@ async def load_data(uri: str, hass: HomeAssistant) -> str:
     if parsed.scheme in ("http", "https"):
         if not parsed.hostname:
             raise ValueError(f"URL '{uri}' has no hostname")
-        await _validate_public_host(hass, parsed.hostname)
 
-        session = async_get_clientsession(hass)
-        async with session.get(uri, timeout=FETCH_TIMEOUT, allow_redirects=False) as response:
+        connector = aiohttp.TCPConnector(resolver=_PublicOnlyResolver())
+        async with (
+            aiohttp.ClientSession(connector=connector) as session,
+            session.get(uri, timeout=FETCH_TIMEOUT, allow_redirects=False) as response,
+        ):
+            if 300 <= response.status < 400:
+                raise ValueError(f"Refusing redirect from '{uri}' (status {response.status})")
             response.raise_for_status()
             if response.content_length is not None and response.content_length > MAX_RESPONSE_BYTES:
                 raise ValueError(

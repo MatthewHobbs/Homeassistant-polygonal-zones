@@ -101,6 +101,13 @@ class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=build_create_flow(user_input),
             errors=errors,
+            description_placeholders={
+                "consent_notice": (
+                    "This integration continuously monitors the GPS position of the "
+                    "device_tracker entities you select. Please ensure everyone whose "
+                    "device is being tracked is aware of this."
+                )
+            },
         )
 
     @staticmethod
@@ -123,7 +130,8 @@ class OptionsFlowHandler(OptionsFlow):
         if user_input is not None:
             errors = await validate_zone_urls(user_input["zone_urls"], self.hass)
             if not errors:
-                self.hass.config_entries.async_update_entry(self.config_entry, data=user_input)
+                merged = {**self.config_entry.data, **user_input}
+                self.hass.config_entries.async_update_entry(self.config_entry, data=merged)
                 return self.async_create_entry(title="", data=user_input)
 
         return self.async_show_form(

@@ -1,13 +1,14 @@
 """definition file for the add new zone action."""
 
+import asyncio
 from collections.abc import Callable
 import json
 
 from homeassistant.core import HomeAssistant, ServiceCall
 
 from ..utils.general import load_data, safe_config_path
-from ..utils.local_zones import get_file_lock, save_zones
-from .errors import ZoneAlreadyExists, ZoneFileNotEditable
+from ..utils.local_zones import LOCK_ACQUIRE_TIMEOUT, get_file_lock, save_zones
+from .errors import InvalidZoneData, ZoneAlreadyExists, ZoneFileNotEditable
 from .helpers import (
     get_entities_from_device_id,
     parse_zone_feature,
@@ -33,19 +34,24 @@ def action_builder(hass: HomeAssistant) -> Callable[[ServiceCall], None]:
         filename = entity.zone_urls[0]
         filepath = safe_config_path(hass.config.config_dir, filename)
 
-        async with get_file_lock(filepath):
-            existing_zones = json.loads(await load_data(filename, hass))
+        try:
+            async with asyncio.timeout(LOCK_ACQUIRE_TIMEOUT), get_file_lock(filepath):
+                existing_zones = json.loads(await load_data(filename, hass))
 
-            if zone_already_defined(new_name, existing_zones):
-                raise ZoneAlreadyExists(f'The zone with name "{new_name}" already exists')
+                if zone_already_defined(new_name, existing_zones):
+                    raise ZoneAlreadyExists(f'The zone with name "{new_name}" already exists')
 
-            existing_zones["features"].append(new_zone)
-            new_content = json.dumps(
-                {
-                    "type": "FeatureCollection",
-                    "features": existing_zones["features"],
-                }
-            )
-            await save_zones(new_content, filepath, hass)
+                existing_zones["features"].append(new_zone)
+                new_content = json.dumps(
+                    {
+                        "type": "FeatureCollection",
+                        "features": existing_zones["features"],
+                    }
+                )
+                await save_zones(new_content, filepath, hass)
+        except TimeoutError as err:
+            raise InvalidZoneData(
+                f"Timed out waiting for lock on {filepath}; another operation may be in progress"
+            ) from err
 
     return add_new_zone

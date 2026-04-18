@@ -37,7 +37,7 @@ def parse_zone_feature(raw: str | None) -> dict:
         raise InvalidZoneData(f"Zone payload exceeds {MAX_ZONE_JSON_BYTES} bytes")
     try:
         feature = json.loads(raw)
-    except ValueError as err:
+    except (ValueError, RecursionError) as err:
         raise InvalidZoneData(f"Zone payload is not valid JSON: {err}") from err
     _validate_feature(feature)
     return feature
@@ -51,7 +51,7 @@ def parse_zone_collection(raw: str | None) -> dict:
         raise InvalidZoneData(f"Zone payload exceeds {MAX_ZONE_JSON_BYTES} bytes")
     try:
         collection = json.loads(raw)
-    except ValueError as err:
+    except (ValueError, RecursionError) as err:
         raise InvalidZoneData(f"Zone payload is not valid JSON: {err}") from err
     if not isinstance(collection, dict) or collection.get("type") != "FeatureCollection":
         raise InvalidZoneData("Payload must be a GeoJSON FeatureCollection")
