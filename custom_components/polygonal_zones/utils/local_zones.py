@@ -5,10 +5,12 @@ import contextlib
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 from homeassistant.core import HomeAssistant
 from shapely import to_geojson
 
+from ..const import SCHEMA_VERSION
 from .zones import Zone, get_zones
 
 _FILE_LOCKS: dict[str, asyncio.Lock] = {}
@@ -38,24 +40,44 @@ def release_file_lock(path: Path) -> None:
     _FILE_LOCKS.pop(str(path), None)
 
 
+def dump_feature_collection(
+    features: list[dict[str, Any]], existing: dict[str, Any] | None = None
+) -> str:
+    """Serialize a FeatureCollection JSON string, stamped with the current schema_version.
+
+    When ``existing`` is supplied (read-modify-write flow), non-standard top-level
+    keys and any unrelated ``polygonal_zones.*`` members are preserved; only
+    ``schema_version`` is (re-)written to :data:`SCHEMA_VERSION`.
+    """
+    collection: dict[str, Any] = {"type": "FeatureCollection"}
+    if existing:
+        for key, value in existing.items():
+            if key in ("type", "features", "polygonal_zones"):
+                continue
+            collection[key] = value
+        existing_pz = existing.get("polygonal_zones")
+        preserved_pz = existing_pz if isinstance(existing_pz, dict) else {}
+        collection["polygonal_zones"] = {**preserved_pz, "schema_version": SCHEMA_VERSION}
+    else:
+        collection["polygonal_zones"] = {"schema_version": SCHEMA_VERSION}
+    collection["features"] = features
+    return json.dumps(collection)
+
+
 def zones_to_geojson(zones: list[Zone]) -> str:
     """Convert a list of ``Zone`` objects back into a GeoJSON string."""
-    return json.dumps(
+    features = [
         {
-            "type": "FeatureCollection",
-            "features": [
-                {
-                    "type": "Feature",
-                    "properties": {
-                        "name": zone.name,
-                        "priority": zone.priority,
-                    },
-                    "geometry": json.loads(to_geojson(zone.geometry)),
-                }
-                for zone in zones
-            ],
+            "type": "Feature",
+            "properties": {
+                "name": zone.name,
+                "priority": zone.priority,
+            },
+            "geometry": json.loads(to_geojson(zone.geometry)),
         }
-    )
+        for zone in zones
+    ]
+    return dump_feature_collection(features)
 
 
 async def download_zones(

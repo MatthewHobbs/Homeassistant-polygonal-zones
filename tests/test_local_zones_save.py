@@ -9,8 +9,10 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from shapely.geometry import Polygon
 
+from custom_components.polygonal_zones.const import SCHEMA_VERSION
 from custom_components.polygonal_zones.utils.local_zones import (
     download_zones,
+    dump_feature_collection,
     get_file_lock,
     release_file_lock,
     save_zones,
@@ -64,6 +66,36 @@ def test_zones_to_geojson_roundtrip() -> None:
     parsed = json.loads(raw)
     assert parsed["type"] == "FeatureCollection"
     assert parsed["features"][0]["properties"]["name"] == "Home"
+
+
+def test_zones_to_geojson_stamps_schema_version() -> None:
+    polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
+    raw = zones_to_geojson([Zone(name="Home", geometry=polygon)])
+    parsed = json.loads(raw)
+    assert parsed["polygonal_zones"] == {"schema_version": SCHEMA_VERSION}
+
+
+def test_dump_feature_collection_stamps_schema_version_without_existing() -> None:
+    raw = dump_feature_collection([])
+    parsed = json.loads(raw)
+    assert parsed["type"] == "FeatureCollection"
+    assert parsed["polygonal_zones"]["schema_version"] == SCHEMA_VERSION
+    assert parsed["features"] == []
+
+
+def test_dump_feature_collection_preserves_foreign_members() -> None:
+    """Non-standard top-level keys and unrelated polygonal_zones.* keys pass through."""
+    existing = {
+        "type": "FeatureCollection",
+        "polygonal_zones": {"schema_version": 1, "editor": "addon"},
+        "bbox": [-1, -1, 1, 1],
+        "features": [],
+    }
+    raw = dump_feature_collection([], existing=existing)
+    parsed = json.loads(raw)
+    assert parsed["bbox"] == [-1, -1, 1, 1]
+    assert parsed["polygonal_zones"]["editor"] == "addon"
+    assert parsed["polygonal_zones"]["schema_version"] == SCHEMA_VERSION
 
 
 async def test_download_zones_writes_to_destination(tmp_path) -> None:

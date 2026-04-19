@@ -8,7 +8,10 @@ from unittest.mock import AsyncMock, patch
 import numpy as np
 from shapely.geometry import Point, Polygon
 
+import pytest
+
 from custom_components.polygonal_zones.utils.zones import (
+    UnsupportedSchemaVersion,
     get_distance_to_centroid,
     get_distance_to_exterior_points,
     get_zones,
@@ -110,3 +113,46 @@ def test_get_zones_empty_uri_list_returns_empty_list() -> None:
 
     zones = asyncio.run(_go())
     assert zones == []
+
+
+async def test_get_zones_accepts_missing_schema_version() -> None:
+    """A file without a polygonal_zones member is treated as implicit schema_version=1."""
+    payload = json.dumps({"type": "FeatureCollection", "features": [_polygon("Home")]})
+    with patch(
+        "custom_components.polygonal_zones.utils.zones.load_data",
+        new=AsyncMock(return_value=payload),
+    ):
+        zones = await get_zones(["http://x"], SimpleNamespace(), False)
+    assert zones[0].name == "Home"
+
+
+async def test_get_zones_accepts_known_schema_version() -> None:
+    payload = json.dumps(
+        {
+            "type": "FeatureCollection",
+            "polygonal_zones": {"schema_version": 1},
+            "features": [_polygon("Home")],
+        }
+    )
+    with patch(
+        "custom_components.polygonal_zones.utils.zones.load_data",
+        new=AsyncMock(return_value=payload),
+    ):
+        zones = await get_zones(["http://x"], SimpleNamespace(), False)
+    assert zones[0].name == "Home"
+
+
+async def test_get_zones_rejects_future_schema_version() -> None:
+    payload = json.dumps(
+        {
+            "type": "FeatureCollection",
+            "polygonal_zones": {"schema_version": 99},
+            "features": [_polygon("Home")],
+        }
+    )
+    with patch(
+        "custom_components.polygonal_zones.utils.zones.load_data",
+        new=AsyncMock(return_value=payload),
+    ):
+        with pytest.raises(UnsupportedSchemaVersion, match="schema_version=99"):
+            await get_zones(["http://x"], SimpleNamespace(), False)
