@@ -11,10 +11,12 @@ from shapely.geometry import Point, Polygon
 
 from custom_components.polygonal_zones.utils.zones import (
     UnsupportedSchemaVersion,
+    ZoneFileCorrupt,
     get_distance_to_centroid,
     get_distance_to_exterior_points,
     get_zones,
     haversine_distances,
+    load_zones,
 )
 
 
@@ -202,3 +204,165 @@ async def test_get_zones_rejects_future_schema_version() -> None:
         pytest.raises(UnsupportedSchemaVersion, match="schema_version=99"),
     ):
         await get_zones(["http://x"], SimpleNamespace(), False)
+
+
+# ---------- Structural validation: _parse_feature via _load_zones_from_uri ----------
+
+
+async def test_get_zones_rejects_top_level_not_object() -> None:
+    """A JSON array at the top level is not a FeatureCollection."""
+    with (
+        patch(
+            "custom_components.polygonal_zones.utils.zones.load_data",
+            new=AsyncMock(return_value="[]"),
+        ),
+        pytest.raises(ZoneFileCorrupt, match="top-level payload is not an object"),
+    ):
+        await get_zones(["http://x"], SimpleNamespace(), False)
+
+
+async def test_get_zones_rejects_non_json_body() -> None:
+    with (
+        patch(
+            "custom_components.polygonal_zones.utils.zones.load_data",
+            new=AsyncMock(return_value="not json {"),
+        ),
+        pytest.raises(ZoneFileCorrupt, match="not valid JSON"),
+    ):
+        await get_zones(["http://x"], SimpleNamespace(), False)
+
+
+async def test_get_zones_rejects_missing_features_list() -> None:
+    payload = json.dumps({"type": "FeatureCollection"})
+    with (
+        patch(
+            "custom_components.polygonal_zones.utils.zones.load_data",
+            new=AsyncMock(return_value=payload),
+        ),
+        pytest.raises(ZoneFileCorrupt, match="'features' is missing"),
+    ):
+        await get_zones(["http://x"], SimpleNamespace(), False)
+
+
+async def test_get_zones_rejects_feature_missing_geometry() -> None:
+    feature = {"type": "Feature", "properties": {"name": "Home"}}
+    payload = json.dumps({"type": "FeatureCollection", "features": [feature]})
+    with (
+        patch(
+            "custom_components.polygonal_zones.utils.zones.load_data",
+            new=AsyncMock(return_value=payload),
+        ),
+        pytest.raises(ZoneFileCorrupt, match="no 'geometry' object"),
+    ):
+        await get_zones(["http://x"], SimpleNamespace(), False)
+
+
+async def test_get_zones_rejects_feature_blank_name() -> None:
+    feature = {
+        "type": "Feature",
+        "properties": {"name": "   "},
+        "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]]},
+    }
+    payload = json.dumps({"type": "FeatureCollection", "features": [feature]})
+    with (
+        patch(
+            "custom_components.polygonal_zones.utils.zones.load_data",
+            new=AsyncMock(return_value=payload),
+        ),
+        pytest.raises(ZoneFileCorrupt, match=r"properties\.name"),
+    ):
+        await get_zones(["http://x"], SimpleNamespace(), False)
+
+
+async def test_get_zones_rejects_feature_unparseable_priority() -> None:
+    feature = {
+        "type": "Feature",
+        "properties": {"name": "Home", "priority": "not-an-int"},
+        "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]]},
+    }
+    payload = json.dumps({"type": "FeatureCollection", "features": [feature]})
+    with (
+        patch(
+            "custom_components.polygonal_zones.utils.zones.load_data",
+            new=AsyncMock(return_value=payload),
+        ),
+        pytest.raises(ZoneFileCorrupt, match="non-integer priority"),
+    ):
+        await get_zones(["http://x"], SimpleNamespace(), False)
+
+
+# ---------- Per-URI partial success via load_zones ----------
+
+
+async def test_load_zones_partial_success_keeps_successful_uris() -> None:
+    """One URI fails, another succeeds — the successful zones survive; failure is recorded."""
+    good = json.dumps({"type": "FeatureCollection", "features": [_polygon("Home")]})
+    bad_exc = RuntimeError("DNS boom")
+
+    async def fake_load(uri: str, _hass) -> str:
+        if "good" in uri:
+            return good
+        raise bad_exc
+
+    with patch(
+        "custom_components.polygonal_zones.utils.zones.load_data",
+        side_effect=fake_load,
+    ):
+        result = await load_zones(["http://good", "http://bad"], SimpleNamespace(), False)
+
+    assert [z.name for z in result.zones] == ["Home"]
+    assert len(result.failures) == 1
+    failed_uri, failed_msg = result.failures[0]
+    assert failed_uri == "http://bad"
+    assert "DNS boom" in failed_msg
+
+
+async def test_load_zones_all_fail_returns_empty_with_failures() -> None:
+    """All URIs fail — load_zones returns empty zones + full failure list (never raises)."""
+
+    async def fake_load(uri: str, _hass) -> str:
+        raise RuntimeError(f"nope {uri}")
+
+    with patch(
+        "custom_components.polygonal_zones.utils.zones.load_data",
+        side_effect=fake_load,
+    ):
+        result = await load_zones(["http://a", "http://b"], SimpleNamespace(), False)
+
+    assert result.zones == []
+    assert {uri for uri, _ in result.failures} == {"http://a", "http://b"}
+
+
+async def test_get_zones_raises_when_all_uris_fail() -> None:
+    """get_zones (the wrapper) raises ZoneFileCorrupt so retry/backoff still kicks in."""
+
+    async def fake_load(uri: str, _hass) -> str:
+        raise RuntimeError(f"down: {uri}")
+
+    with (
+        patch(
+            "custom_components.polygonal_zones.utils.zones.load_data",
+            side_effect=fake_load,
+        ),
+        pytest.raises(ZoneFileCorrupt, match="All 2 zone URIs failed"),
+    ):
+        await get_zones(["http://a", "http://b"], SimpleNamespace(), False)
+
+
+async def test_load_zones_unsupported_schema_propagates_as_hard_error() -> None:
+    """Schema-version mismatch is NOT swallowed into the failures list."""
+    payload = json.dumps(
+        {
+            "type": "FeatureCollection",
+            "polygonal_zones": {"schema_version": 99},
+            "features": [],
+        }
+    )
+    with (
+        patch(
+            "custom_components.polygonal_zones.utils.zones.load_data",
+            new=AsyncMock(return_value=payload),
+        ),
+        pytest.raises(UnsupportedSchemaVersion),
+    ):
+        await load_zones(["http://x"], SimpleNamespace(), False)

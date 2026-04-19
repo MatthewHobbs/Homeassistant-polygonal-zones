@@ -179,7 +179,7 @@ async def test_retry_callback_fires_initialize_again() -> None:
             side_effect=fake_at_started,
         ),
         patch(
-            "custom_components.polygonal_zones.device_tracker.get_zones",
+            "custom_components.polygonal_zones.device_tracker.load_zones",
             new=AsyncMock(side_effect=RuntimeError("boom")),
         ),
         patch(

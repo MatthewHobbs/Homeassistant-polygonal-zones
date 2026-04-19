@@ -27,7 +27,7 @@ from .const import (
 )
 from .utils import event_should_trigger, get_locations_zone
 from .utils.local_zones import download_zones
-from .utils.zones import Zone, get_zones
+from .utils.zones import Zone, ZoneFileCorrupt, load_zones
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -127,6 +127,7 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         self._expose_coordinates = expose_coordinates
 
         self._zones: list[Zone] = []
+        self._last_load_failures: list[tuple[str, str]] = []
         self._unsub: Callable[[], None] | None = None
         self._unsub_at_started: Callable[[], None] | None = None
         self._unsub_retry: Callable[[], None] | None = None
@@ -160,9 +161,15 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
                 attempt,
             )
             try:
-                self._zones = await get_zones(
-                    self._zones_urls, self.hass, self._prioritize_zone_files
-                )
+                result = await load_zones(self._zones_urls, self.hass, self._prioritize_zone_files)
+                if self._zones_urls and not result.zones and result.failures:
+                    first_uri, first_msg = result.failures[0]
+                    raise ZoneFileCorrupt(
+                        f"All {len(result.failures)} zone URIs failed; "
+                        f"first: {first_uri}: {first_msg}"
+                    )
+                self._zones = result.zones
+                self._last_load_failures = result.failures
             except Exception:
                 if attempt < _MAX_LOAD_ATTEMPTS:
                     delay = min(600, _BASE_RETRY_DELAY * (2 ** (attempt - 1)))
@@ -217,7 +224,14 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         self._prioritize_zone_files = bool(config_entry.data.get(CONF_PRIORITIZE_ZONE_FILES))
 
         try:
-            self._zones = await get_zones(self._zones_urls, self.hass, self._prioritize_zone_files)
+            result = await load_zones(self._zones_urls, self.hass, self._prioritize_zone_files)
+            if self._zones_urls and not result.zones and result.failures:
+                first_uri, first_msg = result.failures[0]
+                raise ZoneFileCorrupt(
+                    f"All {len(result.failures)} zone URIs failed; first: {first_uri}: {first_msg}"
+                )
+            self._zones = result.zones
+            self._last_load_failures = result.failures
         except Exception:
             _LOGGER.warning(
                 "Failed to reload zones for entry=%s entity=%s; keeping previous zones",
@@ -319,7 +333,14 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
           ``call`` to sync in-memory state after writing to disk.
         """
         try:
-            self._zones = await get_zones(self._zones_urls, self.hass, self._prioritize_zone_files)
+            result = await load_zones(self._zones_urls, self.hass, self._prioritize_zone_files)
+            if self._zones_urls and not result.zones and result.failures:
+                first_uri, first_msg = result.failures[0]
+                raise ZoneFileCorrupt(
+                    f"All {len(result.failures)} zone URIs failed; first: {first_uri}: {first_msg}"
+                )
+            self._zones = result.zones
+            self._last_load_failures = result.failures
         except Exception:
             _LOGGER.warning(
                 "Failed to reload zones for entry=%s entity=%s",

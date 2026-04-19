@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from shapely.geometry import Polygon
 
 from custom_components.polygonal_zones.device_tracker import PolygonalZoneEntity
-from custom_components.polygonal_zones.utils.zones import Zone
+from custom_components.polygonal_zones.utils.zones import Zone, ZoneLoadResult
 
 
 def _make_entity() -> PolygonalZoneEntity:
@@ -55,8 +55,8 @@ async def test_added_to_hass_initializes_zones_immediately() -> None:
             side_effect=_capture,
         ),
         patch(
-            "custom_components.polygonal_zones.device_tracker.get_zones",
-            new=AsyncMock(return_value=zones),
+            "custom_components.polygonal_zones.device_tracker.load_zones",
+            new=AsyncMock(return_value=ZoneLoadResult(zones=zones)),
         ),
         patch.object(PolygonalZoneEntity, "async_write_ha_state", lambda self: None),
         patch("custom_components.polygonal_zones.device_tracker.ir.async_create_issue"),
@@ -88,7 +88,7 @@ async def test_added_to_hass_failure_schedules_retry() -> None:
             side_effect=_capture,
         ),
         patch(
-            "custom_components.polygonal_zones.device_tracker.get_zones",
+            "custom_components.polygonal_zones.device_tracker.load_zones",
             new=AsyncMock(side_effect=RuntimeError("boom")),
         ),
         patch(
@@ -126,7 +126,7 @@ async def test_added_to_hass_exhausted_retries_marks_unavailable() -> None:
             side_effect=fake_at_started,
         ),
         patch(
-            "custom_components.polygonal_zones.device_tracker.get_zones",
+            "custom_components.polygonal_zones.device_tracker.load_zones",
             new=AsyncMock(side_effect=RuntimeError("boom")),
         ),
         patch(
@@ -159,8 +159,8 @@ async def test_update_config_reads_new_data_and_reloads() -> None:
     )
 
     with patch(
-        "custom_components.polygonal_zones.device_tracker.get_zones",
-        new=AsyncMock(return_value=zones),
+        "custom_components.polygonal_zones.device_tracker.load_zones",
+        new=AsyncMock(return_value=ZoneLoadResult(zones=zones)),
     ):
         await entity.async_update_config(new_entry)
 
@@ -181,7 +181,7 @@ async def test_update_config_keeps_previous_zones_on_failure() -> None:
     )
 
     with patch(
-        "custom_components.polygonal_zones.device_tracker.get_zones",
+        "custom_components.polygonal_zones.device_tracker.load_zones",
         new=AsyncMock(side_effect=RuntimeError("nope")),
     ):
         await entity.async_update_config(new_entry)
