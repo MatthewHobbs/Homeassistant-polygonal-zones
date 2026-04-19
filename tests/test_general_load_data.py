@@ -61,3 +61,32 @@ def test_is_public_ip_rejects_private() -> None:
 def test_is_public_ip_accepts_public() -> None:
     assert _is_public_ip(ipaddress.ip_address("8.8.8.8"))
     assert _is_public_ip(ipaddress.ip_address("1.1.1.1"))
+
+
+@pytest.mark.parametrize(
+    ("address", "label"),
+    [
+        ("::1", "IPv6 loopback"),
+        ("fd00::1", "IPv6 unique-local (ULA, RFC 4193)"),
+        ("fc00::1", "IPv6 unique-local (fc00::/7 lower half)"),
+        ("fe80::1", "IPv6 link-local (RFC 4291)"),
+        ("ff02::1", "IPv6 multicast"),
+        ("::", "IPv6 unspecified"),
+        ("::ffff:7f00:1", "IPv4-mapped IPv6 loopback (::ffff:127.0.0.1)"),
+        ("::ffff:a00:1", "IPv4-mapped IPv6 private (::ffff:10.0.0.1)"),
+    ],
+)
+def test_is_public_ip_rejects_ipv6_non_public(address: str, label: str) -> None:
+    """IPv6 private / loopback / link-local / multicast / mapped-private ranges must fail the SSRF gate."""
+    assert not _is_public_ip(ipaddress.ip_address(address)), label
+
+
+@pytest.mark.parametrize(
+    "address",
+    [
+        "2001:4860:4860::8888",  # Google DNS v6
+        "2606:4700:4700::1111",  # Cloudflare DNS v6
+    ],
+)
+def test_is_public_ip_accepts_ipv6_public(address: str) -> None:
+    assert _is_public_ip(ipaddress.ip_address(address))
