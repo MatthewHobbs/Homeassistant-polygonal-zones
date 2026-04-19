@@ -1,8 +1,6 @@
 # Polygonal Zones
 
-This homeassistant integration provides the ability to create polygonal zones and use them in automations.
-It gives you the ability to provide a location for a GeoJSON file that contains the zones you want to monitor.
-The integration will create a sensor for each device you want to track and provide you the zone it is currently in.
+This Home Assistant integration lets you define arbitrary polygonal zones from a GeoJSON file and resolve any tracked `device_tracker` entity into the zone it currently sits inside. Use it when the built-in circular HA zones aren't expressive enough — irregular property boundaries, school catchments, neighbourhoods, town centres, etc.
 
 > ℹ️ **Fork Notice**
 >
@@ -11,72 +9,101 @@ The integration will create a sensor for each device you want to track and provi
 >
 > Pull requests and contributions are welcome.
 
+## Contents
+
+- [Installation](#installation)
+- [First-time setup](#first-time-setup)
+- [Configuration options](#configuration-options)
+- [Usage](#usage)
+- [GeoJSON file format](#geojson-file-format)
+- [Actions / services](#actions--services)
+- [Action examples](#action-examples)
+- [Troubleshooting](#troubleshooting)
+- [Privacy and data handling](#privacy-and-data-handling)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [License](#license)
+
 ## Installation
 
-Installing the integration can be done using hacs but also manually. Installation using hacs is recommended.
+Two paths: HACS (recommended) or manual copy.
 
-### Install using hacs
-
-To install the integration using hacs you can either add the url to your custom repositories or use the button below
+### Install via HACS
 
 [![Add to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=MatthewHobbs&repository=Homeassistant-polygonal-zones&category=integration)
 
+If the button doesn't work: HACS → ⋮ → Custom repositories → add `https://github.com/MatthewHobbs/Homeassistant-polygonal-zones` as an Integration.
+
 ### Manual installation
 
-Installing the integration manually can be done by copying the `custom_components/polygonal_zones` folder to your
-`custom_components`
-folder in your homeassistant configuration folder.
+Copy `custom_components/polygonal_zones/` into the `custom_components/` directory inside your Home Assistant config folder, then restart Home Assistant.
 
-## Configuration
+## First-time setup
 
-The configuration is done in the homeassistant UI.
+1. **Add the integration**: Settings → Devices & Services → Add Integration → search "Polygonal Zones".
+2. **Fill in the form**:
+   - **URLs of GeoJSON files**: one or more `https://…/zones.json` URLs, or relative paths under `/config` (e.g. `polygonal_zones/my_zones.json`). Leave empty if you want a blank file created for you (toggle **Download the GeoJSON files** below).
+   - **Entities**: the `device_tracker.*` entities whose location you want to evaluate against the zones.
+   - **Prioritize order of zone files** _(advanced)_: when one position falls inside zones from more than one file, prefer the earlier file in the list.
+   - **Download the GeoJSON files** _(advanced)_: download / merge the source URLs into a single local file under `<config>/polygonal_zones/<entry_id>.json`. **Required if you want to mutate zones from automations** via the action services below.
+3. **Submit**. The integration creates one new entity per selected device, named `device_tracker.polygonal_zones_<original_entity>`. The state is the zone name (e.g. `Home`, `School`) or `away` if the device falls outside every zone.
+4. **Verify**: open Developer Tools → States and find `device_tracker.polygonal_zones_*`. The `latitude`, `longitude`, `gps_accuracy`, and `zone_uris` attributes should populate within a few seconds.
 
-1. Go to Configuration -> Integrations
-2. Click on the `+` button to add a new integration.
-3. Search for `Polygonal Zones` and click on it.
-4. Fill in the required fields:
-   - GeoJSON URIs: The URLs to the GeoJSON files that contains the zones you want to track.
-   - Devices: The devices you want to track.
+If the entity stays unknown for more than a minute, see [Troubleshooting](#troubleshooting).
 
-If you want to create an empty GeoJSON file you can omit the GeoJSON URIs field but the download option is required. The section below explains the options further.
+## Configuration options
 
-### Configuration options
+| Field                   | Required | Notes                                                                                                                                                            |
+| ----------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `zone_urls`             | yes\*    | List of `http(s)://…` URLs or paths inside `/config`. \*Can be empty if `download_zones` is enabled.                                                             |
+| `prioritize_zone_files` | no       | Prefer earlier files when a position matches zones in multiple files.                                                                                            |
+| `download_zones`        | no       | Materialise the source files into a single editable local file. Required to use the `add_new_zone` / `edit_zone` / `delete_zone` / `replace_all_zones` services. |
+| `entities`              | yes      | `device_tracker.*` entities to evaluate. Selectable from the entity picker.                                                                                      |
 
-The configuration exposes you to a couple of different options.
-These options are as follows:
-
-- GeoJSON uris: This is a list of the GeoJSON files that contain the zones you want to track. This can either be a local
-  file or a URL to a website.
-- Prioritize zone files: If you want to prioritize the order of the zone files, enable this option. This means that if a
-  tracker is in multiple zones it will only consider those with the lowest priority.
-- Download zones: Use a local GeoJSON file to store the zones in. This will load the above defined files into a single
-  file. The provided urls will be replaced with the location of this file. If you want to edit the zone files using
-  actions, you will need to enable this option.
-- Registered entities: Select the entities that you want to track in the zones.
+Re-open the integration's Configure dialog to change `zone_urls` and `prioritize_zone_files` later. To add or remove tracked entities, delete and re-add the integration entry.
 
 ## Usage
 
-The integration will create an entity for each entity you want to track. The state of this entity will be the zone the
-device is currently in. You can use this entity in automations to trigger actions based on the zone the device is in.
+For each tracked entity the integration creates a mirror entity:
 
-The entities name will be generated based on the tracked entity. For example, if you are tracking a device called
-`device_tracker.my_phone`, the entity will be called `device_tracker.polygonal_zones_device_tracker_my_phone`. If that
-entity is already defined, the integration will append `_n` to the name where `n` is the number of the entity.
+```
+device_tracker.alice_phone        →  device_tracker.polygonal_zones_alice_phone
+```
 
-## GeoJSON file
+The mirror's state is the name of the zone the source device is inside, falling back to `"away"`. Use it directly in automations:
 
-The zones are stored in geojson files. GeoJSON is a well-defined standard for storing geospatial data. It is a
-JSON-based format that is easy for humans to read and write and easy for machines to parse and generate.
-Currently only polygons are supported. An example of this file is shown below.
+```yaml
+automation:
+  - alias: "Notify when Alice arrives at school"
+    triggers:
+      - trigger: state
+        entity_id: device_tracker.polygonal_zones_alice_phone
+        to: "School"
+    actions:
+      - action: notify.mobile_app
+        data:
+          message: "Alice has arrived at school"
+```
 
-For ease of creating and managing this file in the UI an optional add-on is available that will generate and host
-the file. This add-on can be found in the [polygonal zones editor repo](https://github.com/MichelGerding/Homeassistant-polygonal-zones-addon/). This add-on can be added by using the button below.
+The mirror entity also exposes the source coordinates in its attributes (`latitude`, `longitude`, `gps_accuracy`) so templates can read them directly without referencing the underlying tracker.
+
+## GeoJSON file format
+
+[GeoJSON](https://geojson.org/) is a standard JSON-based geospatial format. This integration accepts a `FeatureCollection` containing `Feature` objects whose geometry is a `Polygon` or `MultiPolygon`. Other geometry types (`Point`, `LineString`, etc.) are rejected.
+
+Each Feature must have:
+
+- `properties.name` — display name shown as the entity state.
+- `properties.priority` — _(optional)_ integer, lower number = higher priority when zones overlap and `prioritize_zone_files` is off.
+- `geometry` — `Polygon` or `MultiPolygon` with coordinates in standard GeoJSON `[longitude, latitude]` order.
+
+For convenience, an optional add-on with a UI editor lives at the [polygonal zones editor repo](https://github.com/MichelGerding/Homeassistant-polygonal-zones-addon/):
 
 [![Add zone editor add-on to Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FMichelGerding%2FHomeassistant-polygonal-zones-addon.git)
 
 ### Example file
 
-The `priority` property is optional; a lower number means higher priority.
+A minimal file with two zones — `Home` (a small square in central London for illustration) and `Park` (a higher-priority overlapping area):
 
 ```json
 {
@@ -86,33 +113,198 @@ The `priority` property is optional; a lower number means higher priority.
       "type": "Feature",
       "properties": {
         "name": "Home",
+        "priority": 1
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [-0.135, 51.51],
+            [-0.125, 51.51],
+            [-0.125, 51.515],
+            [-0.135, 51.515],
+            [-0.135, 51.51]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Park",
         "priority": 0
       },
       "geometry": {
         "type": "Polygon",
-        "coordinates": []
+        "coordinates": [
+          [
+            [-0.131, 51.512],
+            [-0.128, 51.512],
+            [-0.128, 51.514],
+            [-0.131, 51.514],
+            [-0.131, 51.512]
+          ]
+        ]
       }
     }
   ]
 }
 ```
 
-## Actions
+Things worth knowing:
 
-The integration provides a couple of different actions that can be used to modify the zones. It also provides an action
-to reload the zones cache.
+- The first and last coordinate of each polygon ring **must be identical** (the ring closes itself).
+- Coordinates are `[longitude, latitude]` — that's the GeoJSON convention, the opposite of how Home Assistant usually displays positions.
+- A point that lies in `Park` and `Home` will resolve to `Park` because its priority value is lower.
 
-These actions are as follows:
+## Actions / services
 
-- `polygonal_zones.add_new_zone`: This action will add a new zone to the GeoJSON file. This expects a GeoJSON feature as input.
-- `polygonal_zones.delete_zone`: This action will delete a zone from the GeoJSON file. This expects the name of the zone to delete as input.
-- `polygonal_zones.edit_zone`: This action will edit a zone in the GeoJSON file. This expects a GeoJSON feature as input and the name of the zone to edit as input.
-- `polygonal_zones.replace_all_zones`: This action will replace all zones in the GeoJSON file with the provided zones. This expects a GeoJSON feature collection as input.
-- `polygonal_zones.reload_zones`: This action will reload the zones from the GeoJSON files.
+| Action                              | Target | Editable file required?     |
+| ----------------------------------- | ------ | --------------------------- |
+| `polygonal_zones.reload_zones`      | entity | no                          |
+| `polygonal_zones.add_new_zone`      | device | yes (`download_zones=true`) |
+| `polygonal_zones.edit_zone`         | device | yes                         |
+| `polygonal_zones.delete_zone`       | device | yes                         |
+| `polygonal_zones.replace_all_zones` | device | yes                         |
 
-all but the reload_zones action expect the device to be used as target. This is because the zone files are for the entire
-device and not a single entity. You will also still need to call the reload zones integration action to update the entities.
-The reload_zones action expects the entities to be reloaded as target and returns the newly loaded zones to the user.
+`reload_zones` re-fetches the zone files and updates the entity's in-memory cache. The four mutating actions write to the on-disk file managed when `download_zones` is enabled — they are refused with `ZoneFileNotEditable` if the integration is reading directly from a remote URL.
+
+After a mutating action, call `reload_zones` to apply the change to the entity.
+
+## Action examples
+
+### `reload_zones`
+
+```yaml
+action: polygonal_zones.reload_zones
+target:
+  entity_id: device_tracker.polygonal_zones_alice_phone
+```
+
+Optionally returns the loaded zones (names + polygon coordinates) — useful for debugging:
+
+```yaml
+action: polygonal_zones.reload_zones
+target:
+  entity_id: device_tracker.polygonal_zones_alice_phone
+response_variable: zones
+```
+
+### `add_new_zone`
+
+```yaml
+action: polygonal_zones.add_new_zone
+target:
+  device_id: 0123456789abcdef0123456789abcdef
+data:
+  zone: |
+    {
+      "type": "Feature",
+      "properties": {"name": "Office", "priority": 0},
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-0.090, 51.515],
+          [-0.085, 51.515],
+          [-0.085, 51.518],
+          [-0.090, 51.518],
+          [-0.090, 51.515]
+        ]]
+      }
+    }
+```
+
+### `edit_zone`
+
+Replace the geometry of an existing zone. The `zone_name` matches the existing zone; the `zone` payload is the new Feature.
+
+```yaml
+action: polygonal_zones.edit_zone
+target:
+  device_id: 0123456789abcdef0123456789abcdef
+data:
+  zone_name: "Office"
+  zone: |
+    {
+      "type": "Feature",
+      "properties": {"name": "Office", "priority": 0},
+      "geometry": { "type": "Polygon", "coordinates": [[ ... ]] }
+    }
+```
+
+### `delete_zone`
+
+```yaml
+action: polygonal_zones.delete_zone
+target:
+  device_id: 0123456789abcdef0123456789abcdef
+data:
+  zone_name: "Office"
+```
+
+### `replace_all_zones`
+
+Replaces the entire local file with a new `FeatureCollection`. Useful when the editor add-on regenerates the file.
+
+```yaml
+action: polygonal_zones.replace_all_zones
+target:
+  device_id: 0123456789abcdef0123456789abcdef
+data:
+  zone: |
+    {
+      "type": "FeatureCollection",
+      "features": [ ... ]
+    }
+```
+
+## Troubleshooting
+
+### The mirror entity stays `unknown` or `away`
+
+- Check the source `device_tracker.*` actually has `latitude`, `longitude`, and `gps_accuracy` attributes. Many wifi-only trackers don't.
+- Look in the HA log for messages tagged `custom_components.polygonal_zones`. A `WARNING` line that says "Failed to load zones for entry=…" means the GeoJSON couldn't be fetched on startup. The integration retries with exponential backoff (30s, 60s, 120s, 240s, 480s) before giving up. Call `reload_zones` after the source recovers.
+- Confirm the polygon ring is closed (first coordinate == last coordinate) and the geometry type is `Polygon` or `MultiPolygon`.
+
+### Config-flow errors
+
+| Banner            | Meaning                                                                                                                                     |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `invalid_url`     | One of the entries isn't a valid `http(s)` URL. Check the protocol and that the host is present.                                            |
+| `invalid_path`    | A non-URL entry doesn't resolve to an existing file inside `/config`, or it tries to escape the config directory (e.g. `../../etc/passwd`). |
+| `unreachable_url` | The URL passed shape validation but couldn't be fetched.                                                                                    |
+
+### "Refusing to connect to non-public address"
+
+The integration won't fetch from `127.0.0.1`, `192.168.x.x`, `10.x.x.x`, `169.254.x.x`, or any other private / loopback / link-local / metadata IP. This is to prevent SSRF. Solutions:
+
+- Host the GeoJSON on a public URL.
+- Place the file in `/config` and reference it as a path (e.g. `polygonal_zones/zones.json`).
+
+### `ZoneFileNotEditable` from a service call
+
+The mutating actions only work when **Download the GeoJSON files** is enabled in the integration options. Without it, the integration reads the source URL directly on every reload and has no local file to mutate.
+
+### `Path '…' resolves outside config directory`
+
+A path you supplied (in `zone_urls` or via a service call) resolves outside `/config` when normalised. Fix the path so it stays within the HA config directory.
+
+### `Timed out waiting for lock on …`
+
+A previous service call against the same zone file hasn't finished within 15 seconds. Usually transient (e.g. slow remote fetch). Retry the action.
+
+### Increasing log verbosity
+
+Set the integration's logger to `DEBUG` to see GPS coordinates, zone resolution, and full lifecycle events:
+
+```yaml
+logger:
+  default: info
+  logs:
+    custom_components.polygonal_zones: debug
+```
+
+GPS coordinates and zone names are **only** emitted at DEBUG level — see [Privacy](#privacy-and-data-handling) for details.
 
 ## Privacy and data handling
 
@@ -159,4 +351,4 @@ I'll do my best to respond to issues and review pull requests as quickly as I ca
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
