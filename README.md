@@ -47,6 +47,10 @@ Two paths: HACS (recommended) or manual copy.
 
 If the button doesn't work: HACS → ⋮ → Custom repositories → add `https://github.com/MatthewHobbs/Homeassistant-polygonal-zones` as an Integration.
 
+#### Opt into beta releases (early adopters)
+
+Stable releases ship as regular GitHub releases; early-access builds ship as **pre-releases** (tagged `-rc1`, `-rc2`, …). To see them in HACS, open this integration's HACS card → ⋮ → **Redownload** → toggle **Show beta versions**. Pre-releases are visible only while that toggle is on; stable users are never prompted to upgrade to an `-rc`.
+
 ### Manual installation
 
 Copy `custom_components/polygonal_zones/` into the `custom_components/` directory inside your Home Assistant config folder, then restart Home Assistant.
