@@ -1,0 +1,101 @@
+rules:
+  # --------- Bronze ---------
+  action-setup: done
+  appropriate-polling:
+    status: exempt
+    comment: Push-based; reacts to source device_tracker state_changed events.
+  brands: done
+  common-modules: done
+  config-flow: done
+  config-flow-test-coverage: done
+  dependency-transparency: done
+  docs-actions: done
+  docs-high-level-description: done
+  docs-installation-instructions: done
+  docs-removal-instructions: done
+  entity-event-setup: done
+  entity-unique-id: done
+  has-entity-name:
+    status: exempt
+    comment: Entity name is generated from the source device_tracker entity_id.
+  runtime-data:
+    status: todo
+    comment: Currently uses hass.data[DOMAIN][entry.entry_id]; could migrate to ConfigEntry.runtime_data.
+  test-before-configure: done
+  test-before-setup: done
+  unique-config-entry: done
+
+  # --------- Silver ---------
+  action-exceptions: done
+  config-entry-unloading: done
+  docs-configuration-parameters: done
+  docs-installation-parameters: done
+  entity-unavailable: done
+  integration-owner: done
+  log-when-unavailable: done
+  parallel-updates: done
+  reauthentication-flow:
+    status: exempt
+    comment: Integration uses no authentication.
+  test-coverage: done
+
+  # --------- Gold ---------
+  devices:
+    status: exempt
+    comment: One synthetic device per config entry; uses DeviceEntryType.SERVICE.
+  diagnostics:
+    status: todo
+  discovery:
+    status: exempt
+    comment: Zone files are user-supplied URLs/paths; no network discovery.
+  discovery-update-info:
+    status: exempt
+    comment: No discovery.
+  docs-data-update:
+    status: todo
+  docs-examples: done
+  docs-known-limitations:
+    status: todo
+  docs-supported-devices:
+    status: exempt
+    comment: Operates on any HA device_tracker entity exposing latitude / longitude / gps_accuracy.
+  docs-supported-functions:
+    status: todo
+  docs-troubleshooting: done
+  docs-use-cases:
+    status: todo
+  dynamic-devices:
+    status: exempt
+    comment: Single synthetic device per config entry; nothing dynamic to add post-setup.
+  entity-category:
+    status: exempt
+    comment: TrackerEntity has no entity_category by convention.
+  entity-device-class:
+    status: exempt
+    comment: TrackerEntity has no device_class.
+  entity-disabled-by-default:
+    status: exempt
+    comment: All entities are enabled by default; user explicitly selected them in config flow.
+  entity-translations:
+    status: todo
+  exception-translations:
+    status: todo
+  icon-translations:
+    status: todo
+  reconfiguration-flow:
+    status: todo
+    comment: Options flow exists for zone_urls and prioritize_zone_files; entity list still requires re-add.
+  repair-issues:
+    status: todo
+  stale-devices:
+    status: exempt
+    comment: No dynamic devices.
+
+  # --------- Platinum ---------
+  async-dependency:
+    status: exempt
+    comment: shapely and pandas are sync compute libraries; no production async equivalents exist.
+  inject-websession:
+    status: todo
+    comment: Currently uses a per-call session with a custom DNS resolver for SSRF protection.
+  strict-typing: done

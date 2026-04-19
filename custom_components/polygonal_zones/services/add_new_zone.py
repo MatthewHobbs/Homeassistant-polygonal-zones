@@ -4,6 +4,7 @@ import asyncio
 from collections.abc import Awaitable, Callable
 import json
 
+import aiohttp
 from homeassistant.core import HomeAssistant, ServiceCall
 
 from ..utils.general import load_data, safe_config_path
@@ -30,11 +31,10 @@ def action_builder(hass: HomeAssistant) -> Callable[[ServiceCall], Awaitable[Non
 
         new_zone = parse_zone_feature(call.data.get("zone"))
         new_name = new_zone["properties"]["name"]
-
         filename = entity.zone_urls[0]
-        filepath = safe_config_path(hass.config.config_dir, filename)
 
         try:
+            filepath = safe_config_path(hass.config.config_dir, filename)
             async with asyncio.timeout(LOCK_ACQUIRE_TIMEOUT), get_file_lock(filepath):
                 existing_zones = json.loads(await load_data(filename, hass))
 
@@ -51,7 +51,13 @@ def action_builder(hass: HomeAssistant) -> Callable[[ServiceCall], Awaitable[Non
                 await save_zones(new_content, filepath, hass)
         except TimeoutError as err:
             raise InvalidZoneData(
-                f"Timed out waiting for lock on {filepath}; another operation may be in progress"
+                f"Timed out waiting for lock on {filename}; another operation may be in progress"
             ) from err
+        except aiohttp.ClientError as err:
+            raise InvalidZoneData(f"Failed to fetch zone file: {err}") from err
+        except OSError as err:
+            raise InvalidZoneData(f"Failed to access zone file {filename}: {err}") from err
+        except ValueError as err:
+            raise InvalidZoneData(f"Zone file content or path is invalid: {err}") from err
 
     return add_new_zone
