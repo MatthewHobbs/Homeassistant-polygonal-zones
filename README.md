@@ -1,15 +1,15 @@
+# Polygonal Zones
+
+This homeassistant integration provides the ability to create polygonal zones and use them in automations.
+It gives you the ability to provide a location for a GeoJSON file that contains the zones you want to monitor.
+The integration will create a sensor for each device you want to track and provide you the zone it is currently in.
+
 > ℹ️ **Fork Notice**
 >
 > This is a community-maintained continuation of the original [MichelGerding/Homeassistant-polygonal-zones](https://github.com/MichelGerding/Homeassistant-polygonal-zones), which is no longer actively maintained.
 > Development continues here at [MatthewHobbs/Homeassistant-polygonal-zones](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones).
 >
 > Pull requests and contributions are welcome.
-
-# Polygonal Zones
-
-This homeassistant integration provides the ability to create polygonal zones and use them in automations.
-It gives you the ability to provide a location for a GeoJSON file that contains the zones you want to monitor.
-The integration will create a sensor for each device you want to track and provide you the zone it is currently in.
 
 ## Installation
 
@@ -124,7 +124,7 @@ What is stored where:
 - **Recorder history**: by default Home Assistant's recorder will persist these attributes, which means a full location history of tracked devices accumulates in the HA database unless you exclude it.
 - **Zone files**: when `download_zones` is enabled, the integration writes a GeoJSON file under `<config>/polygonal_zones/<entry_id>.json` with mode `0600` inside a directory with mode `0700`.
 - **Outbound requests**: when `zone_urls` points at an http(s) URL, the integration fetches it from your HA instance. The server hosting the GeoJSON learns your public IP. Private, loopback, and link-local addresses are rejected to prevent SSRF.
-- **Logging**: GPS coordinates and zone names are only logged at `DEBUG` level. At default log levels they are not written to the HA log.
+- **Logging**: GPS coordinates and zone names are only logged at `DEBUG` level. At default log levels they are not written to the HA log. `WARNING`-level logs (raised when a zone fetch fails) include the source `entity_id` (e.g. `device_tracker.alice_phone`) — if you ship Home Assistant logs to an external aggregator, consider filtering or redacting these.
 
 If you do not want location history retained, add something like the following to your HA configuration:
 
