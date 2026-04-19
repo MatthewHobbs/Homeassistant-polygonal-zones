@@ -75,6 +75,49 @@ def test_zones_to_geojson_stamps_schema_version() -> None:
     assert parsed["polygonal_zones"] == {"schema_version": SCHEMA_VERSION}
 
 
+def test_zones_to_geojson_preserves_extra_properties() -> None:
+    """Unknown property keys and the polygonal_zones_ext namespace survive round-trip."""
+    polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
+    zone = Zone(
+        name="Home",
+        geometry=polygon,
+        priority=1,
+        properties={
+            "name": "Home",
+            "priority": 1,
+            "description": "kept me out of the party",
+            "polygonal_zones_ext": {"color": "#3366ff", "editor_version": "2.1"},
+        },
+    )
+    raw = zones_to_geojson([zone])
+    props = json.loads(raw)["features"][0]["properties"]
+    assert props["description"] == "kept me out of the party"
+    assert props["polygonal_zones_ext"] == {"color": "#3366ff", "editor_version": "2.1"}
+
+
+def test_zones_to_geojson_dataclass_values_override_stale_properties() -> None:
+    """``Zone.name`` and ``Zone.priority`` are authoritative; stale copies in ``properties`` lose."""
+    polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
+    zone = Zone(
+        name="Renamed",
+        geometry=polygon,
+        priority=5,
+        properties={"name": "OldName", "priority": 0, "extra": "keep"},
+    )
+    props = json.loads(zones_to_geojson([zone]))["features"][0]["properties"]
+    assert props["name"] == "Renamed"
+    assert props["priority"] == 5
+    assert props["extra"] == "keep"
+
+
+def test_zones_to_geojson_empty_properties_still_emits_name_and_priority() -> None:
+    """A hand-built Zone with no ``properties`` dict still produces valid output."""
+    polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
+    zone = Zone(name="Solo", geometry=polygon)
+    props = json.loads(zones_to_geojson([zone]))["features"][0]["properties"]
+    assert props == {"name": "Solo", "priority": 0}
+
+
 def test_dump_feature_collection_stamps_schema_version_without_existing() -> None:
     raw = dump_feature_collection([])
     parsed = json.loads(raw)

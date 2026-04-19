@@ -141,6 +141,51 @@ async def test_get_zones_accepts_known_schema_version() -> None:
     assert zones[0].name == "Home"
 
 
+async def test_parse_serialize_roundtrip_preserves_extra_properties() -> None:
+    """A full file → get_zones → zones_to_geojson → get_zones cycle preserves custom keys."""
+    from custom_components.polygonal_zones.utils.local_zones import zones_to_geojson
+
+    source = json.dumps(
+        {
+            "type": "FeatureCollection",
+            "polygonal_zones": {"schema_version": 1},
+            "features": [
+                {
+                    "type": "Feature",
+                    "properties": {
+                        "name": "Home",
+                        "priority": 2,
+                        "description": "front door",
+                        "polygonal_zones_ext": {"color": "#f00"},
+                    },
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]],
+                    },
+                }
+            ],
+        }
+    )
+
+    with patch(
+        "custom_components.polygonal_zones.utils.zones.load_data",
+        new=AsyncMock(return_value=source),
+    ):
+        first = await get_zones(["http://x"], SimpleNamespace(), False)
+
+    serialized = zones_to_geojson(first)
+
+    with patch(
+        "custom_components.polygonal_zones.utils.zones.load_data",
+        new=AsyncMock(return_value=serialized),
+    ):
+        second = await get_zones(["http://x"], SimpleNamespace(), False)
+
+    assert second[0].properties["description"] == "front door"
+    assert second[0].properties["polygonal_zones_ext"] == {"color": "#f00"}
+    assert second[0].priority == 2
+
+
 async def test_get_zones_rejects_future_schema_version() -> None:
     payload = json.dumps(
         {
