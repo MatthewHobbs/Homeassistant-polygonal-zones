@@ -2,6 +2,7 @@
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-p no:homeassistant -ra"
+asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 100
