@@ -100,8 +100,7 @@ async def load_data(uri: str, hass: HomeAssistant) -> str:
     safe_path = safe_config_path(hass.config.config_dir, uri)
 
     def _read() -> str:
-        with open(safe_path, encoding="utf-8") as f:
-            return f.read()
+        return safe_path.read_text(encoding="utf-8")
 
     return await hass.async_add_executor_job(_read)
 
