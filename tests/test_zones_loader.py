@@ -5,7 +5,6 @@ import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-import numpy as np
 import pytest
 from shapely.geometry import Point, Polygon
 
@@ -133,16 +132,16 @@ async def test_prioritize_file_index_resolves_overlapping_point_to_file_0() -> N
 
 def test_haversine_distance_known_pair() -> None:
     """London → Paris, ~344 km, accept 1% tolerance."""
-    london = np.array([51.5074, -0.1278])
-    paris = np.array([[48.8566, 2.3522]])
+    london = (51.5074, -0.1278)  # (lat, lon)
+    paris = [(48.8566, 2.3522)]
     distance_m = haversine_distances(london, paris)[0]
     distance_km = distance_m / 1000.0
     assert abs(distance_km - 344) < 4
 
 
 def test_haversine_distance_to_self_is_zero() -> None:
-    p = np.array([10.0, 20.0])
-    distance = haversine_distances(p, np.array([[10.0, 20.0]]))[0]
+    p = (10.0, 20.0)
+    distance = haversine_distances(p, [(10.0, 20.0)])[0]
     assert abs(distance) < 1e-6
 
 
