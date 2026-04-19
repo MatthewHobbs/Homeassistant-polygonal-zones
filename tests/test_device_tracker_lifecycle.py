@@ -146,3 +146,22 @@ async def test_async_reload_zones_handles_failure() -> None:
         result = await entity.async_reload_zones(call)
 
     assert result is None
+
+
+async def test_async_reload_zones_accepts_no_call() -> None:
+    """Callable with ``call=None`` from the mutation-service path — no response."""
+    entity = _make_entity()
+    entity.hass = _make_hass()
+    entity._async_write_ha_state = MagicMock()
+
+    polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
+    zones = [Zone(name="Home", geometry=polygon, priority=0)]
+
+    with patch(
+        "custom_components.polygonal_zones.device_tracker.get_zones",
+        new=AsyncMock(return_value=zones),
+    ):
+        result = await entity.async_reload_zones()
+
+    assert result is None
+    assert entity._zones == zones

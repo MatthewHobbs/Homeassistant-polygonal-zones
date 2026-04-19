@@ -2,7 +2,7 @@
 
 import json
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -45,7 +45,9 @@ async def test_add_zone_duplicate_name_raises(tmp_path) -> None:
         )
     )
 
-    fake_entity = SimpleNamespace(editable_file=True, zone_urls=["zones.json"])
+    fake_entity = SimpleNamespace(
+        editable_file=True, zone_urls=["zones.json"], async_reload_zones=AsyncMock()
+    )
     hass = _make_hass(tmp_path)
     action = action_builder(hass)
 
@@ -83,7 +85,9 @@ async def test_add_zone_new_name_appends_to_file(tmp_path) -> None:
         )
     )
 
-    fake_entity = SimpleNamespace(editable_file=True, zone_urls=["zones.json"])
+    fake_entity = SimpleNamespace(
+        editable_file=True, zone_urls=["zones.json"], async_reload_zones=AsyncMock()
+    )
     hass = _make_hass(tmp_path)
     action = action_builder(hass)
 
@@ -103,3 +107,59 @@ async def test_add_zone_new_name_appends_to_file(tmp_path) -> None:
     parsed = json.loads(zones_file.read_text())
     names = sorted(f["properties"]["name"] for f in parsed["features"])
     assert names == ["Home", "Work"]
+    fake_entity.async_reload_zones.assert_awaited_once_with()
+
+
+async def test_add_zone_syncs_all_entities_under_entry(tmp_path) -> None:
+    """Every entity under the entry gets its in-memory zones refreshed after a successful write."""
+    zones_file = tmp_path / "zones.json"
+    zones_file.write_text(
+        json.dumps({"type": "FeatureCollection", "features": [_polygon_feature("Home")]})
+    )
+
+    entity_a = SimpleNamespace(
+        editable_file=True, zone_urls=["zones.json"], async_reload_zones=AsyncMock()
+    )
+    entity_b = SimpleNamespace(
+        editable_file=True, zone_urls=["zones.json"], async_reload_zones=AsyncMock()
+    )
+    hass = _make_hass(tmp_path)
+    action = action_builder(hass)
+
+    call = SimpleNamespace(data={"device_id": "fake", "zone": json.dumps(_polygon_feature("Work"))})
+
+    with patch(
+        "custom_components.polygonal_zones.services.add_new_zone.get_entities_from_device_id",
+        return_value=[entity_a, entity_b],
+    ):
+        await action(call)
+
+    entity_a.async_reload_zones.assert_awaited_once_with()
+    entity_b.async_reload_zones.assert_awaited_once_with()
+
+
+async def test_add_zone_does_not_sync_when_write_fails(tmp_path) -> None:
+    """If save_zones is never reached (duplicate name), no reload fires."""
+    zones_file = tmp_path / "zones.json"
+    zones_file.write_text(
+        json.dumps({"type": "FeatureCollection", "features": [_polygon_feature("Home")]})
+    )
+
+    fake_entity = SimpleNamespace(
+        editable_file=True, zone_urls=["zones.json"], async_reload_zones=AsyncMock()
+    )
+    hass = _make_hass(tmp_path)
+    action = action_builder(hass)
+
+    call = SimpleNamespace(data={"device_id": "fake", "zone": json.dumps(_polygon_feature("Home"))})
+
+    with (
+        patch(
+            "custom_components.polygonal_zones.services.add_new_zone.get_entities_from_device_id",
+            return_value=[fake_entity],
+        ),
+        pytest.raises(ZoneAlreadyExists),
+    ):
+        await action(call)
+
+    fake_entity.async_reload_zones.assert_not_awaited()

@@ -2,7 +2,7 @@
 
 import json
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -43,7 +43,9 @@ def _seed_zones(tmp_path, names: list[str]) -> None:
 
 async def test_delete_existing_zone(tmp_path) -> None:
     _seed_zones(tmp_path, ["Home", "Work"])
-    fake_entity = SimpleNamespace(editable_file=True, zone_urls=["zones.json"])
+    fake_entity = SimpleNamespace(
+        editable_file=True, zone_urls=["zones.json"], async_reload_zones=AsyncMock()
+    )
     action = action_builder(_make_hass(tmp_path))
 
     call = SimpleNamespace(data={"device_id": "fake-device-id", "zone_name": "Home"})
@@ -57,11 +59,14 @@ async def test_delete_existing_zone(tmp_path) -> None:
     parsed = json.loads((tmp_path / "zones.json").read_text())
     names = [f["properties"]["name"] for f in parsed["features"]]
     assert names == ["Work"]
+    fake_entity.async_reload_zones.assert_awaited_once_with()
 
 
 async def test_delete_missing_zone_raises(tmp_path) -> None:
     _seed_zones(tmp_path, ["Home"])
-    fake_entity = SimpleNamespace(editable_file=True, zone_urls=["zones.json"])
+    fake_entity = SimpleNamespace(
+        editable_file=True, zone_urls=["zones.json"], async_reload_zones=AsyncMock()
+    )
     action = action_builder(_make_hass(tmp_path))
 
     call = SimpleNamespace(data={"device_id": "fake-device-id", "zone_name": "Nope"})
@@ -77,7 +82,9 @@ async def test_delete_missing_zone_raises(tmp_path) -> None:
 
 
 async def test_delete_missing_zone_name_raises(tmp_path) -> None:
-    fake_entity = SimpleNamespace(editable_file=True, zone_urls=["zones.json"])
+    fake_entity = SimpleNamespace(
+        editable_file=True, zone_urls=["zones.json"], async_reload_zones=AsyncMock()
+    )
     action = action_builder(_make_hass(tmp_path))
 
     call = SimpleNamespace(data={"device_id": "fake-device-id"})

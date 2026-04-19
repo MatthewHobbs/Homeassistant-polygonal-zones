@@ -2,7 +2,7 @@
 
 import json
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -38,7 +38,9 @@ async def test_replace_writes_full_collection(tmp_path) -> None:
     (tmp_path / "zones.json").write_text(
         json.dumps({"type": "FeatureCollection", "features": [_polygon_feature("Old")]})
     )
-    fake_entity = SimpleNamespace(editable_file=True, zone_urls=["zones.json"])
+    fake_entity = SimpleNamespace(
+        editable_file=True, zone_urls=["zones.json"], async_reload_zones=AsyncMock()
+    )
     action = action_builder(_make_hass(tmp_path))
 
     new_collection = {
@@ -56,10 +58,13 @@ async def test_replace_writes_full_collection(tmp_path) -> None:
     parsed = json.loads((tmp_path / "zones.json").read_text())
     names = sorted(f["properties"]["name"] for f in parsed["features"])
     assert names == ["Home", "Work"]
+    fake_entity.async_reload_zones.assert_awaited_once_with()
 
 
 async def test_replace_invalid_payload_raises(tmp_path) -> None:
-    fake_entity = SimpleNamespace(editable_file=True, zone_urls=["zones.json"])
+    fake_entity = SimpleNamespace(
+        editable_file=True, zone_urls=["zones.json"], async_reload_zones=AsyncMock()
+    )
     action = action_builder(_make_hass(tmp_path))
 
     call = SimpleNamespace(data={"device_id": "fake-device-id", "zone": '{"type": "wrong"}'})

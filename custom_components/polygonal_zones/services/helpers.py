@@ -1,5 +1,6 @@
 """Helper functions for the services for the polygonal zones integration."""
 
+import asyncio
 import json
 import logging
 from typing import Any
@@ -173,6 +174,20 @@ def zone_already_defined(name: str, existing_zones: dict[str, Any]) -> bool:
 
     """
     return any(zone["properties"]["name"] == name for zone in existing_zones["features"])
+
+
+async def sync_entities_after_write(entities: list[PolygonalZoneEntity]) -> None:
+    """Refresh each entity's in-memory zone list after a successful disk write.
+
+    Every entity under a single config entry shares the same local zone file,
+    so a mutation service has to refresh them all — otherwise a device that
+    moves between the write and the next manual ``reload_zones`` call would
+    resolve against the stale in-memory list. ``async_reload_zones`` swallows
+    per-entity exceptions, so ``gather`` never raises.
+    """
+    if not entities:
+        return
+    await asyncio.gather(*(e.async_reload_zones() for e in entities))
 
 
 def get_entities_from_device_id(device_id: str, hass: HomeAssistant) -> list[PolygonalZoneEntity]:
