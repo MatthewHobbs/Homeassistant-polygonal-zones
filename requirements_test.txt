@@ -1,4 +1,8 @@
-homeassistant
+# Pinned to a known-green HA version range so nightly CI on an unpinned
+# floor doesn't silently green-on-break when HA core ships an API change.
+# Upper bound allows patch bumps within the same minor. Dependabot (see
+# .github/dependabot.yml) bumps weekly.
+homeassistant>=2026.1,<2027
 mypy
 pytest
 pytest-asyncio
