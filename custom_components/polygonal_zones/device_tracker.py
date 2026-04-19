@@ -11,7 +11,7 @@ from homeassistant.const import CONF_ENTITIES
 from homeassistant.core import HomeAssistant, SupportsResponse
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers import issue_registry as ir
-from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity import generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_call_later
@@ -174,13 +174,12 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
 
                     self._unsub_retry = async_call_later(self.hass, delay, _retry)
                 else:
-                    _LOGGER.error(
+                    _LOGGER.exception(
                         "Giving up loading zones for entry=%s entity=%s after %d attempts; "
                         "call the reload_zones service or reload the integration to retry",
                         self._config_entry_id,
                         self._entity_id,
                         _MAX_LOAD_ATTEMPTS,
-                        exc_info=True,
                     )
                     self._set_available(False)
                     ir.async_create_issue(
@@ -352,8 +351,6 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
     @property
     def device_info(self) -> DeviceInfo | None:
         """Information about the polygonal_zones device."""
-        from homeassistant.helpers.device_registry import DeviceEntryType
-
         return {
             "identifiers": {("polygonal_zones", self._config_entry_id)},
             "name": "Polygonal Zones",

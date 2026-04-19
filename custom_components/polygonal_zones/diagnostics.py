@@ -30,19 +30,18 @@ async def async_get_config_entry_diagnostics(
     """
     entry_data = {k: (_redact(v) if k in TO_REDACT else v) for k, v in entry.data.items()}
 
-    entities_state: list[dict[str, Any]] = []
     runtime = getattr(entry, "runtime_data", None)
     entities = runtime.entities if runtime is not None else []
-    for entity in entities:
-        entities_state.append(
-            {
-                "available": getattr(entity, "_attr_available", True),
-                "editable_file": getattr(entity, "_editable_file", False),
-                "zone_count": len(getattr(entity, "_zones", [])),
-                "url_count": len(getattr(entity, "_zones_urls", []) or []),
-                "prioritize_zone_files": bool(getattr(entity, "_prioritize_zone_files", False)),
-            }
-        )
+    entities_state: list[dict[str, Any]] = [
+        {
+            "available": getattr(entity, "_attr_available", True),
+            "editable_file": getattr(entity, "_editable_file", False),
+            "zone_count": len(getattr(entity, "_zones", [])),
+            "url_count": len(getattr(entity, "_zones_urls", []) or []),
+            "prioritize_zone_files": bool(getattr(entity, "_prioritize_zone_files", False)),
+        }
+        for entity in entities
+    ]
 
     return {
         "entry": {

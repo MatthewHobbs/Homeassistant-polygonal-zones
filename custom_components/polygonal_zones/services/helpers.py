@@ -175,7 +175,7 @@ def zone_already_defined(name: str, existing_zones: dict[str, Any]) -> bool:
     return any(zone["properties"]["name"] == name for zone in existing_zones["features"])
 
 
-def get_entities_from_device_id(device_id: str, hass: HomeAssistant) -> list["PolygonalZoneEntity"]:
+def get_entities_from_device_id(device_id: str, hass: HomeAssistant) -> list[PolygonalZoneEntity]:
     """Get the entities from the provided device_id via the entry's runtime_data."""
     device_entry = dr.async_get(hass)
     device = device_entry.async_get(device_id)

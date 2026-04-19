@@ -101,14 +101,18 @@ async def save_zones(geojson: str, destination: Path, hass: HomeAssistant) -> No
     def _write() -> None:
         destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         tmp = destination.with_suffix(destination.suffix + ".tmp")
+        # os.open used here (rather than Path.write_text) so we can pass an
+        # explicit 0o600 mode atomically — Path.open doesn't accept mode for new
+        # files until Python 3.13's Path.open(mode_arg=...) and even then we'd
+        # need a chmod follow-up which leaves a brief world-readable window.
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 f.write(geojson)
-            os.replace(tmp, destination)
+            tmp.replace(destination)
         except Exception:
             with contextlib.suppress(FileNotFoundError):
-                os.unlink(tmp)
+                tmp.unlink()
             raise
 
     await hass.async_add_executor_job(_write)
