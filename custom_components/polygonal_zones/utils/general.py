@@ -94,8 +94,12 @@ async def load_data(uri: str, hass: HomeAssistant, *, allow_private_urls: bool =
         connector = aiohttp.TCPConnector(
             resolver=_PublicOnlyResolver(allow_private=allow_private_urls)
         )
+        # ``trust_env=False`` explicitly: do NOT inherit HTTP_PROXY / HTTPS_PROXY
+        # / NO_PROXY / .netrc from the environment. aiohttp defaults to False
+        # already; pinning it keeps the SSRF-hardened resolver authoritative and
+        # guards against a future env-proxy leak that would bypass our DNS gate.
         async with (
-            aiohttp.ClientSession(connector=connector) as session,
+            aiohttp.ClientSession(connector=connector, trust_env=False) as session,
             session.get(uri, timeout=FETCH_TIMEOUT, allow_redirects=False) as response,
         ):
             if 300 <= response.status < 400:
