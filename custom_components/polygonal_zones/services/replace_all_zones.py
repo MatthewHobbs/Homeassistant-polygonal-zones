@@ -30,17 +30,21 @@ def action_builder(
             raise ZoneFileNotEditable("Zone files of entity are not editable")
 
         filename = entity.zone_urls[0]
-        filepath = safe_config_path(hass.config.config_dir, filename)
 
         collection = parse_zone_collection(call.data.get("zone"))
         new_content = json.dumps(collection)
 
         try:
+            filepath = safe_config_path(hass.config.config_dir, filename)
             async with asyncio.timeout(LOCK_ACQUIRE_TIMEOUT), get_file_lock(filepath):
                 await save_zones(new_content, filepath, hass)
         except TimeoutError as err:
             raise InvalidZoneData(
-                f"Timed out waiting for lock on {filepath}; another operation may be in progress"
+                f"Timed out waiting for lock on {filename}; another operation may be in progress"
             ) from err
+        except OSError as err:
+            raise InvalidZoneData(f"Failed to access zone file {filename}: {err}") from err
+        except ValueError as err:
+            raise InvalidZoneData(f"Zone file path is invalid: {err}") from err
 
     return replace_all_zones

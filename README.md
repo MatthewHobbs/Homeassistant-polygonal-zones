@@ -2,7 +2,7 @@
 
 This Home Assistant integration lets you define arbitrary polygonal zones from a GeoJSON file and resolve any tracked `device_tracker` entity into the zone it currently sits inside. Use it when the built-in circular HA zones aren't expressive enough — irregular property boundaries, school catchments, neighbourhoods, town centres, etc.
 
-**Status:** stable (v1.4.1). Actively maintained; HACS-ready; declares `quality_scale: bronze` in its manifest.
+**Status:** stable (v1.5.0). Actively maintained; HACS-ready; declares `quality_scale: silver` in its manifest.
 
 > ℹ️ **Fork Notice**
 >

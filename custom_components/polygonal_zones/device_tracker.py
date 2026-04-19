@@ -33,6 +33,10 @@ _LOGGER = logging.getLogger(__name__)
 _MAX_LOAD_ATTEMPTS = 5
 _BASE_RETRY_DELAY = 30  # seconds; doubles on each attempt, capped at 10 min
 
+# Push-based: zone resolution runs in response to source-tracker state_changed
+# events, not on a polled schedule. Unlimited concurrency is safe.
+PARALLEL_UPDATES = 0
+
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
@@ -178,7 +182,9 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
                         _MAX_LOAD_ATTEMPTS,
                         exc_info=True,
                     )
+                    self._set_available(False)
                 return
+            self._set_available(True)
             await self._update_state()
 
         self._unsub_at_started = async_at_started(self.hass, _initialize_zones)
@@ -203,7 +209,24 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
             )
             return
 
+        self._set_available(True)
         await self._update_state()
+
+    def _set_available(self, available: bool) -> None:
+        """Toggle entity availability and log transitions at INFO."""
+        if self._attr_available == available:
+            return
+        self._attr_available = available
+        if available:
+            _LOGGER.info(
+                "Entity %s is available again (zones loaded)",
+                self._attr_unique_id,
+            )
+        else:
+            _LOGGER.info(
+                "Entity %s is unavailable (zone loading exhausted retries)",
+                self._attr_unique_id,
+            )
 
     async def async_will_remove_from_hass(self) -> None:
         """Handle cleanup when the entity is removed."""
