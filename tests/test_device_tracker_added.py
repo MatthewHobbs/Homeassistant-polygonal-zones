@@ -22,10 +22,15 @@ def _make_entity() -> PolygonalZoneEntity:
 
 def _make_hass() -> SimpleNamespace:
     bus = SimpleNamespace(async_listen=MagicMock(return_value=lambda: None))
+
+    async def aaej(func, *args):
+        return func(*args)
+
     return SimpleNamespace(
         bus=bus,
         states=SimpleNamespace(get=MagicMock(return_value=None)),
         async_create_task=MagicMock(),
+        async_add_executor_job=aaej,
     )
 
 
@@ -190,8 +195,14 @@ async def test_update_state_invokes_update_location_when_attrs_present() -> None
     polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
     entity._zones = pd.DataFrame([{"name": "Home", "priority": 0, "geometry": polygon}])
 
+    async def aaej(func, *args):
+        return func(*args)
+
     state = SimpleNamespace(attributes={"latitude": 0.5, "longitude": 0.5, "gps_accuracy": 5})
-    entity.hass = SimpleNamespace(states=SimpleNamespace(get=MagicMock(return_value=state)))
+    entity.hass = SimpleNamespace(
+        states=SimpleNamespace(get=MagicMock(return_value=state)),
+        async_add_executor_job=aaej,
+    )
 
     with patch.object(PolygonalZoneEntity, "async_write_ha_state", lambda self: None):
         await entity._update_state()

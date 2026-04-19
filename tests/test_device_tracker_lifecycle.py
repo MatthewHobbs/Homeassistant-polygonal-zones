@@ -22,10 +22,15 @@ def _make_entity(zone_urls=None) -> PolygonalZoneEntity:
 
 def _make_hass() -> SimpleNamespace:
     bus = SimpleNamespace(async_listen=MagicMock(return_value=lambda: None))
+
+    async def aaej(func, *args):
+        return func(*args)
+
     return SimpleNamespace(
         bus=bus,
         states=SimpleNamespace(get=MagicMock(return_value=None)),
         async_create_task=MagicMock(),
+        async_add_executor_job=aaej,
     )
 
 
@@ -55,6 +60,7 @@ async def test_will_remove_releases_all_unsubs() -> None:
 
 async def test_update_location_sets_attributes() -> None:
     entity = _make_entity()
+    entity.hass = _make_hass()
     entity._zones = pd.DataFrame(
         [
             {
@@ -65,7 +71,7 @@ async def test_update_location_sets_attributes() -> None:
         ]
     )
 
-    entity.update_location(latitude=0.5, longitude=0.5, gps_accuracy=10)
+    await entity.update_location(latitude=0.5, longitude=0.5, gps_accuracy=10)
 
     assert entity._attr_location_name == "Home"
     assert entity._attr_extra_state_attributes["latitude"] == 0.5
@@ -75,6 +81,7 @@ async def test_update_location_sets_attributes() -> None:
 
 async def test_update_location_outside_zones_marks_away() -> None:
     entity = _make_entity()
+    entity.hass = _make_hass()
     entity._zones = pd.DataFrame(
         [
             {
@@ -84,7 +91,7 @@ async def test_update_location_outside_zones_marks_away() -> None:
             }
         ]
     )
-    entity.update_location(latitude=10, longitude=10, gps_accuracy=1)
+    await entity.update_location(latitude=10, longitude=10, gps_accuracy=1)
     assert entity._attr_location_name == "away"
 
 

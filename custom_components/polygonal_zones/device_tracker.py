@@ -252,19 +252,16 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
             self._unsub_retry()
             self._unsub_retry = None
 
-    def update_location(self, latitude, longitude, gps_accuracy) -> None:
+    async def update_location(self, latitude, longitude, gps_accuracy) -> None:
         """Update the location of the entity.
 
-        this function should only be called when either the latitude, longitude or gps accuracy changes.
-
-        Args:
-            latitude: The latitude of the tracked entity.
-            longitude: The longitude of the tracked entity.
-            gps_accuracy: The accuracy of the entity.
-
+        Resolves the location to a zone via the executor so the (sync, CPU-bound)
+        shapely / pandas geometry math doesn't block the event loop. Should only
+        be called when latitude, longitude, or gps_accuracy actually changes.
         """
-
-        zone = get_locations_zone(latitude, longitude, gps_accuracy, self._zones)
+        zone = await self.hass.async_add_executor_job(
+            get_locations_zone, latitude, longitude, gps_accuracy, self._zones
+        )
         _LOGGER.debug("State of entity '%s' changed. new zone: %s", self._attr_unique_id, zone)
         self._attr_location_name = zone["name"] if zone is not None else "away"
         self._attr_extra_state_attributes = {
@@ -295,7 +292,7 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         if entity_state is not None and all(
             key in entity_state.attributes for key in ["latitude", "longitude", "gps_accuracy"]
         ):
-            self.update_location(
+            await self.update_location(
                 entity_state.attributes["latitude"],
                 entity_state.attributes["longitude"],
                 entity_state.attributes["gps_accuracy"],
