@@ -82,3 +82,26 @@ async def async_reload_entry(hass: HomeAssistant, entry: PolygonalZonesConfigEnt
     list is rebuilt and add/remove in options flow takes effect without HA restart.
     """
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Migrate an older config entry to the current ``VERSION``.
+
+    The config flow's ``VERSION = 1`` is the only schema we've ever shipped, so
+    this function is a no-op stub today. It exists to document the contract and
+    keep the migration path obvious when the first real schema change lands
+    (e.g. splitting ``entry.data`` user-mutable fields into ``entry.options``,
+    or dropping a removed key).
+
+    Return True for versions we know how to handle (which is just ``1``); False
+    for future versions we can't downgrade.
+    """
+    if entry.version == 1:
+        return True
+    _LOGGER.error(
+        "Cannot migrate polygonal_zones entry=%s from schema version %d; "
+        "this integration supports up to version 1",
+        entry.entry_id,
+        entry.version,
+    )
+    return False
