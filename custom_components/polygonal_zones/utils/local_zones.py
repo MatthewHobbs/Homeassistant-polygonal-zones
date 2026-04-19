@@ -30,6 +30,15 @@ def get_file_lock(path: Path) -> asyncio.Lock:
     return lock
 
 
+def release_file_lock(path: Path) -> None:
+    """Drop the cached ``asyncio.Lock`` for ``path`` if one exists.
+
+    Called from ``async_unload_entry`` so locks don't accumulate forever
+    across config-entry reloads in long-running HA instances.
+    """
+    _FILE_LOCKS.pop(str(path), None)
+
+
 def zones_to_geojson(zones: pd.DataFrame) -> str:
     """Convert the zones to GeoJSON."""
     return json.dumps(

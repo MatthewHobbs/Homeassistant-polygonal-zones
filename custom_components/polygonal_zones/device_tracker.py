@@ -281,20 +281,20 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
                 "Failed to reload zones for entry=%s entity=%s",
                 self._config_entry_id,
                 self._attr_unique_id,
-                exc_info=True,
             )
-            if call.return_response:
-                return None
             return None
         _LOGGER.debug("Reloaded zones of entity: %s", self._attr_unique_id)
 
         await self._update_state()
         if call.return_response:
             zones_clone = self.zones.copy()
+            if zones_clone.empty:
+                return []
             zones_clone["geometry"] = zones_clone["geometry"].apply(
                 lambda polygon: list(polygon.exterior.coords)
             )
-            return zones_clone[["name", "priority", "geometry"]].to_dict(orient="records")
+            cols = [c for c in ("name", "priority", "geometry") if c in zones_clone.columns]
+            return zones_clone[cols].to_dict(orient="records")
         return None
 
     @property
