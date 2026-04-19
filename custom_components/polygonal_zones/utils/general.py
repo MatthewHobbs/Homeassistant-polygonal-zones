@@ -30,16 +30,20 @@ def safe_config_path(config_dir: str, user_path: str) -> Path:
     return candidate
 
 
-def _is_public_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
-    """Return True if the address is on the public internet (not private/loopback/etc.)."""
-    return not (
-        ip.is_private
-        or ip.is_loopback
-        or ip.is_link_local
-        or ip.is_multicast
-        or ip.is_reserved
-        or ip.is_unspecified
-    )
+def _is_public_ip(
+    ip: ipaddress.IPv4Address | ipaddress.IPv6Address, *, allow_private: bool = False
+) -> bool:
+    """Return True if the address is reachable under the integration's policy.
+
+    By default, reachable means "on the public internet": not private, not
+    loopback, not link-local, not multicast, not reserved, not unspecified.
+    Set ``allow_private=True`` to relax only the ``is_private`` bucket (RFC-1918
+    IPv4 + RFC-4193 ULA IPv6) — loopback, link-local (including cloud metadata
+    169.254.169.254), multicast, reserved, and unspecified stay blocked.
+    """
+    if ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved or ip.is_unspecified:
+        return False
+    return allow_private or not ip.is_private
 
 
 class _PublicOnlyResolver(DefaultResolver):  # type: ignore[misc, valid-type]
@@ -48,7 +52,15 @@ class _PublicOnlyResolver(DefaultResolver):  # type: ignore[misc, valid-type]
     Applying the check inside the aiohttp resolver closes the DNS-rebinding
     TOCTOU window: aiohttp's own connect path goes through ``resolve`` and
     therefore every IP the socket actually connects to has passed the check.
+
+    When constructed with ``allow_private=True``, RFC-1918 / ULA addresses
+    are allowed through. Loopback / link-local / metadata ranges remain
+    blocked regardless.
     """
+
+    def __init__(self, *args, allow_private: bool = False, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._allow_private = allow_private
 
     async def resolve(self, host: str, port: int = 0, family: int = socket.AF_INET) -> list[dict]:
         infos = await super().resolve(host, port, family)
@@ -58,22 +70,30 @@ class _PublicOnlyResolver(DefaultResolver):  # type: ignore[misc, valid-type]
                 ip = ipaddress.ip_address(info["host"])
             except ValueError:
                 continue
-            if _is_public_ip(ip):
+            if _is_public_ip(ip, allow_private=self._allow_private):
                 filtered.append(info)
         if not filtered:
-            raise OSError(f"Refusing to connect to '{host}': no public addresses available")
+            raise OSError(f"Refusing to connect to '{host}': no reachable addresses available")
         return filtered
 
 
-async def load_data(uri: str, hass: HomeAssistant) -> str:
-    """Load data from an HTTP(S) URL or a file inside the HA config directory."""
+async def load_data(uri: str, hass: HomeAssistant, *, allow_private_urls: bool = False) -> str:
+    """Load data from an HTTP(S) URL or a file inside the HA config directory.
+
+    ``allow_private_urls=True`` relaxes the SSRF resolver to accept RFC-1918
+    private addresses so a user can point the integration at a LAN-installed
+    zone source (e.g. the companion editor add-on at ``http://192.168.x.x:8000``).
+    Loopback / link-local / multicast / metadata addresses stay blocked.
+    """
     parsed = urlparse(uri)
 
     if parsed.scheme in ("http", "https"):
         if not parsed.hostname:
             raise ValueError(f"URL '{uri}' has no hostname")
 
-        connector = aiohttp.TCPConnector(resolver=_PublicOnlyResolver())
+        connector = aiohttp.TCPConnector(
+            resolver=_PublicOnlyResolver(allow_private=allow_private_urls)
+        )
         async with (
             aiohttp.ClientSession(connector=connector) as session,
             session.get(uri, timeout=FETCH_TIMEOUT, allow_redirects=False) as response,

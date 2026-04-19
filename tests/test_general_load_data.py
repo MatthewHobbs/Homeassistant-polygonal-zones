@@ -90,3 +90,33 @@ def test_is_public_ip_rejects_ipv6_non_public(address: str, label: str) -> None:
 )
 def test_is_public_ip_accepts_ipv6_public(address: str) -> None:
     assert _is_public_ip(ipaddress.ip_address(address))
+
+
+@pytest.mark.parametrize(
+    "address",
+    [
+        "192.168.1.50",
+        "10.0.0.1",
+        "172.16.5.10",
+        "fd00::1",  # IPv6 ULA
+    ],
+)
+def test_is_public_ip_allow_private_accepts_rfc1918(address: str) -> None:
+    """allow_private=True opens the RFC-1918 / ULA bucket specifically."""
+    assert _is_public_ip(ipaddress.ip_address(address), allow_private=True)
+
+
+@pytest.mark.parametrize(
+    ("address", "label"),
+    [
+        ("127.0.0.1", "loopback stays blocked"),
+        ("::1", "IPv6 loopback stays blocked"),
+        ("169.254.169.254", "cloud-metadata link-local stays blocked"),
+        ("fe80::1", "IPv6 link-local stays blocked"),
+        ("224.0.0.1", "multicast stays blocked"),
+        ("0.0.0.0", "unspecified stays blocked"),
+    ],
+)
+def test_is_public_ip_allow_private_still_rejects_non_lan(address: str, label: str) -> None:
+    """allow_private is scoped to RFC-1918 only — other risky buckets stay blocked."""
+    assert not _is_public_ip(ipaddress.ip_address(address), allow_private=True), label

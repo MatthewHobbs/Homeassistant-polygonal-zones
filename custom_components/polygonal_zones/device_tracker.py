@@ -21,6 +21,7 @@ from homeassistant.helpers.start import async_at_started
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_ALLOW_PRIVATE_URLS,
     CONF_DOWNLOAD_ZONES,
     CONF_EXPOSE_COORDINATES,
     CONF_PRIORITIZE_ZONE_FILES,
@@ -62,6 +63,9 @@ async def async_setup_entry(
     # to True to preserve their current behaviour. New entries default to
     # False via the config flow (privacy by default).
     expose_coordinates: bool = bool(entry.data.get(CONF_EXPOSE_COORDINATES, True))
+    # Opt-in SSRF relaxation for LAN addon installs. Default strict; user
+    # flips the toggle in config/options. See issue #28.
+    allow_private_urls: bool = bool(entry.data.get(CONF_ALLOW_PRIVATE_URLS, False))
 
     editable_file = False
 
@@ -70,7 +74,9 @@ async def async_setup_entry(
 
         exists = await hass.async_add_executor_job(download_path.exists)
         if not exists:
-            await download_zones(zone_uris, download_path, prioritize, hass)
+            await download_zones(
+                zone_uris, download_path, prioritize, hass, allow_private_urls=allow_private_urls
+            )
 
         zone_uris = [f"/polygonal_zones/{entry.entry_id}.json"]
         editable_file = True
@@ -88,6 +94,7 @@ async def async_setup_entry(
             prioritize,
             editable_file,
             expose_coordinates,
+            allow_private_urls,
         )
         entities.append(entity)
 
@@ -120,6 +127,7 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         prioritized_zone_files: bool,
         editable_file: bool,
         expose_coordinates: bool = True,
+        allow_private_urls: bool = False,
     ) -> None:
         """Initialize the entity."""
         self._config_entry_id = config_entry_id
@@ -127,6 +135,7 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         self._zones_urls = zone_urls
         self._prioritize_zone_files = prioritized_zone_files
         self._expose_coordinates = expose_coordinates
+        self._allow_private_urls = allow_private_urls
 
         self._zones: list[Zone] = []
         self._last_load_failures: list[tuple[str, str]] = []
@@ -169,7 +178,12 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
                 attempt,
             )
             try:
-                result = await load_zones(self._zones_urls, self.hass, self._prioritize_zone_files)
+                result = await load_zones(
+                    self._zones_urls,
+                    self.hass,
+                    self._prioritize_zone_files,
+                    allow_private_urls=self._allow_private_urls,
+                )
                 if self._zones_urls and not result.zones and result.failures:
                     first_uri, first_msg = result.failures[0]
                     raise ZoneFileCorrupt(
@@ -233,9 +247,15 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         """Update the configuration of the entity."""
         self._zones_urls = config_entry.data.get(CONF_ZONES_URL) or []
         self._prioritize_zone_files = bool(config_entry.data.get(CONF_PRIORITIZE_ZONE_FILES))
+        self._allow_private_urls = bool(config_entry.data.get(CONF_ALLOW_PRIVATE_URLS, False))
 
         try:
-            result = await load_zones(self._zones_urls, self.hass, self._prioritize_zone_files)
+            result = await load_zones(
+                self._zones_urls,
+                self.hass,
+                self._prioritize_zone_files,
+                allow_private_urls=self._allow_private_urls,
+            )
             if self._zones_urls and not result.zones and result.failures:
                 first_uri, first_msg = result.failures[0]
                 raise ZoneFileCorrupt(
@@ -353,7 +373,12 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
           ``call`` to sync in-memory state after writing to disk.
         """
         try:
-            result = await load_zones(self._zones_urls, self.hass, self._prioritize_zone_files)
+            result = await load_zones(
+                self._zones_urls,
+                self.hass,
+                self._prioritize_zone_files,
+                allow_private_urls=self._allow_private_urls,
+            )
             if self._zones_urls and not result.zones and result.failures:
                 first_uri, first_msg = result.failures[0]
                 raise ZoneFileCorrupt(
