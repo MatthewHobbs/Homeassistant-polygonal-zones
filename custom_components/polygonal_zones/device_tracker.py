@@ -8,7 +8,7 @@ from typing import Any
 
 from homeassistant.components.device_tracker import SourceType, TrackerEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_ENTITIES
+from homeassistant.const import CONF_ENTITIES, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, SupportsResponse
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers import issue_registry as ir
@@ -348,16 +348,30 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
 
     async def _update_state(self) -> None:
         entity_state = self.hass.states.get(self._entity_id)
-        if entity_state is not None and all(
+
+        # Source tracker has been removed or is reporting unavailable /
+        # unknown. Reflect that on the mirror so downstream automations
+        # can detect the gap instead of acting on stale zone data.
+        # (A tracker that merely lacks GPS attributes for one update — common
+        # for wifi-only trackers between fixes — is handled below without
+        # flipping availability.)
+        if entity_state is None or entity_state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            self._set_available(False)
+            return
+
+        if not all(
             key in entity_state.attributes for key in ["latitude", "longitude", "gps_accuracy"]
         ):
-            await self.update_location(
-                entity_state.attributes["latitude"],
-                entity_state.attributes["longitude"],
-                entity_state.attributes["gps_accuracy"],
-            )
+            return
 
-            self.async_write_ha_state()
+        await self.update_location(
+            entity_state.attributes["latitude"],
+            entity_state.attributes["longitude"],
+            entity_state.attributes["gps_accuracy"],
+        )
+        self._set_available(True)
+
+        self.async_write_ha_state()
 
     async def async_reload_zones(self, call=None) -> dict | list | None:
         """Reload the zones.
