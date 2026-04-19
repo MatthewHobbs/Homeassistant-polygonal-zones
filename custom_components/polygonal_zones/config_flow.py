@@ -69,6 +69,11 @@ def build_create_flow(
                 default=defaults.get("expose_coordinates", expose_fallback),
                 description={"advanced": True},
             ): selector.BooleanSelector(),
+            vol.Optional(
+                "allow_private_urls",
+                default=defaults.get("allow_private_urls", False),
+                description={"advanced": True},
+            ): selector.BooleanSelector(),
         }
     )
 
@@ -98,6 +103,10 @@ def build_options_flow(
             vol.Required(
                 "expose_coordinates",
                 default=defaults.get("expose_coordinates", True),
+            ): selector.BooleanSelector(selector.BooleanSelectorConfig()),
+            vol.Required(
+                "allow_private_urls",
+                default=defaults.get("allow_private_urls", False),
             ): selector.BooleanSelector(selector.BooleanSelectorConfig()),
         }
     )

@@ -59,7 +59,7 @@ async def test_get_zones_prioritise_uses_file_index() -> None:
     file_a = json.dumps({"type": "FeatureCollection", "features": [_polygon("A")]})
     file_b = json.dumps({"type": "FeatureCollection", "features": [_polygon("B")]})
 
-    async def fake_load(uri: str, _hass) -> str:
+    async def fake_load(uri: str, _hass, **_kwargs) -> str:
         return file_a if "a." in uri else file_b
 
     with patch(
@@ -299,7 +299,7 @@ async def test_load_zones_partial_success_keeps_successful_uris() -> None:
     good = json.dumps({"type": "FeatureCollection", "features": [_polygon("Home")]})
     bad_exc = RuntimeError("DNS boom")
 
-    async def fake_load(uri: str, _hass) -> str:
+    async def fake_load(uri: str, _hass, **_kwargs) -> str:
         if "good" in uri:
             return good
         raise bad_exc
@@ -320,7 +320,7 @@ async def test_load_zones_partial_success_keeps_successful_uris() -> None:
 async def test_load_zones_all_fail_returns_empty_with_failures() -> None:
     """All URIs fail — load_zones returns empty zones + full failure list (never raises)."""
 
-    async def fake_load(uri: str, _hass) -> str:
+    async def fake_load(uri: str, _hass, **_kwargs) -> str:
         raise RuntimeError(f"nope {uri}")
 
     with patch(
@@ -336,7 +336,7 @@ async def test_load_zones_all_fail_returns_empty_with_failures() -> None:
 async def test_get_zones_raises_when_all_uris_fail() -> None:
     """get_zones (the wrapper) raises ZoneFileCorrupt so retry/backoff still kicks in."""
 
-    async def fake_load(uri: str, _hass) -> str:
+    async def fake_load(uri: str, _hass, **_kwargs) -> str:
         raise RuntimeError(f"down: {uri}")
 
     with (

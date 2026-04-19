@@ -1,5 +1,6 @@
 """Constants for polygonal zones integration."""
 
+CONF_ALLOW_PRIVATE_URLS = "allow_private_urls"
 CONF_DOWNLOAD_ZONES = "download_zones"
 CONF_ENSURE_UNIQUE_ENTITIES = "ensure_unique_entities"
 CONF_EXPOSE_COORDINATES = "expose_coordinates"
