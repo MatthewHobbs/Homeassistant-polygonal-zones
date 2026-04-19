@@ -15,7 +15,7 @@ jobs:
       contents: write
       actions: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Verify Validate workflow succeeded on this SHA
         env:
@@ -44,6 +44,6 @@ jobs:
           zip -r "$GITHUB_WORKSPACE/polygonal_zones.zip" .
 
       - name: Upload zip to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: polygonal_zones.zip
