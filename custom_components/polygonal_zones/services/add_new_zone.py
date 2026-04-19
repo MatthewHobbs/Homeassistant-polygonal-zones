@@ -61,13 +61,13 @@ def action_builder(hass: HomeAssistant) -> Callable[[ServiceCall], Awaitable[Non
                 await sync_entities_after_write(entities)
         except TimeoutError as err:
             raise InvalidZoneData(
-                f"Timed out waiting for lock on {filename}; another operation may be in progress"
+                "Timed out waiting for zone file lock; another operation may be in progress"
             ) from err
         except aiohttp.ClientError as err:
-            raise InvalidZoneData(f"Failed to fetch zone file: {err}") from err
+            raise InvalidZoneData("Failed to fetch zone file") from err
         except OSError as err:
-            raise InvalidZoneData(f"Failed to access zone file {filename}: {err}") from err
+            raise InvalidZoneData("Failed to access zone file") from err
         except ValueError as err:
-            raise InvalidZoneData(f"Zone file content or path is invalid: {err}") from err
+            raise InvalidZoneData("Zone file content or path is invalid") from err
 
     return add_new_zone
