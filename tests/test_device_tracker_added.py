@@ -38,6 +38,14 @@ async def test_added_to_hass_initializes_zones_immediately() -> None:
     """async_at_started callback runs the initialiser; zones load + state updates."""
     entity = _make_entity()
     entity.hass = _make_hass()
+    # Provide a valid source-tracker state so _update_state doesn't flip
+    # availability to False on the unavailable-source path.
+    entity.hass.states.get = MagicMock(
+        return_value=SimpleNamespace(
+            state="home",
+            attributes={"latitude": 0.5, "longitude": 0.5, "gps_accuracy": 5},
+        )
+    )
     entity.async_get_last_state = AsyncMock(return_value=None)
 
     polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
@@ -198,7 +206,10 @@ async def test_update_state_invokes_update_location_when_attrs_present() -> None
     async def aaej(func, *args):
         return func(*args)
 
-    state = SimpleNamespace(attributes={"latitude": 0.5, "longitude": 0.5, "gps_accuracy": 5})
+    state = SimpleNamespace(
+        state="home",
+        attributes={"latitude": 0.5, "longitude": 0.5, "gps_accuracy": 5},
+    )
     entity.hass = SimpleNamespace(
         states=SimpleNamespace(get=MagicMock(return_value=state)),
         async_add_executor_job=aaej,
@@ -210,10 +221,88 @@ async def test_update_state_invokes_update_location_when_attrs_present() -> None
 
 
 async def test_update_state_skips_when_source_state_missing() -> None:
+    """Source tracker doesn't exist → mirror goes unavailable, location_name preserved."""
     entity = _make_entity()
+    entity._attr_available = True  # simulate healthy startup state
     entity.hass = SimpleNamespace(states=SimpleNamespace(get=MagicMock(return_value=None)))
 
     with patch.object(PolygonalZoneEntity, "async_write_ha_state", lambda self: None):
         await entity._update_state()
-    # location_name stays at default None
     assert entity._attr_location_name is None
+    assert entity._attr_available is False
+
+
+async def test_update_state_flips_unavailable_when_source_is_unavailable() -> None:
+    """Source device reports state='unavailable' → mirror follows."""
+    entity = _make_entity()
+    entity._attr_available = True
+    entity.hass = SimpleNamespace(
+        states=SimpleNamespace(
+            get=MagicMock(return_value=SimpleNamespace(state="unavailable", attributes={}))
+        )
+    )
+
+    with patch.object(PolygonalZoneEntity, "async_write_ha_state", lambda self: None):
+        await entity._update_state()
+    assert entity._attr_available is False
+
+
+async def test_update_state_flips_unavailable_when_source_is_unknown() -> None:
+    """Source device reports state='unknown' → mirror follows."""
+    entity = _make_entity()
+    entity._attr_available = True
+    entity.hass = SimpleNamespace(
+        states=SimpleNamespace(
+            get=MagicMock(return_value=SimpleNamespace(state="unknown", attributes={}))
+        )
+    )
+
+    with patch.object(PolygonalZoneEntity, "async_write_ha_state", lambda self: None):
+        await entity._update_state()
+    assert entity._attr_available is False
+
+
+async def test_update_state_stays_available_when_source_has_state_but_no_gps() -> None:
+    """Wifi-only trackers post state without lat/lon between fixes.
+
+    This is common — don't flip availability just because a single update
+    lacks GPS attrs; the previous resolved zone remains the best estimate
+    until the next fix arrives.
+    """
+    entity = _make_entity()
+    entity._attr_available = True
+    entity.hass = SimpleNamespace(
+        states=SimpleNamespace(
+            get=MagicMock(return_value=SimpleNamespace(state="home", attributes={}))
+        )
+    )
+
+    with patch.object(PolygonalZoneEntity, "async_write_ha_state", lambda self: None):
+        await entity._update_state()
+    assert entity._attr_available is True
+
+
+async def test_update_state_recovers_available_when_source_returns() -> None:
+    """Mirror flipped to unavailable; next valid GPS update restores availability."""
+    entity = _make_entity()
+    polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
+    entity._zones = [Zone(name="Home", geometry=polygon, priority=0)]
+    entity._attr_available = False  # previously flipped off
+
+    async def aaej(func, *args):
+        return func(*args)
+
+    state = SimpleNamespace(
+        state="home",
+        attributes={"latitude": 0.5, "longitude": 0.5, "gps_accuracy": 5},
+    )
+    entity.hass = SimpleNamespace(
+        states=SimpleNamespace(get=MagicMock(return_value=state)),
+        async_add_executor_job=aaej,
+    )
+
+    with patch.object(PolygonalZoneEntity, "async_write_ha_state", lambda self: None):
+        await entity._update_state()
+
+    assert entity._attr_available is True
+    assert entity._attr_location_name == "Home"
