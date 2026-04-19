@@ -11,7 +11,7 @@ from shapely.geometry.polygon import Polygon
 from .general import load_data
 
 
-def haversine_distances(point: np.array, coordinates: np.array) -> np.array:
+def haversine_distances(point: np.ndarray, coordinates: np.ndarray) -> np.ndarray:
     """Calculate Haversine distances from a single point to multiple points.
 
     Args:
