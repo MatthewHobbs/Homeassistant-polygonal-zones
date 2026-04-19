@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN
+if TYPE_CHECKING:
+    from . import PolygonalZonesConfigEntry
 
 # Keys whose values may carry user-meaningful identifiers; replace with placeholder.
 TO_REDACT = {"entities", "zone_urls"}
@@ -20,7 +20,7 @@ def _redact(value: Any) -> Any:
 
 
 async def async_get_config_entry_diagnostics(
-    hass: HomeAssistant, entry: ConfigEntry
+    hass: HomeAssistant, entry: PolygonalZonesConfigEntry
 ) -> dict[str, Any]:
     """Return sanitized diagnostics for a single config entry.
 
@@ -31,7 +31,9 @@ async def async_get_config_entry_diagnostics(
     entry_data = {k: (_redact(v) if k in TO_REDACT else v) for k, v in entry.data.items()}
 
     entities_state: list[dict[str, Any]] = []
-    for entity in hass.data.get(DOMAIN, {}).get(entry.entry_id, []):
+    runtime = getattr(entry, "runtime_data", None)
+    entities = runtime.entities if runtime is not None else []
+    for entity in entities:
         entities_state.append(
             {
                 "available": getattr(entity, "_attr_available", True),

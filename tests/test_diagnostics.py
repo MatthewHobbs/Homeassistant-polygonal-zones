@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pandas as pd
 from shapely.geometry import Polygon
 
-from custom_components.polygonal_zones.const import DOMAIN
+from custom_components.polygonal_zones import PolygonalZonesData
 from custom_components.polygonal_zones.diagnostics import (
     async_get_config_entry_diagnostics,
 )
@@ -20,11 +20,11 @@ async def test_diagnostics_redacts_identifying_lists() -> None:
         _zones_urls=["https://example.com/a.json"],
         _prioritize_zone_files=True,
     )
-    hass = SimpleNamespace(data={DOMAIN: {"entry-1": [fake_entity]}})
     entry = SimpleNamespace(
         entry_id="entry-1",
         title="Polygonal Zones",
         version=1,
+        runtime_data=PolygonalZonesData(entities=[fake_entity]),
         data={
             "zone_urls": ["https://example.com/a.json"],
             "entities": ["device_tracker.alice", "device_tracker.bob"],
@@ -33,7 +33,7 @@ async def test_diagnostics_redacts_identifying_lists() -> None:
         },
     )
 
-    result = await async_get_config_entry_diagnostics(hass, entry)
+    result = await async_get_config_entry_diagnostics(SimpleNamespace(), entry)
 
     assert result["entry"]["title"] == "Polygonal Zones"
     assert result["entry"]["data"]["entities"] == ["<redacted-0>", "<redacted-1>"]
@@ -44,14 +44,26 @@ async def test_diagnostics_redacts_identifying_lists() -> None:
 
 
 async def test_diagnostics_with_no_entities() -> None:
-    hass = SimpleNamespace(data={DOMAIN: {}})
     entry = SimpleNamespace(
         entry_id="entry-2",
         title="Polygonal Zones",
         version=1,
+        runtime_data=PolygonalZonesData(),
         data={"zone_urls": [], "entities": []},
     )
-    result = await async_get_config_entry_diagnostics(hass, entry)
+    result = await async_get_config_entry_diagnostics(SimpleNamespace(), entry)
+    assert result["entities"] == []
+
+
+async def test_diagnostics_when_runtime_data_missing() -> None:
+    """Defensive: an entry without runtime_data still produces a sensible report."""
+    entry = SimpleNamespace(
+        entry_id="entry-3",
+        title="Polygonal Zones",
+        version=1,
+        data={"zone_urls": [], "entities": []},
+    )
+    result = await async_get_config_entry_diagnostics(SimpleNamespace(), entry)
     assert result["entities"] == []
 
 

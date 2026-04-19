@@ -114,12 +114,13 @@ def zone_already_defined(name: str, existing_zones: dict[str, Any]) -> bool:
 
 
 def get_entities_from_device_id(device_id: str, hass: HomeAssistant) -> list["PolygonalZoneEntity"]:
-    """Get the entities from the provided device_id."""
+    """Get the entities from the provided device_id via the entry's runtime_data."""
     device_entry = dr.async_get(hass)
     device = device_entry.async_get(device_id)
     if device is None:
         raise InvalidZoneData(f"Unknown device_id: {device_id}")
     entry_id = device.primary_config_entry
-    if entry_id is None or entry_id not in hass.data.get(DOMAIN, {}):
+    entry = hass.config_entries.async_get_entry(entry_id) if entry_id else None
+    if entry is None or entry.domain != DOMAIN or not hasattr(entry, "runtime_data"):
         raise InvalidZoneData(f"Device '{device_id}' is not registered to polygonal_zones")
-    return hass.data[DOMAIN][entry_id]
+    return entry.runtime_data.entities

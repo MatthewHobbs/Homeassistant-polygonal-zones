@@ -26,9 +26,7 @@ rules:
   has-entity-name:
     status: exempt
     comment: Entity name is generated from the source device_tracker entity_id.
-  runtime-data:
-    status: todo
-    comment: Currently uses hass.data[DOMAIN][entry.entry_id]; could migrate to ConfigEntry.runtime_data.
+  runtime-data: done
   test-before-configure: done
   test-before-setup: done
   unique-config-entry: done
