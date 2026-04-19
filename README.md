@@ -2,7 +2,7 @@
 
 This Home Assistant integration lets you define arbitrary polygonal zones from a GeoJSON file and resolve any tracked `device_tracker` entity into the zone it currently sits inside. Use it when the built-in circular HA zones aren't expressive enough — irregular property boundaries, school catchments, neighbourhoods, town centres, etc.
 
-**Status:** stable (v1.5.0). Actively maintained; HACS-ready; declares `quality_scale: silver` in its manifest.
+**Status:** stable (v1.6.0). Actively maintained; HACS-ready; declares `quality_scale: gold` in its manifest.
 
 > ℹ️ **Fork Notice**
 >
@@ -17,9 +17,12 @@ This Home Assistant integration lets you define arbitrary polygonal zones from a
 - [First-time setup](#first-time-setup)
 - [Configuration options](#configuration-options)
 - [Usage](#usage)
+- [Use cases](#use-cases)
+- [How updates flow](#how-updates-flow)
 - [GeoJSON file format](#geojson-file-format)
 - [Actions / services](#actions--services)
 - [Action examples](#action-examples)
+- [Known limitations](#known-limitations)
 - [Troubleshooting](#troubleshooting)
 - [Privacy and data handling](#privacy-and-data-handling)
 - [Roadmap](#roadmap)
@@ -88,6 +91,25 @@ automation:
 ```
 
 The mirror entity also exposes the source coordinates in its attributes (`latitude`, `longitude`, `gps_accuracy`) so templates can read them directly without referencing the underlying tracker.
+
+## Use cases
+
+A few scenarios where polygonal zones are a better fit than HA's built-in circular zones:
+
+- **Property boundary that isn't a circle** — flag-shaped lots, mews flats with awkward driveways, farms.
+- **School catchment / neighbourhood** — fire an automation when a child arrives in a defined area larger than a single circle would naturally cover.
+- **Town centre / shopping district** — irregular footprints where a circle would either miss the edges or include unwanted streets.
+- **Multi-zone presence with priority** — overlapping zones (e.g. "Town" containing "Shop") where you want the more specific one to win automation triggers. Combine with `prioritize_zone_files` or per-feature `priority`.
+- **Geofence handover between vehicles and phones** — track multiple `device_tracker` entities into the same zone set; correlate their `polygonal_zones_*` mirror states.
+
+## How updates flow
+
+The integration is **push-based**. There is no polling schedule.
+
+- Each tracked source `device_tracker` entity has a `state_changed` listener attached.
+- When the source's `latitude` / `longitude` / `gps_accuracy` change, the mirror entity recomputes which zone it sits in and updates its state.
+- Zone definitions are loaded once on startup (and on `polygonal_zones.reload_zones`). Remote URLs are fetched only at those moments — never per location update.
+- If the initial zone fetch fails it retries with exponential backoff (30 s → 60 s → 120 s → 240 s → 480 s, 5 attempts) before raising a Home Assistant repair issue and marking the entity unavailable.
 
 ## GeoJSON file format
 
@@ -259,6 +281,18 @@ data:
       "features": [ ... ]
     }
 ```
+
+## Known limitations
+
+- **Geometry types**: only `Polygon` and `MultiPolygon` are accepted. `Point`, `LineString`, `MultiPoint`, `GeometryCollection`, and a `null` geometry are rejected at the service boundary.
+- **Coordinate system**: only WGS-84 lat/lon (the GeoJSON default, `[longitude, latitude]` order). No projected coordinate systems.
+- **Zone-file size**: HTTP zone files are capped at **5 MiB**. Service payloads (`add_new_zone`, `edit_zone`, `replace_all_zones`) at **1 MiB**.
+- **Zone names**: max **200 characters**.
+- **Network targets**: outbound zone-file fetches **refuse private, loopback, link-local, multicast, reserved, and metadata IPs** to prevent SSRF. If your zones live on a LAN or `169.254.x` host, place the file under `/config` and reference the path instead of a URL.
+- **No 3xx redirects**: HTTP responses with status 300–399 are rejected (the redirect target hasn't been validated by our DNS resolver).
+- **Service mutations require a downloaded local file**: `add_new_zone`, `edit_zone`, `delete_zone`, and `replace_all_zones` are refused with `ZoneFileNotEditable` when the integration is reading directly from a remote URL. Toggle **Download the GeoJSON files** in the integration options to enable mutations.
+- **Single point in time per device**: only the source device's most recent GPS fix is evaluated; history isn't replayed.
+- **Async constraints**: `shapely` and `pandas` are sync compute libraries — geometry math runs on the event loop. For typical home setups (≤20 tracked devices, ≤100 zones) this is imperceptible. Very large zone sets may stall the loop.
 
 ## Troubleshooting
 

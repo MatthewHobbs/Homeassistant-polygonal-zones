@@ -54,6 +54,8 @@ async def test_added_to_hass_initializes_zones_immediately() -> None:
             new=AsyncMock(return_value=df),
         ),
         patch.object(PolygonalZoneEntity, "async_write_ha_state", lambda self: None),
+        patch("custom_components.polygonal_zones.device_tracker.ir.async_create_issue"),
+        patch("custom_components.polygonal_zones.device_tracker.ir.async_delete_issue"),
     ):
         await entity.async_added_to_hass()
         await captured["cb"](entity.hass)
@@ -112,6 +114,7 @@ async def test_added_to_hass_exhausted_retries_marks_unavailable() -> None:
         captured["cb"] = cb
         return lambda: None
 
+    create_issue_mock = MagicMock()
     with (
         patch(
             "custom_components.polygonal_zones.device_tracker.async_at_started",
@@ -125,11 +128,16 @@ async def test_added_to_hass_exhausted_retries_marks_unavailable() -> None:
             "custom_components.polygonal_zones.device_tracker.async_call_later",
             new=call_later_mock,
         ),
+        patch(
+            "custom_components.polygonal_zones.device_tracker.ir.async_create_issue",
+            new=create_issue_mock,
+        ),
     ):
         await entity.async_added_to_hass()
         await captured["cb"](entity.hass, attempt=5)
 
     call_later_mock.assert_not_called()
+    create_issue_mock.assert_called_once()
     assert entity._attr_available is False
 
 

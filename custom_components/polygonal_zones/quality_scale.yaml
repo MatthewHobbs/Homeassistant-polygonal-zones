@@ -40,33 +40,26 @@ rules:
   test-coverage: done
 
   # --------- Gold ---------
-  devices:
-    status: exempt
-    comment: One synthetic device per config entry; uses DeviceEntryType.SERVICE.
-  diagnostics:
-    status: todo
+  devices: done
+  diagnostics: done
   discovery:
     status: exempt
-    comment: Zone files are user-supplied URLs/paths; no network discovery.
+    comment: Zone files are user-supplied URLs/paths; no network discovery is possible.
   discovery-update-info:
     status: exempt
     comment: No discovery.
-  docs-data-update:
-    status: todo
+  docs-data-update: done
   docs-examples: done
-  docs-known-limitations:
-    status: todo
+  docs-known-limitations: done
   docs-supported-devices:
     status: exempt
     comment: Operates on any HA device_tracker entity exposing latitude / longitude / gps_accuracy.
-  docs-supported-functions:
-    status: todo
+  docs-supported-functions: done
   docs-troubleshooting: done
-  docs-use-cases:
-    status: todo
+  docs-use-cases: done
   dynamic-devices:
     status: exempt
-    comment: Single synthetic device per config entry; nothing dynamic to add post-setup.
+    comment: Single synthetic DeviceEntryType.SERVICE device per config entry; nothing dynamic to add post-setup.
   entity-category:
     status: exempt
     comment: TrackerEntity has no entity_category by convention.
@@ -77,16 +70,14 @@ rules:
     status: exempt
     comment: All entities are enabled by default; user explicitly selected them in config flow.
   entity-translations:
-    status: todo
-  exception-translations:
-    status: todo
+    status: exempt
+    comment: Entity name is derived from the source device_tracker; no static name to translate.
+  exception-translations: done
   icon-translations:
-    status: todo
-  reconfiguration-flow:
-    status: todo
-    comment: Options flow exists for zone_urls and prioritize_zone_files; entity list still requires re-add.
-  repair-issues:
-    status: todo
+    status: exempt
+    comment: TrackerEntity has no icon; icon comes from HA's device_tracker frontend.
+  reconfiguration-flow: done
+  repair-issues: done
   stale-devices:
     status: exempt
     comment: No dynamic devices.

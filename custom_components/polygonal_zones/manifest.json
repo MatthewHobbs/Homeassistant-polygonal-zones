@@ -8,7 +8,7 @@
   "integration_type": "service",
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues",
-  "quality_scale": "silver",
+  "quality_scale": "gold",
   "requirements": ["shapely==2.0.6", "pandas==2.2.3"],
-  "version": "1.5.0"
+  "version": "1.6.0"
 }

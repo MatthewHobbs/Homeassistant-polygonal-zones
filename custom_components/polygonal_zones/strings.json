@@ -16,6 +16,22 @@
           "download_zones": "Use a local GeoJSON file to store the zones in. This will load the above defined files into a single file. The entities will only use this single file to retrieve the zones from. If no GeoJSON files are defined we will create an empty GeoJSON file.",
           "registered_entities": "Select the entities that you want to track in the zones."
         }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Polygonal Zones",
+        "description": "Update zone sources, tracked entities, and flags in place.",
+        "data": {
+          "zone_urls": "URLs of GeoJSON files",
+          "prioritize_zone_files": "Prioritize order of zone files",
+          "registered_entities": "Entities",
+          "download_zones": "Download the GeoJSON files"
+        },
+        "data_description": {
+          "zone_urls": "Enter the URLs of the GeoJSON files that contain the zones you want to track. This supports both websites and files in the /config directory.",
+          "prioritize_zone_files": "If you want to prioritize the order of the zone files, enable this option. This means that if a tracker is in multiple zones it will only consider those with the lowest priority.",
+          "download_zones": "Use a local GeoJSON file to store the zones in. This will load the above defined files into a single file. The entities will only use this single file to retrieve the zones from. If no GeoJSON files are defined we will create an empty GeoJSON file.",
+          "registered_entities": "Select the entities that you want to track in the zones."
+        }
       }
     },
     "error": {
@@ -111,6 +127,26 @@
           "description": "The name of the zone to delete."
         }
       }
+    }
+  },
+  "exceptions": {
+    "zone_file_not_editable": {
+      "message": "The zone file for this device is read-only. Enable 'Download the GeoJSON files' in the integration options to make it editable."
+    },
+    "zone_already_exists": {
+      "message": "A zone with that name already exists in this file."
+    },
+    "zone_does_not_exist": {
+      "message": "No zone with that name exists in this file."
+    },
+    "invalid_zone_data": {
+      "message": "The supplied zone data is invalid."
+    }
+  },
+  "issues": {
+    "zone_load_failed": {
+      "title": "Polygonal Zones could not load zones",
+      "description": "The integration was unable to load the GeoJSON zone file for `{entity_id}` after several retry attempts. Check that the URL is reachable or the local path is correct, then call the `polygonal_zones.reload_zones` action or reload the integration."
     }
   }
 }
