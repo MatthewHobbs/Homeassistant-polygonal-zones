@@ -3,10 +3,10 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pandas as pd
 from shapely.geometry import Polygon
 
 from custom_components.polygonal_zones.device_tracker import PolygonalZoneEntity
+from custom_components.polygonal_zones.utils.zones import Zone
 
 
 def _make_entity() -> PolygonalZoneEntity:
@@ -41,7 +41,7 @@ async def test_added_to_hass_initializes_zones_immediately() -> None:
     entity.async_get_last_state = AsyncMock(return_value=None)
 
     polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
-    df = pd.DataFrame([{"name": "Home", "priority": 0, "geometry": polygon}])
+    zones = [Zone(name="Home", geometry=polygon, priority=0)]
 
     captured = {}
 
@@ -56,7 +56,7 @@ async def test_added_to_hass_initializes_zones_immediately() -> None:
         ),
         patch(
             "custom_components.polygonal_zones.device_tracker.get_zones",
-            new=AsyncMock(return_value=df),
+            new=AsyncMock(return_value=zones),
         ),
         patch.object(PolygonalZoneEntity, "async_write_ha_state", lambda self: None),
         patch("custom_components.polygonal_zones.device_tracker.ir.async_create_issue"),
@@ -65,7 +65,7 @@ async def test_added_to_hass_initializes_zones_immediately() -> None:
         await entity.async_added_to_hass()
         await captured["cb"](entity.hass)
 
-    assert not entity._zones.empty
+    assert entity._zones
     assert entity._attr_available is True
 
 
@@ -152,7 +152,7 @@ async def test_update_config_reads_new_data_and_reloads() -> None:
     entity._async_write_ha_state = MagicMock()
 
     polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
-    df = pd.DataFrame([{"name": "Home", "priority": 0, "geometry": polygon}])
+    zones = [Zone(name="Home", geometry=polygon, priority=0)]
 
     new_entry = SimpleNamespace(
         data={"zone_urls": ["https://new.example/zones.json"], "prioritize_zone_files": True}
@@ -160,7 +160,7 @@ async def test_update_config_reads_new_data_and_reloads() -> None:
 
     with patch(
         "custom_components.polygonal_zones.device_tracker.get_zones",
-        new=AsyncMock(return_value=df),
+        new=AsyncMock(return_value=zones),
     ):
         await entity.async_update_config(new_entry)
 
@@ -174,7 +174,7 @@ async def test_update_config_keeps_previous_zones_on_failure() -> None:
     entity._async_write_ha_state = MagicMock()
 
     polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
-    entity._zones = pd.DataFrame([{"name": "Home", "priority": 0, "geometry": polygon}])
+    entity._zones = [Zone(name="Home", geometry=polygon, priority=0)]
 
     new_entry = SimpleNamespace(
         data={"zone_urls": ["https://nope"], "prioritize_zone_files": False}
@@ -187,13 +187,13 @@ async def test_update_config_keeps_previous_zones_on_failure() -> None:
         await entity.async_update_config(new_entry)
 
     # Previous zones preserved
-    assert not entity._zones.empty
+    assert entity._zones
 
 
 async def test_update_state_invokes_update_location_when_attrs_present() -> None:
     entity = _make_entity()
     polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
-    entity._zones = pd.DataFrame([{"name": "Home", "priority": 0, "geometry": polygon}])
+    entity._zones = [Zone(name="Home", geometry=polygon, priority=0)]
 
     async def aaej(func, *args):
         return func(*args)

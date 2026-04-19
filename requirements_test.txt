@@ -4,4 +4,3 @@ pytest
 pytest-asyncio
 pytest-cov
 shapely==2.0.6
-pandas==2.2.3

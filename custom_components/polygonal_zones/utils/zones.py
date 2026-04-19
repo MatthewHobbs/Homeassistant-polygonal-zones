@@ -1,28 +1,40 @@
-"""Zone related utility functions for polygonal zones integration."""
+"""Zone-related utility functions for the polygonal_zones integration."""
 
+from __future__ import annotations
+
+from dataclasses import dataclass, field
 import json
+from typing import Any
 
 from homeassistant.core import HomeAssistant
 import numpy as np
-import pandas as pd
 from shapely.geometry import Point, shape
 from shapely.geometry.polygon import Polygon
 
 from .general import load_data
 
 
+@dataclass
+class Zone:
+    """A single named polygonal zone with optional priority + extra properties."""
+
+    name: str
+    geometry: Polygon
+    priority: int = 0
+    properties: dict[str, Any] = field(default_factory=dict)
+
+
 def haversine_distances(point: np.ndarray, coordinates: np.ndarray) -> np.ndarray:
     """Calculate Haversine distances from a single point to multiple points.
 
     Args:
-        point: NumPy array of shape (2,) containing [latitude, longitude] of the single point (in degrees)
-        coordinates: NumPy array of shape (n, 2) containing latitudes and longitudes of multiple points (in degrees)
+        point: NumPy array of shape (2,) containing [latitude, longitude] in degrees.
+        coordinates: NumPy array of shape (n, 2) containing latitudes and longitudes.
 
     Returns:
-        Array of distances in kilometers
-
+        Array of distances in metres.
     """
-    R = 6371000  # Radius of the earth in meters
+    R = 6371000  # Earth radius in metres
 
     lat1, lon1 = np.radians(point)
     lats2, lons2 = np.radians(coordinates).T
@@ -37,128 +49,95 @@ def haversine_distances(point: np.ndarray, coordinates: np.ndarray) -> np.ndarra
 
 
 def get_distance_to_exterior_points(polygon: Polygon, point: Point) -> float:
-    """Get the haversine distance between a point and the closest exterior point of a polygon.
-
-    Args:
-        polygon: A shapely Polygon object
-        point: A shapely Point object
-
-    Returns:
-        The distance in kilometers.
-
-    """
+    """Haversine distance to the closest point on the polygon's exterior, in metres."""
     polygon_points = np.array(polygon.exterior.coords)
     point_coords = np.array([point.x, point.y])
     distances = haversine_distances(point_coords, polygon_points)
-    return min(distances)
+    return float(min(distances))
 
 
 def get_distance_to_centroid(polygon: Polygon, point: Point) -> float:
-    """Get the haversine distance between a point and the centroid of a polygon.
-
-    Args:
-        polygon: A shapely Polygon object
-        point: A shapely Point object
-
-    Returns:
-        The distance in meters as a plain ``float`` (JSON-serialisable).
-
-    """
+    """Haversine distance from ``point`` to the polygon's centroid, in metres (JSON-safe)."""
     centroid = polygon.centroid
     point_coords = np.array([point.x, point.y])
     centroid_coords = np.array([[centroid.x, centroid.y]])
-
     return float(haversine_distances(point_coords, centroid_coords)[0])
 
 
-async def get_zones(uris: list[str], hass: HomeAssistant, prioritize: bool) -> pd.DataFrame:
-    """Get the zones from the geojson file.
+async def get_zones(uris: list[str], hass: HomeAssistant, prioritize: bool) -> list[Zone]:
+    """Load and parse the GeoJSON file(s) into a list of ``Zone`` objects.
 
     Args:
-        uris: The URL to the geojson file.
-        hass: The homeassistant instance.
-        prioritize: boolean if we want to prioritize the zones in order.
+        uris: URLs (or HA config-dir paths) of GeoJSON files.
+        hass: The Home Assistant instance.
+        prioritize: When True, features without an explicit priority inherit the
+            file's index in ``uris`` so earlier files outrank later ones.
 
     Returns:
-        A pandas DataFrame containing the zones.
-
+        A list of Zone objects parsed from every file.
     """
-    zones = []
+    zones: list[Zone] = []
 
     for idx, uri in enumerate(uris):
-        data = await load_data(uri, hass)
-        data = json.loads(data)
+        raw = await load_data(uri, hass)
+        data = json.loads(raw)
 
-        # parse the geojson file into a pandas DataFrame.
-        # We only want the relevant information.
         for feature in data["features"]:
-            properties = feature["properties"]
+            properties = dict(feature["properties"])
             if "priority" in properties:
-                priority = properties["priority"]
+                priority = int(properties["priority"])
             else:
                 priority = idx if prioritize else 0
 
             geometry = shape(feature["geometry"])
             zones.append(
-                {
-                    "geometry": geometry,
-                    "priority": priority,
-                    **properties,
-                }
+                Zone(
+                    name=properties["name"],
+                    geometry=geometry,
+                    priority=priority,
+                    properties=properties,
+                )
             )
 
-    return pd.DataFrame(zones)
+    return zones
 
 
-def get_locations_zone(lat: float, lon: float, acc: float, zones: pd.DataFrame) -> dict | None:
-    """Determine the closest zone to the given GPS coordinates.
+def get_locations_zone(lat: float, lon: float, acc: float, zones: list[Zone]) -> dict | None:
+    """Resolve the GPS position to the highest-priority enclosing zone.
 
     Args:
-        lat: The latitude of the GPS coordinates.
-        lon: The longitude of the GPS coordinates.
-        acc: The accuracy of the GPS coordinates in meters.
-        zones: A pandas DataFrame containing the zones, with a "geometry" column
-            of Polygon objects.
+        lat: latitude of the GPS fix in degrees.
+        lon: longitude of the GPS fix in degrees.
+        acc: accuracy radius in metres (used to inflate the search point).
+        zones: list of ``Zone`` objects to search.
 
     Returns:
-        The closest zone if found, otherwise `None`.
-
+        ``{"name": ..., "distance_to_centroid": <metres>}`` or ``None`` if the
+        point falls outside every zone.
     """
-    if len(zones) == 0:
+    if not zones:
         return None
 
     gps_point = Point(lon, lat)
     buffer = gps_point.buffer(acc / 111320)
 
-    # Get the zones we might be in
-    posible_zones = zones[buffer.intersects(zones["geometry"])]
-
-    # if we have 1 or 0 possible zones we will return.
-    if posible_zones.empty:
+    possible = [z for z in zones if buffer.intersects(z.geometry)]
+    if not possible:
         return None
 
-    if len(posible_zones) == 1:
-        zone = posible_zones.iloc[0]
-        centroid_distance = get_distance_to_centroid(zone["geometry"], gps_point)
+    if len(possible) == 1:
+        z = possible[0]
         return {
-            "name": zone["name"],
-            "distance_to_centroid": centroid_distance,
+            "name": z.name,
+            "distance_to_centroid": get_distance_to_centroid(z.geometry, gps_point),
         }
 
-    # filter to the lowest priority zones
-    posible_zones = posible_zones[posible_zones["priority"] == posible_zones["priority"].min()]
+    # Filter to the highest-priority candidates (lowest priority value wins)
+    min_priority = min(z.priority for z in possible)
+    candidates = [z for z in possible if z.priority == min_priority]
 
-    # get the distances to the potential zones using the uclidean distance to the cetnroid
-    distances = posible_zones["geometry"].apply(
-        lambda x: get_distance_to_exterior_points(x, gps_point)
-    )
-
-    closest_zone_index = distances.idxmin()
-
-    # get the amount of zones that have the same distance
-    zone = zones.loc[closest_zone_index]
-    centroid_distance = get_distance_to_centroid(zone["geometry"], gps_point)
+    closest = min(candidates, key=lambda z: get_distance_to_exterior_points(z.geometry, gps_point))
     return {
-        "name": zone["name"],
-        "distance_to_centroid": centroid_distance,
+        "name": closest.name,
+        "distance_to_centroid": get_distance_to_centroid(closest.geometry, gps_point),
     }

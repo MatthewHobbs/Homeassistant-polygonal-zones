@@ -7,10 +7,9 @@ import os
 from pathlib import Path
 
 from homeassistant.core import HomeAssistant
-import pandas as pd
 from shapely import to_geojson
 
-from .zones import get_zones
+from .zones import Zone, get_zones
 
 _FILE_LOCKS: dict[str, asyncio.Lock] = {}
 
@@ -39,8 +38,8 @@ def release_file_lock(path: Path) -> None:
     _FILE_LOCKS.pop(str(path), None)
 
 
-def zones_to_geojson(zones: pd.DataFrame) -> str:
-    """Convert the zones to GeoJSON."""
+def zones_to_geojson(zones: list[Zone]) -> str:
+    """Convert a list of ``Zone`` objects back into a GeoJSON string."""
     return json.dumps(
         {
             "type": "FeatureCollection",
@@ -53,7 +52,7 @@ def zones_to_geojson(zones: pd.DataFrame) -> str:
                     },
                     "geometry": json.loads(to_geojson(zone.geometry)),
                 }
-                for zone in zones.itertuples()
+                for zone in zones
             ],
         }
     )

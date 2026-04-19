@@ -24,7 +24,7 @@ def _make_entity(editable_file: bool = False) -> PolygonalZoneEntity:
 
 def test_zones_property_starts_empty() -> None:
     entity = _make_entity()
-    assert entity.zones.empty
+    assert entity.zones == []
 
 
 def test_editable_file_property_returns_constructor_value() -> None:

@@ -2,13 +2,13 @@
 
 from types import SimpleNamespace
 
-import pandas as pd
 from shapely.geometry import Polygon
 
 from custom_components.polygonal_zones import PolygonalZonesData
 from custom_components.polygonal_zones.diagnostics import (
     async_get_config_entry_diagnostics,
 )
+from custom_components.polygonal_zones.utils.zones import Zone
 
 
 async def test_diagnostics_redacts_identifying_lists() -> None:
@@ -16,7 +16,7 @@ async def test_diagnostics_redacts_identifying_lists() -> None:
     fake_entity = SimpleNamespace(
         _attr_available=True,
         _editable_file=True,
-        _zones=pd.DataFrame([{"name": "Home", "priority": 0, "geometry": polygon}]),
+        _zones=[Zone(name="Home", geometry=polygon, priority=0)],
         _zones_urls=["https://example.com/a.json"],
         _prioritize_zone_files=True,
     )
