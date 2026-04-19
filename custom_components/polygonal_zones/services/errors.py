@@ -31,3 +31,10 @@ class InvalidZoneData(HomeAssistantError):
 
     translation_domain = DOMAIN
     translation_key = "invalid_zone_data"
+
+
+class RateLimited(HomeAssistantError):
+    """Error to signal that the mutation service was called too frequently."""
+
+    translation_domain = DOMAIN
+    translation_key = "rate_limited"

@@ -147,6 +147,9 @@
     },
     "invalid_zone_data": {
       "message": "The supplied zone data is invalid."
+    },
+    "rate_limited": {
+      "message": "Zone mutation services on this entry are being called too fast. Wait a moment and try again."
     }
   },
   "issues": {

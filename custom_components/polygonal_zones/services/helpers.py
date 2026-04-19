@@ -3,14 +3,15 @@
 import asyncio
 import json
 import logging
+import time
 from typing import Any
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import device_registry as dr
 
 from ..const import DOMAIN
 from ..device_tracker import PolygonalZoneEntity
-from .errors import InvalidZoneData
+from .errors import InvalidZoneData, RateLimited
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -26,6 +27,56 @@ SUPPORTED_GEOMETRY_TYPES = {"Polygon", "MultiPolygon"}
 # round-trip but logged at WARNING so drift is visible. New producer-specific
 # fields belong under ``properties.polygonal_zones_ext``. See docs/ZONES_FORMAT.md.
 KNOWN_FEATURE_PROPERTY_KEYS = frozenset({"name", "priority", "polygonal_zones_ext"})
+
+# Minimum seconds between mutation-service calls for a single config entry.
+# A low-privilege authenticated user can't wedge the event loop by spamming
+# service calls; 2s is generous for human + automation use and catches runaway
+# loops immediately.
+MUTATION_MIN_INTERVAL_S = 2.0
+_LAST_MUTATION_TIMESTAMP: dict[str, float] = {}
+
+
+def reset_mutation_rate_limit() -> None:
+    """Clear the mutation rate-limit timestamps. Intended for tests."""
+    _LAST_MUTATION_TIMESTAMP.clear()
+
+
+def enforce_mutation_rate_limit(
+    entry_id: str, min_interval: float = MUTATION_MIN_INTERVAL_S
+) -> None:
+    """Raise ``RateLimited`` if this entry mutated within ``min_interval`` seconds.
+
+    Keyed by ``entry_id`` rather than ``device_id`` because every entity under
+    one entry shares the same on-disk file — allowing two devices in the same
+    entry to mutate simultaneously would bypass the point of the gate.
+    """
+    now = time.monotonic()
+    last = _LAST_MUTATION_TIMESTAMP.get(entry_id, 0.0)
+    elapsed = now - last
+    if elapsed < min_interval:
+        raise RateLimited(
+            f"Rate limit exceeded: wait {min_interval - elapsed:.1f}s before the "
+            "next polygonal_zones mutation on this entry."
+        )
+    _LAST_MUTATION_TIMESTAMP[entry_id] = now
+
+
+def audit_mutation_call(call: ServiceCall, service_name: str, entry_id: str) -> None:
+    """Log every mutation invocation at INFO with the calling user_id.
+
+    ``ServiceCall.context.user_id`` is the HA user that invoked the service.
+    Automation / script / system invocations carry a ``None`` user_id; we
+    surface that as ``<automation/system>`` so the audit trail still shows
+    the origin.
+    """
+    context = getattr(call, "context", None)
+    user_id = getattr(context, "user_id", None) if context is not None else None
+    _LOGGER.info(
+        "polygonal_zones.%s invoked by user=%s on entry=%s",
+        service_name,
+        user_id or "<automation/system>",
+        entry_id,
+    )
 
 
 def _count_geometry_vertices(geometry: dict) -> int:

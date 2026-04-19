@@ -46,7 +46,10 @@ async def test_add_zone_duplicate_name_raises(tmp_path) -> None:
     )
 
     fake_entity = SimpleNamespace(
-        editable_file=True, zone_urls=["zones.json"], async_reload_zones=AsyncMock()
+        editable_file=True,
+        zone_urls=["zones.json"],
+        async_reload_zones=AsyncMock(),
+        _config_entry_id="entry-id",
     )
     hass = _make_hass(tmp_path)
     action = action_builder(hass)
@@ -86,7 +89,10 @@ async def test_add_zone_new_name_appends_to_file(tmp_path) -> None:
     )
 
     fake_entity = SimpleNamespace(
-        editable_file=True, zone_urls=["zones.json"], async_reload_zones=AsyncMock()
+        editable_file=True,
+        zone_urls=["zones.json"],
+        async_reload_zones=AsyncMock(),
+        _config_entry_id="entry-id",
     )
     hass = _make_hass(tmp_path)
     action = action_builder(hass)
@@ -118,10 +124,16 @@ async def test_add_zone_syncs_all_entities_under_entry(tmp_path) -> None:
     )
 
     entity_a = SimpleNamespace(
-        editable_file=True, zone_urls=["zones.json"], async_reload_zones=AsyncMock()
+        editable_file=True,
+        zone_urls=["zones.json"],
+        async_reload_zones=AsyncMock(),
+        _config_entry_id="entry-id",
     )
     entity_b = SimpleNamespace(
-        editable_file=True, zone_urls=["zones.json"], async_reload_zones=AsyncMock()
+        editable_file=True,
+        zone_urls=["zones.json"],
+        async_reload_zones=AsyncMock(),
+        _config_entry_id="entry-id",
     )
     hass = _make_hass(tmp_path)
     action = action_builder(hass)
@@ -146,7 +158,10 @@ async def test_add_zone_does_not_sync_when_write_fails(tmp_path) -> None:
     )
 
     fake_entity = SimpleNamespace(
-        editable_file=True, zone_urls=["zones.json"], async_reload_zones=AsyncMock()
+        editable_file=True,
+        zone_urls=["zones.json"],
+        async_reload_zones=AsyncMock(),
+        _config_entry_id="entry-id",
     )
     hass = _make_hass(tmp_path)
     action = action_builder(hass)
