@@ -4,19 +4,32 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import json
+import logging
 from typing import Any
 
 from homeassistant.core import HomeAssistant
 import numpy as np
+from shapely.errors import GEOSException
 from shapely.geometry import Point, shape
 from shapely.geometry.polygon import Polygon
 
 from ..const import MAX_SUPPORTED_SCHEMA_VERSION
 from .general import load_data
 
+_LOGGER = logging.getLogger(__name__)
+
 
 class UnsupportedSchemaVersion(ValueError):
     """Raised when a zone file declares a schema_version this integration can't read."""
+
+
+class ZoneFileCorrupt(ValueError):
+    """Raised when a zone file can be fetched/parsed as JSON but fails structural checks.
+
+    Covers: top-level not a FeatureCollection, ``features`` missing or not a list,
+    a feature missing ``geometry`` / ``properties`` / ``properties.name``, or an
+    unparseable geometry.
+    """
 
 
 @dataclass
@@ -27,6 +40,20 @@ class Zone:
     geometry: Polygon
     priority: int = 0
     properties: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ZoneLoadResult:
+    """Outcome of a multi-URI zone load.
+
+    ``zones`` is the union of every feature successfully parsed.
+    ``failures`` records per-URI failures as ``(uri, message)`` tuples; callers
+    that want graceful degradation use it to surface the failure list in
+    diagnostics without aborting the whole load.
+    """
+
+    zones: list[Zone] = field(default_factory=list)
+    failures: list[tuple[str, str]] = field(default_factory=list)
 
 
 def haversine_distances(point: np.ndarray, coordinates: np.ndarray) -> np.ndarray:
@@ -69,55 +96,122 @@ def get_distance_to_centroid(polygon: Polygon, point: Point) -> float:
     return float(haversine_distances(point_coords, centroid_coords)[0])
 
 
-async def get_zones(uris: list[str], hass: HomeAssistant, prioritize: bool) -> list[Zone]:
-    """Load and parse the GeoJSON file(s) into a list of ``Zone`` objects.
+def _parse_feature(feature: Any, default_priority: int) -> Zone:
+    """Validate a single GeoJSON Feature and convert it to a ``Zone``.
 
-    Args:
-        uris: URLs (or HA config-dir paths) of GeoJSON files.
-        hass: The Home Assistant instance.
-        prioritize: When True, features without an explicit priority inherit the
-            file's index in ``uris`` so earlier files outrank later ones.
-
-    Returns:
-        A list of Zone objects parsed from every file.
+    Raises ``ZoneFileCorrupt`` with an actionable message when any expected
+    field is missing or malformed, so callers get a typed failure instead of
+    a raw KeyError/TypeError escaping from deep inside the parse loop.
     """
-    zones: list[Zone] = []
+    if not isinstance(feature, dict):
+        raise ZoneFileCorrupt("feature is not an object")
+    properties = feature.get("properties")
+    if not isinstance(properties, dict):
+        raise ZoneFileCorrupt("feature has no 'properties' object")
+    name = properties.get("name")
+    if not isinstance(name, str) or not name.strip():
+        raise ZoneFileCorrupt("feature 'properties.name' is missing or not a non-empty string")
+    geometry_data = feature.get("geometry")
+    if not isinstance(geometry_data, dict):
+        raise ZoneFileCorrupt(f"feature {name!r} has no 'geometry' object")
 
-    for idx, uri in enumerate(uris):
-        raw = await load_data(uri, hass)
+    if "priority" in properties:
+        raw_priority = properties["priority"]
+        if not isinstance(raw_priority, int | str):
+            raise ZoneFileCorrupt(
+                f"feature {name!r} has non-integer priority of type {type(raw_priority).__name__}"
+            )
+        try:
+            priority = int(raw_priority)
+        except (TypeError, ValueError) as err:
+            raise ZoneFileCorrupt(
+                f"feature {name!r} has non-integer priority {raw_priority!r}"
+            ) from err
+    else:
+        priority = default_priority
+
+    try:
+        geometry = shape(geometry_data)
+    except (GEOSException, TypeError, ValueError, KeyError) as err:
+        raise ZoneFileCorrupt(f"feature {name!r} has unparseable geometry: {err}") from err
+
+    return Zone(
+        name=name,
+        geometry=geometry,
+        priority=priority,
+        properties=dict(properties),
+    )
+
+
+async def _load_zones_from_uri(
+    uri: str, idx: int, prioritize: bool, hass: HomeAssistant
+) -> list[Zone]:
+    """Load and parse one zone file. Returns a list of zones or raises a typed error."""
+    raw = await load_data(uri, hass)
+    try:
         data = json.loads(raw)
+    except ValueError as err:
+        raise ZoneFileCorrupt(f"not valid JSON: {err}") from err
+    if not isinstance(data, dict):
+        raise ZoneFileCorrupt("top-level payload is not an object")
 
-        pz = data.get("polygonal_zones") if isinstance(data, dict) else None
-        if isinstance(pz, dict):
-            declared_version = pz.get("schema_version", 1)
-            if (
-                isinstance(declared_version, int)
-                and declared_version > MAX_SUPPORTED_SCHEMA_VERSION
-            ):
-                raise UnsupportedSchemaVersion(
-                    f"Zone file {uri!r} declares schema_version={declared_version}; "
-                    f"this integration supports up to {MAX_SUPPORTED_SCHEMA_VERSION}. "
-                    "See docs/ZONES_FORMAT.md."
-                )
-
-        for feature in data["features"]:
-            properties = dict(feature["properties"])
-            if "priority" in properties:
-                priority = int(properties["priority"])
-            else:
-                priority = idx if prioritize else 0
-
-            geometry = shape(feature["geometry"])
-            zones.append(
-                Zone(
-                    name=properties["name"],
-                    geometry=geometry,
-                    priority=priority,
-                    properties=properties,
-                )
+    pz = data.get("polygonal_zones")
+    if isinstance(pz, dict):
+        declared_version = pz.get("schema_version", 1)
+        if isinstance(declared_version, int) and declared_version > MAX_SUPPORTED_SCHEMA_VERSION:
+            raise UnsupportedSchemaVersion(
+                f"Zone file {uri!r} declares schema_version={declared_version}; "
+                f"this integration supports up to {MAX_SUPPORTED_SCHEMA_VERSION}. "
+                "See docs/ZONES_FORMAT.md."
             )
 
-    return zones
+    features = data.get("features")
+    if not isinstance(features, list):
+        raise ZoneFileCorrupt("'features' is missing or not a list")
+
+    default_priority = idx if prioritize else 0
+    return [_parse_feature(feature, default_priority) for feature in features]
+
+
+async def load_zones(uris: list[str], hass: HomeAssistant, prioritize: bool) -> ZoneLoadResult:
+    """Load every URI independently; return successes plus per-URI failure records.
+
+    Partial-success semantics: one flaky URI no longer kills the whole load.
+    Each URI's failure is logged at WARNING with a stacktrace and recorded on the
+    returned result, so the entity can still resolve zones from healthy sources
+    and the failing sources can be surfaced in diagnostics.
+    """
+    result = ZoneLoadResult()
+    for idx, uri in enumerate(uris):
+        try:
+            result.zones.extend(await _load_zones_from_uri(uri, idx, prioritize, hass))
+        except UnsupportedSchemaVersion:
+            # Schema-version mismatch means the file format is ahead of this
+            # integration. Propagate as a hard error so the user sees it clearly
+            # instead of silently skipping the file.
+            raise
+        except Exception as err:
+            _LOGGER.warning("Failed to load zones from %s: %s", uri, err, exc_info=True)
+            result.failures.append((uri, str(err)))
+    return result
+
+
+async def get_zones(uris: list[str], hass: HomeAssistant, prioritize: bool) -> list[Zone]:
+    """Load every URI; return successful zones or raise if all URIs failed.
+
+    Backward-compatible wrapper around :func:`load_zones` for callers that only
+    care about the happy-path list (e.g. ``download_zones`` materialising a merge).
+    When at least one URI returns zones, the failures are logged as WARNINGs and
+    the union is returned. When every URI fails, ``ZoneFileCorrupt`` is raised
+    with the first failure's message so existing retry/backoff logic keeps working.
+    """
+    result = await load_zones(uris, hass, prioritize)
+    if uris and not result.zones and result.failures:
+        first_uri, first_msg = result.failures[0]
+        raise ZoneFileCorrupt(
+            f"All {len(result.failures)} zone URIs failed; first: {first_uri}: {first_msg}"
+        )
+    return result.zones
 
 
 def get_locations_zone(lat: float, lon: float, acc: float, zones: list[Zone]) -> dict | None:
