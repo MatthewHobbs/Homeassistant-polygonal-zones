@@ -1,6 +1,7 @@
 """Helper functions for the services for the polygonal zones integration."""
 
 import json
+from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
@@ -81,7 +82,7 @@ def require_device_id(call_data: dict) -> str:
     return device_id
 
 
-def get_zone_idx(name: str, existing_zones: dict[str, any]) -> int | None:
+def get_zone_idx(name: str, existing_zones: dict[str, Any]) -> int | None:
     """Get the index of the zone in the features list of a GeoJSON dict.
 
     Args:
@@ -98,7 +99,7 @@ def get_zone_idx(name: str, existing_zones: dict[str, any]) -> int | None:
     return None
 
 
-def zone_already_defined(name: str, existing_zones: dict[str, any]) -> bool:
+def zone_already_defined(name: str, existing_zones: dict[str, Any]) -> bool:
     """Check if a zone has already been defined.
 
     Args:

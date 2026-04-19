@@ -48,8 +48,9 @@ async def async_setup_entry(
         None
 
     """
-    zone_uris = entry.data.get(CONF_ZONES_URL)
-    zone_uris = [zone_uri for zone_uri in zone_uris if zone_uri is not None and zone_uri != ""]
+    zone_uris: list[str] = entry.data.get(CONF_ZONES_URL) or []
+    zone_uris = [zone_uri for zone_uri in zone_uris if zone_uri]
+    prioritize: bool = bool(entry.data.get(CONF_PRIORITIZE_ZONE_FILES))
 
     editable_file = False
 
@@ -58,12 +59,7 @@ async def async_setup_entry(
 
         exists = await hass.async_add_executor_job(download_path.exists)
         if not exists:
-            await download_zones(
-                zone_uris,
-                download_path,
-                entry.data.get(CONF_PRIORITIZE_ZONE_FILES),
-                hass,
-            )
+            await download_zones(zone_uris, download_path, prioritize, hass)
 
         zone_uris = [f"/polygonal_zones/{entry.entry_id}.json"]
         editable_file = True
@@ -78,7 +74,7 @@ async def async_setup_entry(
             entry.entry_id,
             zone_uris,
             base_id,
-            entry.data.get(CONF_PRIORITIZE_ZONE_FILES),
+            prioritize,
             editable_file,
         )
         entities.append(entity)
@@ -193,8 +189,8 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
 
     async def async_update_config(self, config_entry: ConfigEntry) -> None:
         """Update the configuration of the entity."""
-        self._zones_urls = config_entry.data.get(CONF_ZONES_URL)
-        self._prioritize_zone_files = config_entry.data.get(CONF_PRIORITIZE_ZONE_FILES)
+        self._zones_urls = config_entry.data.get(CONF_ZONES_URL) or []
+        self._prioritize_zone_files = bool(config_entry.data.get(CONF_PRIORITIZE_ZONE_FILES))
 
         try:
             self._zones = await get_zones(self._zones_urls, self.hass, self._prioritize_zone_files)
@@ -272,7 +268,7 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
 
             self.async_write_ha_state()
 
-    async def async_reload_zones(self, call) -> None | dict:
+    async def async_reload_zones(self, call) -> dict | list | None:
         """Reload the zones."""
         try:
             self._zones = await get_zones(self._zones_urls, self.hass, self._prioritize_zone_files)
@@ -313,12 +309,12 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         return self._zones_urls
 
     @property
-    def source_type(self) -> SourceType | str:
+    def source_type(self) -> SourceType:
         """The source type for the location service."""
         return self._attr_source_type
 
     @property
-    def location_name(self) -> str:
+    def location_name(self) -> str | None:
         """Name of the zone the entity is in."""
         return self._attr_location_name
 

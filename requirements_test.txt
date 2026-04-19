@@ -1,4 +1,5 @@
 homeassistant
+mypy
 pytest
 pytest-asyncio
 shapely==2.0.6

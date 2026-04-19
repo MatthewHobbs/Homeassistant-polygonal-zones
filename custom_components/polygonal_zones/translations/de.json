@@ -1,0 +1,116 @@
+{
+  "config": {
+    "error": {
+      "download_or_no_zones": "Zone-Download muss aktiviert sein oder Links zu GeoJSON-Dateien müssen definiert werden",
+      "invalid_path": "Die Datei konnte nicht gefunden werden",
+      "invalid_url": "Eine oder mehrere URLs oder Dateipfade sind ungültig",
+      "no_entities": "Keine Entitäten ausgewählt",
+      "unreachable_url": "Eine oder mehrere URLs sind nicht erreichbar"
+    },
+    "step": {
+      "user": {
+        "data": {
+          "download_zones": "GeoJSON-Dateien herunterladen",
+          "prioritize_zone_files": "Reihenfolge der Zonendateien priorisieren",
+          "registered_entities": "Entitäten",
+          "zone_urls": "URLs der GeoJSON-Dateien"
+        },
+        "data_description": {
+          "download_zones": "Verwendet eine lokale GeoJSON-Datei zum Speichern der Zonen. Damit werden die oben definierten Dateien in eine einzige Datei geladen. Die Entitäten verwenden nur diese eine Datei zum Abrufen der Zonen. Wenn keine GeoJSON-Dateien definiert sind, wird eine leere GeoJSON-Datei erstellt.",
+          "prioritize_zone_files": "Aktivieren Sie diese Option, um die Reihenfolge der Zonendateien zu priorisieren. Wenn ein Tracker in mehreren Zonen liegt, werden nur die Zonen mit der höchsten Priorität berücksichtigt.",
+          "registered_entities": "Wählen Sie die Entitäten aus, die Sie in den Zonen verfolgen möchten.",
+          "zone_urls": "Geben Sie die URLs der GeoJSON-Dateien ein, die die zu verfolgenden Zonen enthalten. Sowohl Webseiten als auch Dateien im /config-Verzeichnis werden unterstützt."
+        },
+        "description": "Speicherort der GeoJSON-Datei auswählen. {consent_notice}",
+        "title": "Polygonal Zones-Konfiguration"
+      }
+    }
+  },
+  "options": {
+    "error": {
+      "invalid_path": "Die Datei konnte nicht gefunden werden",
+      "invalid_url": "Eine oder mehrere URLs oder Dateipfade sind ungültig",
+      "unreachable_url": "Eine oder mehrere URLs sind nicht erreichbar"
+    },
+    "step": {
+      "init": {
+        "data": {
+          "prioritize_zone_files": "Reihenfolge der Zonendateien priorisieren",
+          "zone_urls": "URLs der GeoJSON-Dateien"
+        },
+        "data_description": {
+          "prioritize_zone_files": "Aktivieren Sie diese Option, um die Reihenfolge der Zonendateien zu priorisieren. Wenn ein Tracker in mehreren Zonen liegt, werden nur die Zonen mit der höchsten Priorität berücksichtigt.",
+          "zone_urls": "Geben Sie die URLs der GeoJSON-Dateien ein, die die zu verfolgenden Zonen enthalten. Sowohl Webseiten als auch Dateien im /config-Verzeichnis werden unterstützt."
+        },
+        "description": "Zonenquellen und Prioritätseinstellungen für diese Integration aktualisieren.",
+        "title": "Polygonal Zones-Optionen"
+      }
+    }
+  },
+  "services": {
+    "add_new_zone": {
+      "description": "Eine neue Zone zu den vorhandenen Zonen hinzufügen.",
+      "fields": {
+        "device_id": {
+          "description": "Das Polygonal Zones-Gerät, dem die Zone hinzugefügt werden soll.",
+          "name": "Gerät"
+        },
+        "zone": {
+          "description": "Das GeoJSON-Feature, das die neue hinzuzufügende Zone darstellt.",
+          "name": "Zonendaten"
+        }
+      },
+      "name": "Zone hinzufügen"
+    },
+    "delete_zone": {
+      "description": "Eine Zone aus dem System entfernen.",
+      "fields": {
+        "device_id": {
+          "description": "Das Polygonal Zones-Gerät, dessen Zone gelöscht werden soll.",
+          "name": "Gerät"
+        },
+        "zone_name": {
+          "description": "Der Name der zu löschenden Zone.",
+          "name": "Zonenname"
+        }
+      },
+      "name": "Zone löschen"
+    },
+    "edit_zone": {
+      "description": "Die Grenzen einer vorhandenen Zone ändern.",
+      "fields": {
+        "device_id": {
+          "description": "Das Polygonal Zones-Gerät, dessen Zone bearbeitet werden soll.",
+          "name": "Gerät"
+        },
+        "zone": {
+          "description": "Das GeoJSON-Feature, das die geänderte Zone darstellt.",
+          "name": "Zonendaten"
+        },
+        "zone_name": {
+          "description": "Der Name der zu bearbeitenden Zone.",
+          "name": "Zonenname"
+        }
+      },
+      "name": "Zone bearbeiten"
+    },
+    "reload_zones": {
+      "description": "Zonen aus den GeoJSON-Dateien neu laden. Dadurch werden sie vom gespeicherten Speicherort abgerufen und der interne Zonen-Cache der Entitäten aktualisiert.",
+      "name": "Zonen neu laden"
+    },
+    "replace_all_zones": {
+      "description": "Alle vorhandenen Zonen durch neue, im GeoJSON-Format definierte Zonen ersetzen.",
+      "fields": {
+        "device_id": {
+          "description": "Das Polygonal Zones-Gerät, dessen Zonendatei ersetzt werden soll.",
+          "name": "Gerät"
+        },
+        "zone": {
+          "description": "Die GeoJSON-FeatureCollection, die alle vorhandenen Zonen ersetzen soll.",
+          "name": "GeoJSON-Daten"
+        }
+      },
+      "name": "Alle Zonen ersetzen"
+    }
+  }
+}
