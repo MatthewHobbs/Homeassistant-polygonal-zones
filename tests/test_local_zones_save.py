@@ -6,7 +6,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-import pandas as pd
 import pytest
 from shapely.geometry import Polygon
 
@@ -17,6 +16,7 @@ from custom_components.polygonal_zones.utils.local_zones import (
     save_zones,
     zones_to_geojson,
 )
+from custom_components.polygonal_zones.utils.zones import Zone
 
 
 def _hass(tmp_path) -> SimpleNamespace:
@@ -59,7 +59,7 @@ async def test_save_zones_cleans_up_tmp_on_failure(tmp_path) -> None:
 
 def test_zones_to_geojson_roundtrip() -> None:
     polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
-    df = pd.DataFrame([{"name": "Home", "priority": 0, "geometry": polygon}])
+    df = [Zone(name="Home", geometry=polygon, priority=0)]
     raw = zones_to_geojson(df)
     parsed = json.loads(raw)
     assert parsed["type"] == "FeatureCollection"
@@ -68,7 +68,7 @@ def test_zones_to_geojson_roundtrip() -> None:
 
 async def test_download_zones_writes_to_destination(tmp_path) -> None:
     polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
-    df = pd.DataFrame([{"name": "Home", "priority": 0, "geometry": polygon}])
+    df = [Zone(name="Home", geometry=polygon, priority=0)]
     dest = tmp_path / "out.json"
 
     with patch(

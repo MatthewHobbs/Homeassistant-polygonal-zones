@@ -3,10 +3,10 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pandas as pd
 from shapely.geometry import Polygon
 
 from custom_components.polygonal_zones.device_tracker import PolygonalZoneEntity
+from custom_components.polygonal_zones.utils.zones import Zone
 
 
 def _make_entity(zone_urls=None) -> PolygonalZoneEntity:
@@ -61,15 +61,9 @@ async def test_will_remove_releases_all_unsubs() -> None:
 async def test_update_location_sets_attributes() -> None:
     entity = _make_entity()
     entity.hass = _make_hass()
-    entity._zones = pd.DataFrame(
-        [
-            {
-                "name": "Home",
-                "priority": 0,
-                "geometry": Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]),
-            }
-        ]
-    )
+    entity._zones = [
+        Zone(name="Home", geometry=Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]), priority=0)
+    ]
 
     await entity.update_location(latitude=0.5, longitude=0.5, gps_accuracy=10)
 
@@ -82,15 +76,9 @@ async def test_update_location_sets_attributes() -> None:
 async def test_update_location_outside_zones_marks_away() -> None:
     entity = _make_entity()
     entity.hass = _make_hass()
-    entity._zones = pd.DataFrame(
-        [
-            {
-                "name": "Home",
-                "priority": 0,
-                "geometry": Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]),
-            }
-        ]
-    )
+    entity._zones = [
+        Zone(name="Home", geometry=Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]), priority=0)
+    ]
     await entity.update_location(latitude=10, longitude=10, gps_accuracy=1)
     assert entity._attr_location_name == "away"
 
@@ -101,18 +89,18 @@ async def test_async_reload_zones_returns_payload_when_requested() -> None:
     entity._async_write_ha_state = MagicMock()
 
     polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
-    df = pd.DataFrame([{"name": "Home", "priority": 0, "geometry": polygon}])
+    zones = [Zone(name="Home", geometry=polygon, priority=0)]
 
     call = SimpleNamespace(return_response=True)
     with patch(
         "custom_components.polygonal_zones.device_tracker.get_zones",
-        new=AsyncMock(return_value=df),
+        new=AsyncMock(return_value=zones),
     ):
         result = await entity.async_reload_zones(call)
 
     assert isinstance(result, list)
     assert result[0]["name"] == "Home"
-    # geometry is a list of (lon,lat) tuples after the .apply transform
+    # geometry is a list of (lon,lat) tuples
     assert isinstance(result[0]["geometry"], list)
 
 
@@ -124,7 +112,7 @@ async def test_async_reload_zones_empty_returns_empty_list() -> None:
     call = SimpleNamespace(return_response=True)
     with patch(
         "custom_components.polygonal_zones.device_tracker.get_zones",
-        new=AsyncMock(return_value=pd.DataFrame([])),
+        new=AsyncMock(return_value=[]),
     ):
         result = await entity.async_reload_zones(call)
 
@@ -139,7 +127,7 @@ async def test_async_reload_zones_returns_none_when_response_not_requested() -> 
     call = SimpleNamespace(return_response=False)
     with patch(
         "custom_components.polygonal_zones.device_tracker.get_zones",
-        new=AsyncMock(return_value=pd.DataFrame([])),
+        new=AsyncMock(return_value=[]),
     ):
         result = await entity.async_reload_zones(call)
 

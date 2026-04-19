@@ -17,7 +17,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.start import async_at_started
-import pandas as pd
 
 from .const import (
     CONF_DOWNLOAD_ZONES,
@@ -27,7 +26,7 @@ from .const import (
 )
 from .utils import event_should_trigger, get_locations_zone
 from .utils.local_zones import download_zones
-from .utils.zones import get_zones
+from .utils.zones import Zone, get_zones
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -119,7 +118,7 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         self._zones_urls = zone_urls
         self._prioritize_zone_files = prioritized_zone_files
 
-        self._zones: pd.DataFrame = pd.DataFrame([])
+        self._zones: list[Zone] = []
         self._unsub: Callable[[], None] | None = None
         self._unsub_at_started: Callable[[], None] | None = None
         self._unsub_retry: Callable[[], None] | None = None
@@ -256,7 +255,7 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         """Update the location of the entity.
 
         Resolves the location to a zone via the executor so the (sync, CPU-bound)
-        shapely / pandas geometry math doesn't block the event loop. Should only
+        shapely geometry math doesn't block the event loop. Should only
         be called when latitude, longitude, or gps_accuracy actually changes.
         """
         zone = await self.hass.async_add_executor_job(
@@ -315,18 +314,18 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
 
         await self._update_state()
         if call.return_response:
-            zones_clone = self.zones.copy()
-            if zones_clone.empty:
-                return []
-            zones_clone["geometry"] = zones_clone["geometry"].apply(
-                lambda polygon: list(polygon.exterior.coords)
-            )
-            cols = [c for c in ("name", "priority", "geometry") if c in zones_clone.columns]
-            return zones_clone[cols].to_dict(orient="records")
+            return [
+                {
+                    "name": z.name,
+                    "priority": z.priority,
+                    "geometry": list(z.geometry.exterior.coords),
+                }
+                for z in self._zones
+            ]
         return None
 
     @property
-    def zones(self) -> pd.DataFrame:
+    def zones(self) -> list[Zone]:
         """The loaded zones."""
         return self._zones
 

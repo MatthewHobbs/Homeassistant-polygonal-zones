@@ -1,5 +1,6 @@
 """Tests for utils.zones.get_zones — GeoJSON parsing."""
 
+import asyncio
 import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -30,7 +31,7 @@ def _polygon(name: str, priority: int | None = None) -> dict:
 
 
 async def test_get_zones_parses_feature_collection() -> None:
-    """get_zones converts a single GeoJSON file into a DataFrame of Polygon rows."""
+    """get_zones converts a single GeoJSON file into a list of Zone objects."""
     payload = json.dumps(
         {
             "type": "FeatureCollection",
@@ -41,12 +42,12 @@ async def test_get_zones_parses_feature_collection() -> None:
         "custom_components.polygonal_zones.utils.zones.load_data",
         new=AsyncMock(return_value=payload),
     ):
-        df = await get_zones(["http://example.com/zones.json"], SimpleNamespace(), False)
+        zones = await get_zones(["http://example.com/zones.json"], SimpleNamespace(), False)
 
-    assert len(df) == 2
-    assert set(df["name"]) == {"Home", "Work"}
-    # Home had explicit priority 0; Work falls back to idx (0) when prioritize=False
-    assert int(df.loc[df["name"] == "Home", "priority"].iloc[0]) == 0
+    assert len(zones) == 2
+    assert {z.name for z in zones} == {"Home", "Work"}
+    by_name = {z.name: z for z in zones}
+    assert by_name["Home"].priority == 0
 
 
 async def test_get_zones_prioritise_uses_file_index() -> None:
@@ -61,13 +62,13 @@ async def test_get_zones_prioritise_uses_file_index() -> None:
         "custom_components.polygonal_zones.utils.zones.load_data",
         side_effect=fake_load,
     ):
-        df = await get_zones(
+        zones = await get_zones(
             ["http://example.com/a.json", "http://example.com/b.json"],
             SimpleNamespace(),
             True,
         )
 
-    priorities = dict(zip(df["name"], df["priority"], strict=False))
+    priorities = {z.name: z.priority for z in zones}
     assert priorities["A"] == 0
     assert priorities["B"] == 1
 
@@ -101,12 +102,11 @@ def test_get_distance_to_exterior_points_returns_min() -> None:
     assert d > 0
 
 
-def test_get_zones_empty_uri_list_returns_empty_df() -> None:
-    """Edge case: zero URIs → empty DataFrame, not a crash."""
-    import asyncio
+def test_get_zones_empty_uri_list_returns_empty_list() -> None:
+    """Edge case: zero URIs → empty list, not a crash."""
 
     async def _go():
         return await get_zones([], SimpleNamespace(), False)
 
-    df = asyncio.run(_go())
-    assert df.empty
+    zones = asyncio.run(_go())
+    assert zones == []

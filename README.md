@@ -10,7 +10,7 @@
 
 This Home Assistant integration lets you define arbitrary polygonal zones from a GeoJSON file and resolve any tracked `device_tracker` entity into the zone it currently sits inside. Use it when the built-in circular HA zones aren't expressive enough — irregular property boundaries, school catchments, neighbourhoods, town centres, etc.
 
-**Status:** stable (v1.8.0). Actively maintained; HACS-ready. Manifest declares `quality_scale: bronze`; the rules for Silver, Gold, and Platinum are implemented and tracked in [`quality_scale.yaml`](custom_components/polygonal_zones/quality_scale.yaml), but a higher tier can only be claimed after a Home Assistant architecture-team review (which happens through the [core-integration submission process](https://developers.home-assistant.io/docs/creating_component_index/), not by self-declaration).
+**Status:** stable (v1.9.0). Actively maintained; HACS-ready. Manifest declares `quality_scale: bronze`; the rules for Silver, Gold, and Platinum are implemented and tracked in [`quality_scale.yaml`](custom_components/polygonal_zones/quality_scale.yaml), but a higher tier can only be claimed after a Home Assistant architecture-team review (which happens through the [core-integration submission process](https://developers.home-assistant.io/docs/creating_component_index/), not by self-declaration).
 
 > ℹ️ **Fork Notice**
 >
