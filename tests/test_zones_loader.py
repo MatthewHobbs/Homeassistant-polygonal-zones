@@ -77,6 +77,60 @@ async def test_get_zones_prioritise_uses_file_index() -> None:
     assert priorities["B"] == 1
 
 
+async def test_prioritize_file_index_resolves_overlapping_point_to_file_0() -> None:
+    """End-to-end: two files, each with a zone that covers point (0.5, 0.5).
+
+    Neither zone declares an explicit priority. With ``prioritize=True`` the
+    loader stamps file_index on each zone's priority, and the resolver must
+    then pick the zone from the first file (lower priority value wins). Before
+    this test existed, the priority-stamping and resolver logic were covered
+    independently but never joined end-to-end — a regression between the two
+    halves would pass both isolated suites yet return the wrong zone in prod.
+    """
+    from custom_components.polygonal_zones.utils.zones import get_locations_zone
+
+    # Both zones are identical squares — each standalone covers the test point.
+    square = {
+        "type": "Polygon",
+        "coordinates": [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]],
+    }
+    file_primary = json.dumps(
+        {
+            "type": "FeatureCollection",
+            "features": [
+                {"type": "Feature", "properties": {"name": "Primary"}, "geometry": square}
+            ],
+        }
+    )
+    file_backup = json.dumps(
+        {
+            "type": "FeatureCollection",
+            "features": [{"type": "Feature", "properties": {"name": "Backup"}, "geometry": square}],
+        }
+    )
+
+    async def fake_load(uri: str, _hass, **_kwargs) -> str:
+        return file_primary if "primary" in uri else file_backup
+
+    with patch(
+        "custom_components.polygonal_zones.utils.zones.load_data",
+        side_effect=fake_load,
+    ):
+        zones = await get_zones(
+            ["http://example.com/primary.json", "http://example.com/backup.json"],
+            SimpleNamespace(),
+            True,
+        )
+
+    # Priorities stamped from file index
+    assert [(z.name, z.priority) for z in zones] == [("Primary", 0), ("Backup", 1)]
+
+    # The resolver hands back the lower-priority-value (first-file) zone
+    result = get_locations_zone(lat=0.5, lon=0.5, acc=1, zones=zones)
+    assert result is not None
+    assert result["name"] == "Primary"
+
+
 def test_haversine_distance_known_pair() -> None:
     """London → Paris, ~344 km, accept 1% tolerance."""
     london = np.array([51.5074, -0.1278])

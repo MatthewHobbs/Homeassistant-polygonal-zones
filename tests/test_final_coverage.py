@@ -1,6 +1,5 @@
 """Targeted tests to push the remaining branches over 99% coverage."""
 
-import asyncio
 import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -281,8 +280,3 @@ async def test_unload_entry_path_traversal_falls_back(tmp_path, monkeypatch) -> 
     ):
         result = await async_unload_entry(hass, entry)
     assert result is True
-
-
-# Sanity asyncio import to satisfy the linter
-def test_asyncio_imported() -> None:
-    assert asyncio is asyncio

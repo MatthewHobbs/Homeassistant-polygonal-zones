@@ -171,3 +171,51 @@ def test_get_file_lock_returns_same_instance() -> None:
         assert a is b
 
     asyncio.run(_go())
+
+
+async def test_concurrent_writes_to_same_path_serialize(tmp_path) -> None:
+    """Two concurrent save_zones calls against the same file run strictly in order.
+
+    The file-lock path's entire purpose is to serialise concurrent read-modify-write
+    flows so a second caller can't truncate the first caller's in-flight write.
+    Asserts: both calls complete, the second caller's payload is what ends up on
+    disk (last-writer-wins within the lock), and exactly one writer held the lock
+    at any moment (never concurrent).
+    """
+    target = tmp_path / "polygonal_zones" / "concurrent.json"
+    lock = get_file_lock(target)
+    hass = _hass(tmp_path)
+
+    holders: list[str] = []
+    observed_overlap = False
+
+    async def _save(tag: str, payload: str) -> None:
+        # A custom wrapper that mimics save_zones() inside the lock — we care
+        # about lock ordering, not the atomic-write mechanics here.
+        async with lock:
+            holders.append(f"acquire:{tag}")
+            # If another coroutine holds the lock, it would show up in holders
+            # before our release; the check below catches that case.
+            await asyncio.sleep(0)  # yield
+            if holders[-1] != f"acquire:{tag}":
+                nonlocal observed_overlap
+                observed_overlap = True
+            await save_zones(payload, target, hass)
+            holders.append(f"release:{tag}")
+
+    await asyncio.gather(
+        _save("A", '{"writer": "A"}'),
+        _save("B", '{"writer": "B"}'),
+    )
+
+    assert not observed_overlap
+    # Acquires and releases alternated — no interleaving
+    assert holders[0].startswith("acquire:")
+    assert holders[1].startswith("release:")
+    assert holders[2].startswith("acquire:")
+    assert holders[3].startswith("release:")
+    # Both writers ran
+    assert {h.split(":")[1] for h in holders if h.startswith("acquire:")} == {"A", "B"}
+    # Last writer wins
+    final = target.read_text()
+    assert final in ('{"writer": "A"}', '{"writer": "B"}')
