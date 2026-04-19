@@ -35,12 +35,26 @@ async def test_diagnostics_redacts_identifying_lists() -> None:
 
     result = await async_get_config_entry_diagnostics(SimpleNamespace(), entry)
 
-    assert result["entry"]["title"] == "Polygonal Zones"
+    assert result["entry"]["title"] == "<redacted>"
     assert result["entry"]["data"]["entities"] == ["<redacted-0>", "<redacted-1>"]
     assert result["entry"]["data"]["zone_urls"] == ["<redacted-0>"]
     assert result["entry"]["data"]["prioritize_zone_files"] is True
     assert result["entities"][0]["available"] is True
     assert result["entities"][0]["zone_count"] == 1
+
+
+async def test_diagnostics_redacts_personalised_title() -> None:
+    """A user-personalised title (e.g. 'Alice's tracking') is redacted."""
+    entry = SimpleNamespace(
+        entry_id="entry-x",
+        title="Alice's tracking",
+        version=1,
+        runtime_data=PolygonalZonesData(),
+        data={"zone_urls": [], "entities": []},
+    )
+    result = await async_get_config_entry_diagnostics(SimpleNamespace(), entry)
+    assert result["entry"]["title"] == "<redacted>"
+    assert "Alice" not in repr(result)
 
 
 async def test_diagnostics_with_no_entities() -> None:

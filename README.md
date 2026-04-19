@@ -61,6 +61,16 @@ Copy `custom_components/polygonal_zones/` into the `custom_components/` director
    - **Download the GeoJSON files** _(advanced)_: download / merge the source URLs into a single local file under `<config>/polygonal_zones/<entry_id>.json`. **Required if you want to mutate zones from automations** via the action services below.
 3. **Submit**. The integration creates one new entity per selected device, named `device_tracker.polygonal_zones_<original_entity>`. The state is the zone name (e.g. `Home`, `School`) or `away` if the device falls outside every zone.
 4. **Verify**: open Developer Tools → States and find `device_tracker.polygonal_zones_*`. The `latitude`, `longitude`, `gps_accuracy`, and `zone_uris` attributes should populate within a few seconds.
+5. **(Recommended) Exclude the mirror entities from the recorder** to stop Home Assistant's database from accumulating a full coordinate history for every tracked person. In `configuration.yaml`:
+
+   ```yaml
+   recorder:
+     exclude:
+       entity_globs:
+         - device_tracker.polygonal_zones_*
+   ```
+
+   New installs default `Expose GPS coordinates` to **off**, which publishes only the zone name — but the recorder will still record state-change timestamps unless you exclude the entity globally. See [Privacy and data handling](#privacy-and-data-handling) for the full rationale.
 
 If the entity stays unknown for more than a minute, see [Troubleshooting](#troubleshooting).
 
