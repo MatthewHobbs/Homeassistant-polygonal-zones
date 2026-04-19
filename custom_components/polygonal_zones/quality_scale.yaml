@@ -83,10 +83,13 @@ rules:
     comment: No dynamic devices.
 
   # --------- Platinum ---------
-  async-dependency:
-    status: exempt
-    comment: shapely and pandas are sync compute libraries; no production async equivalents exist.
+  async-dependency: done
   inject-websession:
-    status: todo
-    comment: Currently uses a per-call session with a custom DNS resolver for SSRF protection.
+    status: exempt
+    comment: |
+      Uses a per-call aiohttp.ClientSession bound to a custom DNS resolver
+      (_PublicOnlyResolver) that re-applies the private/loopback/metadata IP
+      filter inside aiohttp's connect path. Sharing HA's session would either
+      strip this SSRF defence or impose our resolver on every other integration's
+      HTTP traffic, which is not acceptable.
   strict-typing: done
