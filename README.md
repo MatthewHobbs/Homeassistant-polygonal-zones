@@ -99,9 +99,9 @@ Each Feature must have:
 - `properties.priority` — _(optional)_ integer, lower number = higher priority when zones overlap and `prioritize_zone_files` is off.
 - `geometry` — `Polygon` or `MultiPolygon` with coordinates in standard GeoJSON `[longitude, latitude]` order.
 
-For convenience, an optional add-on with a UI editor lives at the [polygonal zones editor repo](https://github.com/MichelGerding/Homeassistant-polygonal-zones-addon/):
+For convenience, an optional add-on with a UI editor lives at the [polygonal zones editor repo](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon/):
 
-[![Add zone editor add-on to Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FMichelGerding%2FHomeassistant-polygonal-zones-addon.git)
+[![Add zone editor add-on to Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FMatthewHobbs%2FHomeassistant-polygonal-zones-addon.git)
 
 ### Example file
 
