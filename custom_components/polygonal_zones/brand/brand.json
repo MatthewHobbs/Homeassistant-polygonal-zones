@@ -1,0 +1,8 @@
+{
+  "domain": "polygonal_zones",
+  "name": "Polygonal Zones",
+  "documentation": "https://github.com/MatthewHobbs/Homeassistant-polygonal-zones",
+  "issue_tracker": "https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues",
+  "codeowners": ["@MatthewHobbs"],
+  "iot_class": "calculated"
+}
