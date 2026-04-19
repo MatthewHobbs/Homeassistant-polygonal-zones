@@ -6,9 +6,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import numpy as np
-from shapely.geometry import Point, Polygon
-
 import pytest
+from shapely.geometry import Point, Polygon
 
 from custom_components.polygonal_zones.utils.zones import (
     UnsupportedSchemaVersion,
@@ -150,9 +149,11 @@ async def test_get_zones_rejects_future_schema_version() -> None:
             "features": [_polygon("Home")],
         }
     )
-    with patch(
-        "custom_components.polygonal_zones.utils.zones.load_data",
-        new=AsyncMock(return_value=payload),
+    with (
+        patch(
+            "custom_components.polygonal_zones.utils.zones.load_data",
+            new=AsyncMock(return_value=payload),
+        ),
+        pytest.raises(UnsupportedSchemaVersion, match="schema_version=99"),
     ):
-        with pytest.raises(UnsupportedSchemaVersion, match="schema_version=99"):
-            await get_zones(["http://x"], SimpleNamespace(), False)
+        await get_zones(["http://x"], SimpleNamespace(), False)
