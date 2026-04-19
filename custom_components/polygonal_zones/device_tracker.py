@@ -197,9 +197,8 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
                 if attempt < _MAX_LOAD_ATTEMPTS:
                     delay = min(600, _BASE_RETRY_DELAY * (2 ** (attempt - 1)))
                     _LOGGER.warning(
-                        "Failed to load zones for entry=%s entity=%s (attempt %d/%d); retrying in %ds",
+                        "Failed to load zones for entry=%s (attempt %d/%d); retrying in %ds",
                         self._config_entry_id,
-                        self._entity_id,
                         attempt,
                         _MAX_LOAD_ATTEMPTS,
                         delay,
@@ -213,10 +212,9 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
                     self._unsub_retry = async_call_later(self.hass, delay, _retry)
                 else:
                     _LOGGER.exception(
-                        "Giving up loading zones for entry=%s entity=%s after %d attempts; "
+                        "Giving up loading zones for entry=%s after %d attempts; "
                         "call the reload_zones service or reload the integration to retry",
                         self._config_entry_id,
-                        self._entity_id,
                         _MAX_LOAD_ATTEMPTS,
                     )
                     self._set_available(False)
@@ -266,9 +264,8 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         except Exception:
             self._last_load_result = "failed"
             _LOGGER.warning(
-                "Failed to reload zones for entry=%s entity=%s; keeping previous zones",
+                "Failed to reload zones for entry=%s; keeping previous zones",
                 self._config_entry_id,
-                self._entity_id,
                 exc_info=True,
             )
             return
@@ -389,9 +386,8 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         except Exception:
             self._last_load_result = "failed"
             _LOGGER.warning(
-                "Failed to reload zones for entry=%s entity=%s",
+                "Failed to reload zones for entry=%s",
                 self._config_entry_id,
-                self._attr_unique_id,
                 exc_info=True,
             )
             return None

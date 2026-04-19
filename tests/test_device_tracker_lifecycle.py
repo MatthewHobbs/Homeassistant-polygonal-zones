@@ -274,6 +274,40 @@ async def test_async_reload_zones_clears_repair_issue_on_success() -> None:
     assert issue_id.startswith("zone_load_failed_")
 
 
+async def test_async_reload_zones_warning_does_not_leak_entity_id(caplog) -> None:
+    """Per-dpo: WARNING logs name entry_id only, never the source entity_id.
+
+    Entity IDs such as ``device_tracker.alice_phone`` carry personal names and
+    end up in external log aggregators. entry_id is an opaque string; it's
+    sufficient for maintainer correlation via diagnostics.
+    """
+    entity = PolygonalZoneEntity(
+        tracked_entity_id="device_tracker.alice_phone",
+        config_entry_id="entry-xyz",
+        zone_urls=["https://example.com/zones.json"],
+        own_id="device_tracker.polygonal_zones_alice_phone",
+        prioritized_zone_files=False,
+        editable_file=False,
+    )
+    entity.hass = _make_hass()
+
+    with (
+        patch(
+            "custom_components.polygonal_zones.device_tracker.load_zones",
+            new=AsyncMock(side_effect=RuntimeError("boom")),
+        ),
+        caplog.at_level("WARNING", logger="custom_components.polygonal_zones.device_tracker"),
+    ):
+        await entity.async_reload_zones(SimpleNamespace(return_response=False))
+
+    warnings = [rec.getMessage() for rec in caplog.records if rec.levelname == "WARNING"]
+    assert warnings, "Expected at least one WARNING log from the failed reload"
+    combined = " | ".join(warnings)
+    assert "entry-xyz" in combined
+    assert "alice_phone" not in combined
+    assert "polygonal_zones_alice_phone" not in combined
+
+
 async def test_async_reload_zones_marks_failed_on_exception() -> None:
     """A reload failure flips last_load_result to 'failed' without touching the timestamp."""
     entity = _make_entity()

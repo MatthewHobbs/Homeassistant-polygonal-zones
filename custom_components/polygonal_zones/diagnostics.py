@@ -10,7 +10,11 @@ if TYPE_CHECKING:
     from . import PolygonalZonesConfigEntry
 
 # Keys whose values may carry user-meaningful identifiers; replace with placeholder.
-TO_REDACT = {"entities", "zone_urls"}
+# - ``entities`` / ``zone_urls`` live inside entry.data and carry URIs + entity_ids.
+# - ``title`` is the config-entry title, which a user may have personalised
+#   (e.g. "Alice's tracking") — redact before shipping diagnostics externally.
+TO_REDACT_DATA = {"entities", "zone_urls"}
+TO_REDACT_ENTRY_FIELDS = {"title"}
 
 
 def _redact(value: Any) -> Any:
@@ -28,7 +32,7 @@ async def async_get_config_entry_diagnostics(
     a user can paste this into a bug report without leaking household location
     or device names.
     """
-    entry_data = {k: (_redact(v) if k in TO_REDACT else v) for k, v in entry.data.items()}
+    entry_data = {k: (_redact(v) if k in TO_REDACT_DATA else v) for k, v in entry.data.items()}
 
     runtime = getattr(entry, "runtime_data", None)
     entities = runtime.entities if runtime is not None else []
@@ -60,7 +64,7 @@ async def async_get_config_entry_diagnostics(
 
     return {
         "entry": {
-            "title": entry.title,
+            "title": "<redacted>" if "title" in TO_REDACT_ENTRY_FIELDS else entry.title,
             "version": entry.version,
             "data": entry_data,
         },
