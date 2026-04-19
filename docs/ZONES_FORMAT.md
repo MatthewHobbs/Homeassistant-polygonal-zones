@@ -18,7 +18,15 @@ The file is a standard GeoJSON [`FeatureCollection`](https://datatracker.ietf.or
       "properties": { "name": "Home", "priority": 1 },
       "geometry": {
         "type": "Polygon",
-        "coordinates": [[[-0.135, 51.51], [-0.125, 51.51], [-0.125, 51.515], [-0.135, 51.515], [-0.135, 51.51]]]
+        "coordinates": [
+          [
+            [-0.135, 51.51],
+            [-0.125, 51.51],
+            [-0.125, 51.515],
+            [-0.135, 51.515],
+            [-0.135, 51.51]
+          ]
+        ]
       }
     }
   ]
@@ -29,11 +37,11 @@ Foreign members are explicitly permitted by RFC 7946 §6.1. Readers that don't k
 
 ## Top-level members
 
-| Member                        | Required | Type                  | Notes                                                                                  |
-| ----------------------------- | -------- | --------------------- | -------------------------------------------------------------------------------------- |
-| `type`                        | yes      | string, `"FeatureCollection"` | Standard GeoJSON.                                                              |
-| `features`                    | yes      | array of Feature      | May be empty.                                                                          |
-| `polygonal_zones.schema_version` | no    | integer ≥ 1           | Missing means implicit `1`. The integration refuses any value greater than `MAX_SUPPORTED` with a clear error. |
+| Member                           | Required | Type                          | Notes                                                                                                          |
+| -------------------------------- | -------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `type`                           | yes      | string, `"FeatureCollection"` | Standard GeoJSON.                                                                                              |
+| `features`                       | yes      | array of Feature              | May be empty.                                                                                                  |
+| `polygonal_zones.schema_version` | no       | integer ≥ 1                   | Missing means implicit `1`. The integration refuses any value greater than `MAX_SUPPORTED` with a clear error. |
 
 Integers only for `schema_version` — no semver. The integer increments by 1 on every breaking change; consumers need a single `if version > known` branch.
 
@@ -50,11 +58,11 @@ Each element of `features` is a GeoJSON `Feature`.
 
 ### `properties`
 
-| Property                       | Required | Type    | Notes                                                                 |
-| ------------------------------ | -------- | ------- | --------------------------------------------------------------------- |
-| `name`                         | yes      | string  | Non-empty, ≤200 characters. Surfaced as the HA entity state.          |
-| `priority`                     | no       | integer | Lower value = higher priority when zones overlap. Default: `0`.       |
-| `polygonal_zones_ext.*`        | no       | object  | Reserved namespace for additive extensions. Free-form.                |
+| Property                | Required | Type    | Notes                                                           |
+| ----------------------- | -------- | ------- | --------------------------------------------------------------- |
+| `name`                  | yes      | string  | Non-empty, ≤200 characters. Surfaced as the HA entity state.    |
+| `priority`              | no       | integer | Lower value = higher priority when zones overlap. Default: `0`. |
+| `polygonal_zones_ext.*` | no       | object  | Reserved namespace for additive extensions. Free-form.          |
 
 Unknown keys under `properties` are preserved round-trip but produce a WARNING log so drift is visible. Do **not** add new keys at the top-level `properties` map — put extensions under `properties.polygonal_zones_ext` so the canonical namespace stays small.
 
@@ -62,13 +70,13 @@ Unknown keys under `properties` are preserved round-trip but produce a WARNING l
 
 Applied at read time; the integration rejects anything that exceeds them.
 
-| Limit                                 | Value       | Source                          |
-| ------------------------------------- | ----------- | ------------------------------- |
-| Remote HTTP body                      | 5 MiB       | `utils/general.py`              |
-| Service-call payload (one Feature or FeatureCollection) | 1 MiB | `services/helpers.py`       |
-| Zone name length                      | 200 chars   | `services/helpers.py`           |
-| Features per FeatureCollection        | 500         | `services/helpers.py`           |
-| Total vertices across a FeatureCollection | 10 000  | `services/helpers.py`           |
+| Limit                                                   | Value     | Source                |
+| ------------------------------------------------------- | --------- | --------------------- |
+| Remote HTTP body                                        | 5 MiB     | `utils/general.py`    |
+| Service-call payload (one Feature or FeatureCollection) | 1 MiB     | `services/helpers.py` |
+| Zone name length                                        | 200 chars | `services/helpers.py` |
+| Features per FeatureCollection                          | 500       | `services/helpers.py` |
+| Total vertices across a FeatureCollection               | 10 000    | `services/helpers.py` |
 
 The vertex cap defends against event-loop stalls from pathological polygons.
 
@@ -116,12 +124,34 @@ Producers MUST stamp `polygonal_zones.schema_version` matching the highest-numbe
     {
       "type": "Feature",
       "properties": { "name": "Town", "priority": 1 },
-      "geometry": { "type": "Polygon", "coordinates": [[[-0.14, 51.50], [-0.12, 51.50], [-0.12, 51.52], [-0.14, 51.52], [-0.14, 51.50]]] }
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [-0.14, 51.5],
+            [-0.12, 51.5],
+            [-0.12, 51.52],
+            [-0.14, 51.52],
+            [-0.14, 51.5]
+          ]
+        ]
+      }
     },
     {
       "type": "Feature",
       "properties": { "name": "Shop", "priority": 0 },
-      "geometry": { "type": "Polygon", "coordinates": [[[-0.131, 51.512], [-0.128, 51.512], [-0.128, 51.514], [-0.131, 51.514], [-0.131, 51.512]]] }
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [-0.131, 51.512],
+            [-0.128, 51.512],
+            [-0.128, 51.514],
+            [-0.131, 51.514],
+            [-0.131, 51.512]
+          ]
+        ]
+      }
     }
   ]
 }
@@ -139,7 +169,14 @@ A point inside both zones resolves to `Shop` because its `priority` is lower.
     "priority": 0,
     "polygonal_zones_ext": { "color": "#3366ff", "editor_version": "2.1" }
   },
-  "geometry": { "type": "Polygon", "coordinates": [[ /* ... */ ]] }
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        /* ... */
+      ]
+    ]
+  }
 }
 ```
 

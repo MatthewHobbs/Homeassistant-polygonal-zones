@@ -38,10 +38,7 @@ def _count_geometry_vertices(geometry: dict) -> int:
     if not isinstance(coordinates, list):
         return 0
 
-    if geometry.get("type") == "Polygon":
-        polygons = [coordinates]
-    else:
-        polygons = coordinates
+    polygons = [coordinates] if geometry.get("type") == "Polygon" else coordinates
 
     total = 0
     for polygon in polygons:

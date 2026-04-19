@@ -3,6 +3,7 @@
 import importlib
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.service import async_register_admin_service
 
 from ..const import DOMAIN
 
@@ -21,6 +22,6 @@ async def register_services(hass: HomeAssistant, names: list[str], *, admin: boo
         func = module.action_builder
 
         if admin:
-            hass.services.async_register_admin_service(DOMAIN, name, func(hass))
+            async_register_admin_service(hass, DOMAIN, name, func(hass))
         else:
             hass.services.async_register(DOMAIN, name, func(hass))
