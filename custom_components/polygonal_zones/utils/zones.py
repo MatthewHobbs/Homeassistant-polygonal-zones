@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 import json
 import logging
+import math
 from typing import Any
 
 from homeassistant.core import HomeAssistant
-import numpy as np
 from shapely.errors import GEOSException
 from shapely.geometry import Point, shape
 from shapely.geometry.polygon import Polygon
@@ -56,44 +57,53 @@ class ZoneLoadResult:
     failures: list[tuple[str, str]] = field(default_factory=list)
 
 
-def haversine_distances(point: np.ndarray, coordinates: np.ndarray) -> np.ndarray:
-    """Calculate Haversine distances from a single point to multiple points.
+_EARTH_RADIUS_M = 6371000
 
-    Args:
-        point: NumPy array of shape (2,) containing [latitude, longitude] in degrees.
-        coordinates: NumPy array of shape (n, 2) containing latitudes and longitudes.
 
-    Returns:
-        Array of distances in metres.
+def _haversine_metres(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Haversine great-circle distance between two (lat, lon) pairs in metres.
+
+    Pure stdlib math — ``numpy`` is no longer a runtime dep of this integration
+    (dropped in v1.12 per chief-architect review). Polygon exterior loops run
+    through this in Python; the vertex-per-collection cap keeps the worst case
+    at ~10k iterations, which is sub-millisecond in CPython.
     """
-    R = 6371000  # Earth radius in metres
+    lat1_r = math.radians(lat1)
+    lat2_r = math.radians(lat2)
+    dlat = lat2_r - lat1_r
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(lat1_r) * math.cos(lat2_r) * math.sin(dlon / 2) ** 2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return _EARTH_RADIUS_M * c
 
-    lat1, lon1 = np.radians(point)
-    lats2, lons2 = np.radians(coordinates).T
 
-    dlat = lats2 - lat1
-    dlon = lons2 - lon1
+def haversine_distances(
+    point: tuple[float, float], coordinates: Iterable[tuple[float, float]]
+) -> list[float]:
+    """Return Haversine distances in metres from one point to every coordinate.
 
-    a = np.sin(dlat / 2) ** 2 + np.cos(lat1) * np.cos(lats2) * np.sin(dlon / 2) ** 2
-    c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
-
-    return R * c
+    Kept as a public helper for test / future callers that want the full list.
+    ``point`` and each entry of ``coordinates`` are ``(lat, lon)`` tuples in
+    degrees.
+    """
+    lat1, lon1 = point
+    return [_haversine_metres(lat1, lon1, lat2, lon2) for lat2, lon2 in coordinates]
 
 
 def get_distance_to_exterior_points(polygon: Polygon, point: Point) -> float:
-    """Haversine distance to the closest point on the polygon's exterior, in metres."""
-    polygon_points = np.array(polygon.exterior.coords)
-    point_coords = np.array([point.x, point.y])
-    distances = haversine_distances(point_coords, polygon_points)
-    return float(min(distances))
+    """Haversine distance to the closest point on the polygon's exterior, in metres.
+
+    Uses ``(point.x, point.y)`` directly (which in shapely terms is ``(lon, lat)``
+    for GeoJSON-convention polygons) to preserve the exact numerics of the prior
+    numpy implementation — a byte-compatible drop of the numpy runtime dep.
+    """
+    return min(_haversine_metres(point.x, point.y, x, y) for x, y in polygon.exterior.coords)
 
 
 def get_distance_to_centroid(polygon: Polygon, point: Point) -> float:
     """Haversine distance from ``point`` to the polygon's centroid, in metres (JSON-safe)."""
     centroid = polygon.centroid
-    point_coords = np.array([point.x, point.y])
-    centroid_coords = np.array([[centroid.x, centroid.y]])
-    return float(haversine_distances(point_coords, centroid_coords)[0])
+    return _haversine_metres(point.x, point.y, centroid.x, centroid.y)
 
 
 def _parse_feature(feature: Any, default_priority: int) -> Zone:
