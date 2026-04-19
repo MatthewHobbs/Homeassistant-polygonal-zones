@@ -2,7 +2,7 @@
 
 [![Latest release](https://img.shields.io/github/v/release/MatthewHobbs/Homeassistant-polygonal-zones?display_name=tag&sort=semver)](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/releases/latest)
 [![Validate CI](https://img.shields.io/github/actions/workflow/status/MatthewHobbs/Homeassistant-polygonal-zones/validate.yml?branch=main&label=validate)](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/actions/workflows/validate.yml)
-[![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/blob/main/.github/workflows/validate.yml)
+[![Coverage](https://img.shields.io/badge/coverage-%E2%89%A598%25-brightgreen)](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/blob/main/.github/workflows/validate.yml)
 [![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5)](https://hacs.xyz/)
 [![HA quality scale](https://img.shields.io/badge/quality--scale-bronze-cd7f32)](https://developers.home-assistant.io/docs/core/integration-quality-scale/)
 [![License: MIT](https://img.shields.io/github/license/MatthewHobbs/Homeassistant-polygonal-zones)](LICENSE)
@@ -381,11 +381,11 @@ Note that any person whose `device_tracker` entity you select will have their lo
 
 Open work items are tracked as GitHub issues: [MatthewHobbs/Homeassistant-polygonal-zones/issues](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues).
 
-Named goals — Home Assistant [quality-scale](https://developers.home-assistant.io/docs/core/integration-quality-scale/) progression (currently `bronze`):
+Named goals:
 
-- [#5 Achieve Silver](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/5) — `PARALLEL_UPDATES`, `entity-unavailable` semantics, action-exception polish, ≥95% test coverage.
-- [#6 Achieve Gold](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/6) — diagnostics, repair flows, reconfiguration flow, entity/exception/icon translation keys, expanded docs. Blocked by #5.
-- [#7 Achieve Platinum](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/7) — practically blocked by `shapely` and `pandas` being sync compute libraries (no production-quality async geospatial alternatives exist). Aspirational. Blocked by #6.
+- [#8 Submit integration to Home Assistant core for review](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/8) — the only path to a panel-validated `quality_scale` tier above bronze. The Silver/Gold/Platinum rules are already implemented (see [`quality_scale.yaml`](custom_components/polygonal_zones/quality_scale.yaml)) but a real tier claim requires HA architecture-team review. Substantial effort; weigh trade-offs (HACS autonomy vs. core distribution + reviewed tier).
+
+The implementation work for the [Silver](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/5), [Gold](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/6), and [Platinum](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/7) rules is done — those issues are closed. Tier certification is what #8 tracks.
 
 ## Contributing
 
