@@ -12,7 +12,38 @@ from .errors import InvalidZoneData
 
 MAX_ZONE_JSON_BYTES = 1_048_576
 MAX_ZONE_NAME_LEN = 200
+MAX_FEATURES_PER_COLLECTION = 500
+# Total vertex count across every ring of every polygon in the collection.
+# Caps event-loop stall time inside shapely.buffer()/.intersects() on each
+# state_changed — a 1 MiB JSON file can otherwise encode ~50k vertices.
+MAX_TOTAL_VERTICES_PER_COLLECTION = 10_000
 SUPPORTED_GEOMETRY_TYPES = {"Polygon", "MultiPolygon"}
+
+
+def _count_geometry_vertices(geometry: dict) -> int:
+    """Sum the vertex count across every ring of a Polygon / MultiPolygon.
+
+    Walks the ``coordinates`` tree instead of calling into shapely so the cap
+    can be enforced before geometry construction, which is the expensive step
+    we are trying to keep off the event loop.
+    """
+    coordinates = geometry.get("coordinates")
+    if not isinstance(coordinates, list):
+        return 0
+
+    if geometry.get("type") == "Polygon":
+        polygons = [coordinates]
+    else:
+        polygons = coordinates
+
+    total = 0
+    for polygon in polygons:
+        if not isinstance(polygon, list):
+            continue
+        for ring in polygon:
+            if isinstance(ring, list):
+                total += len(ring)
+    return total
 
 
 def _validate_feature(feature: object) -> None:
@@ -35,6 +66,12 @@ def _validate_feature(feature: object) -> None:
         raise InvalidZoneData(
             f"Unsupported geometry type {geom_type!r}; "
             f"expected one of {sorted(SUPPORTED_GEOMETRY_TYPES)}"
+        )
+    vertex_count = _count_geometry_vertices(geometry)
+    if vertex_count > MAX_TOTAL_VERTICES_PER_COLLECTION:
+        raise InvalidZoneData(
+            f"Feature has {vertex_count} vertices; single-feature limit is "
+            f"{MAX_TOTAL_VERTICES_PER_COLLECTION}"
         )
 
 
@@ -67,8 +104,20 @@ def parse_zone_collection(raw: str | None) -> dict:
     features = collection.get("features")
     if not isinstance(features, list):
         raise InvalidZoneData("FeatureCollection must have a 'features' array")
+    if len(features) > MAX_FEATURES_PER_COLLECTION:
+        raise InvalidZoneData(
+            f"FeatureCollection has {len(features)} features; limit is "
+            f"{MAX_FEATURES_PER_COLLECTION}"
+        )
+    total_vertices = 0
     for feature in features:
         _validate_feature(feature)
+        total_vertices += _count_geometry_vertices(feature["geometry"])
+    if total_vertices > MAX_TOTAL_VERTICES_PER_COLLECTION:
+        raise InvalidZoneData(
+            f"FeatureCollection has {total_vertices} total vertices; limit is "
+            f"{MAX_TOTAL_VERTICES_PER_COLLECTION}"
+        )
     return collection
 
 
