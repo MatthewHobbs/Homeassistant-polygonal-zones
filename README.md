@@ -339,6 +339,12 @@ Note that any person whose `device_tracker` entity you select will have their lo
 
 Open work items are tracked as GitHub issues: [MatthewHobbs/Homeassistant-polygonal-zones/issues](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues).
 
+Named goals — Home Assistant [quality-scale](https://developers.home-assistant.io/docs/core/integration-quality-scale/) progression (currently `bronze`):
+
+- [#5 Achieve Silver](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/5) — `PARALLEL_UPDATES`, `entity-unavailable` semantics, action-exception polish, ≥95% test coverage.
+- [#6 Achieve Gold](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/6) — diagnostics, repair flows, reconfiguration flow, entity/exception/icon translation keys, expanded docs. Blocked by #5.
+- [#7 Achieve Platinum](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/7) — practically blocked by `shapely` and `pandas` being sync compute libraries (no production-quality async geospatial alternatives exist). Aspirational. Blocked by #6.
+
 ## Contributing
 
 This is a community-supported fork of the original project, maintained in spare time rather than by a dedicated team. That means responses and releases move at a best-effort pace, and the long-term health of the integration depends on contributions from the people who use it.
