@@ -1,6 +1,7 @@
 """Sensor for the polygonal_zones integration."""
 
 from collections.abc import Callable, Coroutine
+from datetime import datetime
 import logging
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.start import async_at_started
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_DOWNLOAD_ZONES,
@@ -128,6 +130,12 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
 
         self._zones: list[Zone] = []
         self._last_load_failures: list[tuple[str, str]] = []
+        # Observability: when did the last successful load complete, and what
+        # was the outcome of the most recent attempt. Surfaced in diagnostics
+        # and in the mirror entity's attributes so a user debugging stale zones
+        # can see "never" / "ok" / "failed" + timestamp without scraping logs.
+        self._last_zones_loaded_at: datetime | None = None
+        self._last_load_result: str = "never"
         self._unsub: Callable[[], None] | None = None
         self._unsub_at_started: Callable[[], None] | None = None
         self._unsub_retry: Callable[[], None] | None = None
@@ -171,6 +179,7 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
                 self._zones = result.zones
                 self._last_load_failures = result.failures
             except Exception:
+                self._last_load_result = "failed"
                 if attempt < _MAX_LOAD_ATTEMPTS:
                     delay = min(600, _BASE_RETRY_DELAY * (2 ** (attempt - 1)))
                     _LOGGER.warning(
@@ -208,6 +217,8 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
                     )
                 return
             # Successful load — clear any open repair issue from a prior failure.
+            self._last_zones_loaded_at = dt_util.utcnow()
+            self._last_load_result = "ok"
             ir.async_delete_issue(self.hass, DOMAIN, f"zone_load_failed_{self._attr_unique_id}")
             self._set_available(True)
             await self._update_state()
@@ -233,6 +244,7 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
             self._zones = result.zones
             self._last_load_failures = result.failures
         except Exception:
+            self._last_load_result = "failed"
             _LOGGER.warning(
                 "Failed to reload zones for entry=%s entity=%s; keeping previous zones",
                 self._config_entry_id,
@@ -241,6 +253,8 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
             )
             return
 
+        self._last_zones_loaded_at = dt_util.utcnow()
+        self._last_load_result = "ok"
         self._set_available(True)
         await self._update_state()
 
@@ -287,6 +301,12 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         attributes: dict[str, Any] = {
             "source_entity": self._entity_id,
             "zone_uris": self._zones_urls,
+            "last_load_result": self._last_load_result,
+            "last_zones_loaded_at": (
+                self._last_zones_loaded_at.isoformat()
+                if self._last_zones_loaded_at is not None
+                else None
+            ),
         }
         if self._expose_coordinates:
             attributes["latitude"] = latitude
@@ -342,6 +362,7 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
             self._zones = result.zones
             self._last_load_failures = result.failures
         except Exception:
+            self._last_load_result = "failed"
             _LOGGER.warning(
                 "Failed to reload zones for entry=%s entity=%s",
                 self._config_entry_id,
@@ -350,6 +371,12 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
             )
             return None
         _LOGGER.debug("Reloaded zones of entity: %s", self._attr_unique_id)
+        # Successful reload clears any repair issue from a prior failure —
+        # same policy as the startup path so a user who invokes reload_zones
+        # after fixing a URL sees the issue disappear without a HA restart.
+        self._last_zones_loaded_at = dt_util.utcnow()
+        self._last_load_result = "ok"
+        ir.async_delete_issue(self.hass, DOMAIN, f"zone_load_failed_{self._attr_unique_id}")
 
         await self._update_state()
         if call is not None and call.return_response:
