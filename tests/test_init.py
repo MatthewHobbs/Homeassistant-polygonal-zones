@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from custom_components.polygonal_zones import (
     PolygonalZonesData,
+    async_migrate_entry,
     async_reload_entry,
     async_setup,
     async_setup_entry,
@@ -96,3 +97,15 @@ async def test_async_reload_entry_delegates_to_async_reload() -> None:
     await async_reload_entry(hass, entry)
 
     reload_mock.assert_awaited_once_with("entry-1")
+
+
+async def test_async_migrate_entry_accepts_current_version() -> None:
+    """VERSION=1 entries need no migration — stub returns True."""
+    entry = SimpleNamespace(entry_id="entry-1", version=1)
+    assert await async_migrate_entry(SimpleNamespace(), entry) is True
+
+
+async def test_async_migrate_entry_rejects_future_version() -> None:
+    """A future schema version the stub doesn't know how to downgrade returns False."""
+    entry = SimpleNamespace(entry_id="entry-1", version=99)
+    assert await async_migrate_entry(SimpleNamespace(), entry) is False
