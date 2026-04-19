@@ -28,6 +28,20 @@ def test_build_create_flow_has_all_required_keys() -> None:
     assert "entities" in keys
 
 
+def test_build_create_flow_download_zones_defaults_true_for_new_entries() -> None:
+    """New installs default download_zones to True so mutation services work out of the box."""
+    schema = build_create_flow()
+    download_key = next(k for k in schema.schema if str(k) == "download_zones")
+    assert download_key.default() is True
+
+
+def test_build_create_flow_preserves_existing_download_zones_false() -> None:
+    """A reconfigure flow on an entry with download_zones=False preserves that choice."""
+    schema = build_create_flow({"download_zones": False})
+    download_key = next(k for k in schema.schema if str(k) == "download_zones")
+    assert download_key.default() is False
+
+
 def test_build_options_flow_has_zone_urls_and_priority() -> None:
     schema = build_options_flow()
     keys = {str(k) for k in schema.schema}
