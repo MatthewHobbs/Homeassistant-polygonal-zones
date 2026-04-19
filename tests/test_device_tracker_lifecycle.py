@@ -83,6 +83,49 @@ async def test_update_location_outside_zones_marks_away() -> None:
     assert entity._attr_location_name == "away"
 
 
+async def test_update_location_expose_coordinates_false_omits_gps_attributes() -> None:
+    """With the privacy toggle off, lat/lon/gps_accuracy are stripped from attributes."""
+    entity = PolygonalZoneEntity(
+        tracked_entity_id="device_tracker.phone",
+        config_entry_id="entry-id",
+        zone_urls=["https://example.com/zones.json"],
+        own_id="device_tracker.polygonal_zones_phone",
+        prioritized_zone_files=False,
+        editable_file=False,
+        expose_coordinates=False,
+    )
+    entity.hass = _make_hass()
+    entity._zones = [
+        Zone(name="Home", geometry=Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]), priority=0)
+    ]
+
+    await entity.update_location(latitude=0.5, longitude=0.5, gps_accuracy=10)
+
+    assert entity._attr_location_name == "Home"
+    attrs = entity._attr_extra_state_attributes
+    assert "latitude" not in attrs
+    assert "longitude" not in attrs
+    assert "gps_accuracy" not in attrs
+    assert attrs["source_entity"] == "device_tracker.phone"
+    assert attrs["zone_uris"] == ["https://example.com/zones.json"]
+
+
+async def test_update_location_expose_coordinates_default_is_true() -> None:
+    """Backward-compat: the constructor default keeps coordinates exposed."""
+    entity = _make_entity()
+    entity.hass = _make_hass()
+    entity._zones = [
+        Zone(name="Home", geometry=Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]), priority=0)
+    ]
+
+    await entity.update_location(latitude=0.5, longitude=0.5, gps_accuracy=10)
+
+    attrs = entity._attr_extra_state_attributes
+    assert attrs["latitude"] == 0.5
+    assert attrs["longitude"] == 0.5
+    assert attrs["gps_accuracy"] == 10
+
+
 async def test_async_reload_zones_returns_payload_when_requested() -> None:
     entity = _make_entity()
     entity.hass = _make_hass()
