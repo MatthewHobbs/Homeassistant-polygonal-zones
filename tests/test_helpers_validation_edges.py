@@ -129,7 +129,9 @@ def test_parse_zone_feature_warns_on_unknown_property_keys(caplog) -> None:
     assert parsed["properties"]["color"] == "#ff0000"
     assert parsed["properties"]["nickname"] == "house"
     assert any("unknown property keys" in rec.message for rec in caplog.records)
-    warning_message = next(rec.message for rec in caplog.records if "unknown property keys" in rec.message)
+    warning_message = next(
+        rec.message for rec in caplog.records if "unknown property keys" in rec.message
+    )
     assert "color" in warning_message
     assert "nickname" in warning_message
 
