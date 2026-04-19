@@ -40,6 +40,7 @@ async def async_setup(hass: HomeAssistant, _config: dict) -> bool:
     await register_services(
         hass,
         ["add_new_zone", "delete_zone", "edit_zone", "replace_all_zones"],
+        admin=True,
     )
     return True
 
