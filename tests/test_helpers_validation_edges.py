@@ -115,3 +115,43 @@ def test_parse_zone_collection_accepts_at_caps() -> None:
     raw = json.dumps({"type": "FeatureCollection", "features": features})
     parsed = parse_zone_collection(raw)
     assert len(parsed["features"]) == 2
+
+
+def test_parse_zone_feature_warns_on_unknown_property_keys(caplog) -> None:
+    """Unknown top-level property keys are preserved but logged at WARNING."""
+    feature = _make_polygon_feature("Home", 4)
+    feature["properties"]["color"] = "#ff0000"
+    feature["properties"]["nickname"] = "house"
+
+    with caplog.at_level("WARNING", logger="custom_components.polygonal_zones.services.helpers"):
+        parsed = parse_zone_feature(json.dumps(feature))
+
+    assert parsed["properties"]["color"] == "#ff0000"
+    assert parsed["properties"]["nickname"] == "house"
+    assert any("unknown property keys" in rec.message for rec in caplog.records)
+    warning_message = next(rec.message for rec in caplog.records if "unknown property keys" in rec.message)
+    assert "color" in warning_message
+    assert "nickname" in warning_message
+
+
+def test_parse_zone_feature_polygonal_zones_ext_is_not_unknown(caplog) -> None:
+    """The reserved polygonal_zones_ext namespace passes validation silently."""
+    feature = _make_polygon_feature("Home", 4)
+    feature["properties"]["polygonal_zones_ext"] = {"editor": "addon", "color": "#00f"}
+
+    with caplog.at_level("WARNING", logger="custom_components.polygonal_zones.services.helpers"):
+        parsed = parse_zone_feature(json.dumps(feature))
+
+    assert parsed["properties"]["polygonal_zones_ext"]["editor"] == "addon"
+    assert not any("unknown property keys" in rec.message for rec in caplog.records)
+
+
+def test_parse_zone_feature_name_and_priority_are_not_unknown(caplog) -> None:
+    """The canonical keys name + priority never trigger the drift warning."""
+    feature = _make_polygon_feature("Home", 4)
+    feature["properties"]["priority"] = 1
+
+    with caplog.at_level("WARNING", logger="custom_components.polygonal_zones.services.helpers"):
+        parse_zone_feature(json.dumps(feature))
+
+    assert not any("unknown property keys" in rec.message for rec in caplog.records)
