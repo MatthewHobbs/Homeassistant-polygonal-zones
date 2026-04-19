@@ -11,7 +11,12 @@ import numpy as np
 from shapely.geometry import Point, shape
 from shapely.geometry.polygon import Polygon
 
+from ..const import MAX_SUPPORTED_SCHEMA_VERSION
 from .general import load_data
+
+
+class UnsupportedSchemaVersion(ValueError):
+    """Raised when a zone file declares a schema_version this integration can't read."""
 
 
 @dataclass
@@ -81,6 +86,19 @@ async def get_zones(uris: list[str], hass: HomeAssistant, prioritize: bool) -> l
     for idx, uri in enumerate(uris):
         raw = await load_data(uri, hass)
         data = json.loads(raw)
+
+        pz = data.get("polygonal_zones") if isinstance(data, dict) else None
+        if isinstance(pz, dict):
+            declared_version = pz.get("schema_version", 1)
+            if (
+                isinstance(declared_version, int)
+                and declared_version > MAX_SUPPORTED_SCHEMA_VERSION
+            ):
+                raise UnsupportedSchemaVersion(
+                    f"Zone file {uri!r} declares schema_version={declared_version}; "
+                    f"this integration supports up to {MAX_SUPPORTED_SCHEMA_VERSION}. "
+                    "See docs/ZONES_FORMAT.md."
+                )
 
         for feature in data["features"]:
             properties = dict(feature["properties"])

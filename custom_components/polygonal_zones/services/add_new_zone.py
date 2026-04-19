@@ -8,7 +8,12 @@ import aiohttp
 from homeassistant.core import HomeAssistant, ServiceCall
 
 from ..utils.general import load_data, safe_config_path
-from ..utils.local_zones import LOCK_ACQUIRE_TIMEOUT, get_file_lock, save_zones
+from ..utils.local_zones import (
+    LOCK_ACQUIRE_TIMEOUT,
+    dump_feature_collection,
+    get_file_lock,
+    save_zones,
+)
 from .errors import InvalidZoneData, ZoneAlreadyExists, ZoneFileNotEditable
 from .helpers import (
     get_entities_from_device_id,
@@ -42,11 +47,8 @@ def action_builder(hass: HomeAssistant) -> Callable[[ServiceCall], Awaitable[Non
                     raise ZoneAlreadyExists(f'The zone with name "{new_name}" already exists')
 
                 existing_zones["features"].append(new_zone)
-                new_content = json.dumps(
-                    {
-                        "type": "FeatureCollection",
-                        "features": existing_zones["features"],
-                    }
+                new_content = dump_feature_collection(
+                    existing_zones["features"], existing=existing_zones
                 )
                 await save_zones(new_content, filepath, hass)
         except TimeoutError as err:

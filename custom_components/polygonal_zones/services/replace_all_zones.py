@@ -2,12 +2,16 @@
 
 import asyncio
 from collections.abc import Awaitable, Callable
-import json
 
 from homeassistant.core import HomeAssistant, ServiceCall
 
 from ..utils.general import safe_config_path
-from ..utils.local_zones import LOCK_ACQUIRE_TIMEOUT, get_file_lock, save_zones
+from ..utils.local_zones import (
+    LOCK_ACQUIRE_TIMEOUT,
+    dump_feature_collection,
+    get_file_lock,
+    save_zones,
+)
 from .errors import InvalidZoneData, ZoneFileNotEditable
 from .helpers import (
     get_entities_from_device_id,
@@ -32,7 +36,7 @@ def action_builder(
         filename = entity.zone_urls[0]
 
         collection = parse_zone_collection(call.data.get("zone"))
-        new_content = json.dumps(collection)
+        new_content = dump_feature_collection(collection["features"], existing=collection)
 
         try:
             filepath = safe_config_path(hass.config.config_dir, filename)
