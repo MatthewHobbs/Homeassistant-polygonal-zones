@@ -111,3 +111,51 @@ async def test_options_flow_valid_input_merges_data(tmp_path) -> None:
     assert merged["prioritize_zone_files"] is True
     assert merged["entities"] == ["device_tracker.alice"]
     assert merged["download_zones"] is True
+
+
+async def test_reconfigure_flow_first_render_uses_entry_defaults(tmp_path) -> None:
+    """The reconfigure step on initial render shows the form with current entry data."""
+    flow = ConfigFlow()
+    flow.hass = _hass(tmp_path)
+    fake_entry = SimpleNamespace(
+        data={
+            "zone_urls": ["https://existing"],
+            "entities": ["device_tracker.alice"],
+            "prioritize_zone_files": False,
+        }
+    )
+    flow._get_reconfigure_entry = MagicMock(return_value=fake_entry)
+    flow.async_show_form = MagicMock(return_value={"type": "form"})
+
+    result = await flow.async_step_reconfigure(None)
+    assert result == {"type": "form"}
+    flow.async_show_form.assert_called_once()
+
+
+async def test_reconfigure_flow_invalid_url_renders_form_with_errors(tmp_path) -> None:
+    flow = ConfigFlow()
+    flow.hass = _hass(tmp_path)
+    flow._get_reconfigure_entry = MagicMock(return_value=SimpleNamespace(data={}))
+    flow.async_show_form = MagicMock(return_value={"type": "form"})
+
+    result = await flow.async_step_reconfigure({"zone_urls": ["ftp://nope"], "entities": []})
+    assert result == {"type": "form"}
+    args = flow.async_show_form.call_args.kwargs
+    assert args["errors"] == {"zone_urls": "invalid_url"}
+
+
+async def test_reconfigure_flow_valid_input_calls_update_reload_and_abort(tmp_path) -> None:
+    flow = ConfigFlow()
+    flow.hass = _hass(tmp_path)
+    fake_entry = SimpleNamespace(data={"zone_urls": [], "entities": []})
+    flow._get_reconfigure_entry = MagicMock(return_value=fake_entry)
+    flow.async_update_reload_and_abort = MagicMock(return_value={"type": "reload"})
+
+    result = await flow.async_step_reconfigure(
+        {
+            "zone_urls": ["https://example.com/x.json"],
+            "entities": ["device_tracker.bob"],
+        }
+    )
+    assert result == {"type": "reload"}
+    flow.async_update_reload_and_abort.assert_called_once()

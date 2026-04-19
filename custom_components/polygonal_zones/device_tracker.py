@@ -10,6 +10,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ENTITIES
 from homeassistant.core import HomeAssistant, SupportsResponse
 from homeassistant.helpers import entity_platform
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -183,7 +184,18 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
                         exc_info=True,
                     )
                     self._set_available(False)
+                    ir.async_create_issue(
+                        self.hass,
+                        DOMAIN,
+                        f"zone_load_failed_{self._attr_unique_id}",
+                        is_fixable=False,
+                        severity=ir.IssueSeverity.WARNING,
+                        translation_key="zone_load_failed",
+                        translation_placeholders={"entity_id": str(self._attr_unique_id)},
+                    )
                 return
+            # Successful load — clear any open repair issue from a prior failure.
+            ir.async_delete_issue(self.hass, DOMAIN, f"zone_load_failed_{self._attr_unique_id}")
             self._set_available(True)
             await self._update_state()
 
@@ -344,10 +356,13 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
     @property
     def device_info(self) -> DeviceInfo | None:
         """Information about the polygonal_zones device."""
+        from homeassistant.helpers.device_registry import DeviceEntryType
+
         return {
             "identifiers": {("polygonal_zones", self._config_entry_id)},
             "name": "Polygonal Zones",
             "manufacturer": "Polygonal Zones Community",
+            "entry_type": DeviceEntryType.SERVICE,
         }
 
     @property
