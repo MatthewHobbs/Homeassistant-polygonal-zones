@@ -50,7 +50,9 @@ def test_get_zone_idx_missing_returns_none() -> None:
 def test_get_entities_from_device_id_unknown_device() -> None:
     """An unrecognised device_id surfaces as InvalidZoneData."""
     fake_registry = SimpleNamespace(async_get=lambda _id: None)
-    hass = SimpleNamespace(data={DOMAIN: {}})
+    hass = SimpleNamespace(
+        config_entries=SimpleNamespace(async_get_entry=lambda _eid: None),
+    )
 
     with (
         patch(
@@ -63,10 +65,13 @@ def test_get_entities_from_device_id_unknown_device() -> None:
 
 
 def test_get_entities_from_device_id_unregistered_entry() -> None:
-    """Device exists but its entry isn't in our integration."""
+    """Device exists but its entry isn't in our integration (different domain)."""
     fake_device = SimpleNamespace(primary_config_entry="other-entry")
     fake_registry = SimpleNamespace(async_get=lambda _id: fake_device)
-    hass = SimpleNamespace(data={DOMAIN: {}})
+    other_entry = SimpleNamespace(domain="some_other_domain")
+    hass = SimpleNamespace(
+        config_entries=SimpleNamespace(async_get_entry=lambda _eid: other_entry),
+    )
 
     with (
         patch(
@@ -79,10 +84,17 @@ def test_get_entities_from_device_id_unregistered_entry() -> None:
 
 
 def test_get_entities_from_device_id_happy_path() -> None:
+    from custom_components.polygonal_zones import PolygonalZonesData
+
     fake_device = SimpleNamespace(primary_config_entry="entry-1")
     fake_registry = SimpleNamespace(async_get=lambda _id: fake_device)
     fake_entity = SimpleNamespace()
-    hass = SimpleNamespace(data={DOMAIN: {"entry-1": [fake_entity]}})
+    fake_entry = SimpleNamespace(
+        domain=DOMAIN, runtime_data=PolygonalZonesData(entities=[fake_entity])
+    )
+    hass = SimpleNamespace(
+        config_entries=SimpleNamespace(async_get_entry=lambda _eid: fake_entry),
+    )
 
     with patch(
         "custom_components.polygonal_zones.services.helpers.dr.async_get",

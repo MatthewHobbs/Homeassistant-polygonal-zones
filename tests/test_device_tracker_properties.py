@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from custom_components.polygonal_zones.const import DOMAIN
 from custom_components.polygonal_zones.device_tracker import (
     PolygonalZoneEntity,
     async_setup_entry,
@@ -71,7 +70,6 @@ def hass_with_setup(tmp_path):
     platform = SimpleNamespace(async_register_entity_service=register_mock)
 
     hass = SimpleNamespace(
-        data={DOMAIN: {}},
         config=SimpleNamespace(config_dir=str(tmp_path)),
         async_add_executor_job=AsyncMock(return_value=True),
         config_entries=SimpleNamespace(async_forward_entry_setups=forward),
@@ -80,11 +78,14 @@ def hass_with_setup(tmp_path):
 
 
 async def test_async_setup_entry_no_download(hass_with_setup) -> None:
-    """async_setup_entry creates an entity per CONF_ENTITIES and stores them in hass.data."""
+    """async_setup_entry creates an entity per CONF_ENTITIES and stores in runtime_data."""
+    from custom_components.polygonal_zones import PolygonalZonesData
+
     hass, platform = hass_with_setup
 
     entry = SimpleNamespace(
         entry_id="entry-1",
+        runtime_data=PolygonalZonesData(),
         data={
             "zone_urls": ["https://example.com/zones.json"],
             "entities": ["device_tracker.alice", "device_tracker.bob"],
@@ -108,17 +109,20 @@ async def test_async_setup_entry_no_download(hass_with_setup) -> None:
     assert add_entities.call_count == 1
     entities = add_entities.call_args.args[0]
     assert len(entities) == 2
-    assert hass.data[DOMAIN]["entry-1"] == entities
+    assert entry.runtime_data.entities == entities
 
 
 async def test_async_setup_entry_download_creates_local_path(hass_with_setup, tmp_path) -> None:
     """When download_zones is true, a local path is generated under config_dir/polygonal_zones/."""
+    from custom_components.polygonal_zones import PolygonalZonesData
+
     hass, platform = hass_with_setup
     # async_add_executor_job(Path.exists) → False so download_zones is invoked
     hass.async_add_executor_job = AsyncMock(return_value=False)
 
     entry = SimpleNamespace(
         entry_id="entry-1",
+        runtime_data=PolygonalZonesData(),
         data={
             "zone_urls": ["https://example.com/zones.json"],
             "entities": ["device_tracker.alice"],
