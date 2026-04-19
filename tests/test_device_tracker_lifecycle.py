@@ -3,6 +3,7 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from homeassistant.util import dt as dt_util
 from shapely.geometry import Polygon
 
 from custom_components.polygonal_zones.device_tracker import PolygonalZoneEntity
@@ -135,9 +136,12 @@ async def test_async_reload_zones_returns_payload_when_requested() -> None:
     zones = [Zone(name="Home", geometry=polygon, priority=0)]
 
     call = SimpleNamespace(return_response=True)
-    with patch(
-        "custom_components.polygonal_zones.device_tracker.load_zones",
-        new=AsyncMock(return_value=ZoneLoadResult(zones=zones)),
+    with (
+        patch(
+            "custom_components.polygonal_zones.device_tracker.load_zones",
+            new=AsyncMock(return_value=ZoneLoadResult(zones=zones)),
+        ),
+        patch("custom_components.polygonal_zones.device_tracker.ir.async_delete_issue"),
     ):
         result = await entity.async_reload_zones(call)
 
@@ -151,11 +155,15 @@ async def test_async_reload_zones_empty_returns_empty_list() -> None:
     entity = _make_entity()
     entity.hass = _make_hass()
     entity._async_write_ha_state = MagicMock()
+    entity._zones_urls = []  # no URIs so the all-fail branch isn't triggered
 
     call = SimpleNamespace(return_response=True)
-    with patch(
-        "custom_components.polygonal_zones.device_tracker.load_zones",
-        new=AsyncMock(return_value=ZoneLoadResult(zones=[])),
+    with (
+        patch(
+            "custom_components.polygonal_zones.device_tracker.load_zones",
+            new=AsyncMock(return_value=ZoneLoadResult(zones=[])),
+        ),
+        patch("custom_components.polygonal_zones.device_tracker.ir.async_delete_issue"),
     ):
         result = await entity.async_reload_zones(call)
 
@@ -166,11 +174,15 @@ async def test_async_reload_zones_returns_none_when_response_not_requested() -> 
     entity = _make_entity()
     entity.hass = _make_hass()
     entity._async_write_ha_state = MagicMock()
+    entity._zones_urls = []
 
     call = SimpleNamespace(return_response=False)
-    with patch(
-        "custom_components.polygonal_zones.device_tracker.load_zones",
-        new=AsyncMock(return_value=ZoneLoadResult(zones=[])),
+    with (
+        patch(
+            "custom_components.polygonal_zones.device_tracker.load_zones",
+            new=AsyncMock(return_value=ZoneLoadResult(zones=[])),
+        ),
+        patch("custom_components.polygonal_zones.device_tracker.ir.async_delete_issue"),
     ):
         result = await entity.async_reload_zones(call)
 
@@ -200,11 +212,100 @@ async def test_async_reload_zones_accepts_no_call() -> None:
     polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
     zones = [Zone(name="Home", geometry=polygon, priority=0)]
 
-    with patch(
-        "custom_components.polygonal_zones.device_tracker.load_zones",
-        new=AsyncMock(return_value=ZoneLoadResult(zones=zones)),
+    with (
+        patch(
+            "custom_components.polygonal_zones.device_tracker.load_zones",
+            new=AsyncMock(return_value=ZoneLoadResult(zones=zones)),
+        ),
+        patch("custom_components.polygonal_zones.device_tracker.ir.async_delete_issue"),
     ):
         result = await entity.async_reload_zones()
 
     assert result is None
     assert entity._zones == zones
+
+
+async def test_async_reload_zones_sets_last_load_observability_on_success() -> None:
+    """A successful reload updates last_zones_loaded_at + sets last_load_result='ok'."""
+    entity = _make_entity()
+    entity.hass = _make_hass()
+    entity._async_write_ha_state = MagicMock()
+
+    polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
+
+    assert entity._last_load_result == "never"
+    assert entity._last_zones_loaded_at is None
+
+    with (
+        patch(
+            "custom_components.polygonal_zones.device_tracker.load_zones",
+            new=AsyncMock(return_value=ZoneLoadResult(zones=[Zone(name="Home", geometry=polygon)])),
+        ),
+        patch("custom_components.polygonal_zones.device_tracker.ir.async_delete_issue"),
+    ):
+        await entity.async_reload_zones()
+
+    assert entity._last_load_result == "ok"
+    assert entity._last_zones_loaded_at is not None
+
+
+async def test_async_reload_zones_clears_repair_issue_on_success() -> None:
+    """Recovering via reload_zones clears the repair issue raised by a prior failure."""
+    entity = _make_entity()
+    entity.hass = _make_hass()
+    entity._async_write_ha_state = MagicMock()
+
+    polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
+
+    with (
+        patch(
+            "custom_components.polygonal_zones.device_tracker.load_zones",
+            new=AsyncMock(return_value=ZoneLoadResult(zones=[Zone(name="Home", geometry=polygon)])),
+        ),
+        patch(
+            "custom_components.polygonal_zones.device_tracker.ir.async_delete_issue"
+        ) as mock_delete,
+    ):
+        await entity.async_reload_zones()
+
+    mock_delete.assert_called_once()
+    _hass, domain, issue_id = mock_delete.call_args.args
+    assert domain == "polygonal_zones"
+    assert issue_id.startswith("zone_load_failed_")
+
+
+async def test_async_reload_zones_marks_failed_on_exception() -> None:
+    """A reload failure flips last_load_result to 'failed' without touching the timestamp."""
+    entity = _make_entity()
+    entity.hass = _make_hass()
+    # Seed a prior-success state so we can confirm the timestamp is NOT overwritten.
+    entity._last_load_result = "ok"
+    prior_ts = entity._last_zones_loaded_at
+
+    with patch(
+        "custom_components.polygonal_zones.device_tracker.load_zones",
+        new=AsyncMock(side_effect=RuntimeError("boom")),
+    ):
+        await entity.async_reload_zones()
+
+    assert entity._last_load_result == "failed"
+    assert entity._last_zones_loaded_at is prior_ts
+
+
+async def test_update_location_exposes_load_observability_attributes() -> None:
+    """last_load_result + last_zones_loaded_at are written to entity attributes."""
+    entity = _make_entity()
+    entity.hass = _make_hass()
+    entity._last_load_result = "ok"
+    entity._last_zones_loaded_at = dt_util.utcnow()
+    entity._zones = [
+        Zone(name="Home", geometry=Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]), priority=0)
+    ]
+
+    await entity.update_location(latitude=0.5, longitude=0.5, gps_accuracy=10)
+
+    attrs = entity._attr_extra_state_attributes
+    assert attrs["last_load_result"] == "ok"
+    assert attrs["last_zones_loaded_at"] is not None
+    # ISO-8601 string with timezone
+    assert "T" in attrs["last_zones_loaded_at"]
