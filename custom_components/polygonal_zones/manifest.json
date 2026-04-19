@@ -10,5 +10,5 @@
   "issue_tracker": "https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues",
   "quality_scale": "bronze",
   "requirements": ["shapely==2.0.6"],
-  "version": "1.11.2"
+  "version": "1.12.0"
 }
