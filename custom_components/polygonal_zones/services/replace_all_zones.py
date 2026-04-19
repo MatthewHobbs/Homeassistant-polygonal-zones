@@ -52,11 +52,11 @@ def action_builder(
                 await sync_entities_after_write(entities)
         except TimeoutError as err:
             raise InvalidZoneData(
-                f"Timed out waiting for lock on {filename}; another operation may be in progress"
+                "Timed out waiting for zone file lock; another operation may be in progress"
             ) from err
         except OSError as err:
-            raise InvalidZoneData(f"Failed to access zone file {filename}: {err}") from err
+            raise InvalidZoneData("Failed to access zone file") from err
         except ValueError as err:
-            raise InvalidZoneData(f"Zone file path is invalid: {err}") from err
+            raise InvalidZoneData("Zone file path is invalid") from err
 
     return replace_all_zones

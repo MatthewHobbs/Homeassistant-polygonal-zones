@@ -51,3 +51,25 @@ def test_priority_tiebreak_picks_correct_zone() -> None:
 def test_empty_zones_returns_none() -> None:
     """With no zones loaded the call must return None, not raise."""
     assert get_locations_zone(lat=0.5, lon=0.5, acc=1, zones=[]) is None
+
+
+def test_matched_zones_lists_every_intersecting_zone() -> None:
+    """``matched_zones`` exposes every zone the buffered point intersects."""
+    zones = [
+        _zone("C", SQUARE_C, priority=1),
+        _zone("D", SQUARE_D, priority=0),
+    ]
+    result = get_locations_zone(lat=5.0, lon=5.0, acc=1, zones=zones)
+    assert result is not None
+    # Winner is D (lower priority value) — see test_priority_tiebreak.
+    assert result["name"] == "D"
+    # The 'matched_zones' list contains both zones the buffered point intersects.
+    assert set(result["matched_zones"]) == {"C", "D"}
+
+
+def test_matched_zones_single_match() -> None:
+    """Single-match case still populates matched_zones for attribute consistency."""
+    zones = [_zone("A", SQUARE_A), _zone("B", SQUARE_B)]
+    result = get_locations_zone(lat=0.5, lon=0.5, acc=1, zones=zones)
+    assert result is not None
+    assert result["matched_zones"] == ["A"]

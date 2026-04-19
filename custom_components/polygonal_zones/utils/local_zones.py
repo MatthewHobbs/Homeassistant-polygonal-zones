@@ -15,7 +15,12 @@ from .zones import Zone, get_zones
 
 _FILE_LOCKS: dict[str, asyncio.Lock] = {}
 
-LOCK_ACQUIRE_TIMEOUT = 15  # seconds
+# Default seconds to wait on the per-file lock before a mutation service
+# aborts. Override at runtime by exporting
+# ``POLYGONAL_ZONES_LOCK_ACQUIRE_TIMEOUT`` in the HA process environment
+# (useful for NFS-mounted /config / SD-card Raspberry Pi setups where a
+# single flush can push past the default).
+LOCK_ACQUIRE_TIMEOUT = int(os.environ.get("POLYGONAL_ZONES_LOCK_ACQUIRE_TIMEOUT", "15"))
 
 
 def get_file_lock(path: Path) -> asyncio.Lock:
@@ -127,7 +132,20 @@ async def save_zones(geojson: str, destination: Path, hass: HomeAssistant) -> No
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 f.write(geojson)
+                # Flush-to-disk before the rename so a host power loss between
+                # write() and replace() can't leave us with an empty file.
+                f.flush()
+                os.fsync(f.fileno())
             tmp.replace(destination)
+            # Sync the directory entry too — the rename is durable only once
+            # the parent's fsync completes. Harmless on filesystems that
+            # don't require it (HFS+, APFS).
+            with contextlib.suppress(OSError):
+                dir_fd = os.open(destination.parent, os.O_DIRECTORY)
+                try:
+                    os.fsync(dir_fd)
+                finally:
+                    os.close(dir_fd)
         except Exception:
             with contextlib.suppress(FileNotFoundError):
                 tmp.unlink()

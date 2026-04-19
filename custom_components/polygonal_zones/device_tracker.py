@@ -324,6 +324,10 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
                 if self._last_zones_loaded_at is not None
                 else None
             ),
+            # Every zone the buffered GPS point currently intersects, not just
+            # the winning one. Makes overlap-priority debugging a five-second
+            # check in Developer Tools instead of a JSON scrape.
+            "matched_zones": zone["matched_zones"] if zone is not None else [],
         }
         if self._expose_coordinates:
             attributes["latitude"] = latitude

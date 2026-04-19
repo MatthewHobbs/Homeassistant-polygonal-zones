@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 from dataclasses import dataclass, field
 import json
 import logging
-import math
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -16,6 +14,25 @@ from shapely.geometry.polygon import Polygon
 
 from ..const import MAX_SUPPORTED_SCHEMA_VERSION
 from .general import load_data
+from .geometry import (
+    get_distance_to_centroid,
+    get_distance_to_exterior_points,
+    haversine_distances,
+)
+
+# Re-exported for back-compat with call sites / tests that imported from zones.
+__all__ = [
+    "UnsupportedSchemaVersion",
+    "Zone",
+    "ZoneFileCorrupt",
+    "ZoneLoadResult",
+    "get_distance_to_centroid",
+    "get_distance_to_exterior_points",
+    "get_locations_zone",
+    "get_zones",
+    "haversine_distances",
+    "load_zones",
+]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -55,55 +72,6 @@ class ZoneLoadResult:
 
     zones: list[Zone] = field(default_factory=list)
     failures: list[tuple[str, str]] = field(default_factory=list)
-
-
-_EARTH_RADIUS_M = 6371000
-
-
-def _haversine_metres(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Haversine great-circle distance between two (lat, lon) pairs in metres.
-
-    Pure stdlib math — ``numpy`` is no longer a runtime dep of this integration
-    (dropped in v1.12 per chief-architect review). Polygon exterior loops run
-    through this in Python; the vertex-per-collection cap keeps the worst case
-    at ~10k iterations, which is sub-millisecond in CPython.
-    """
-    lat1_r = math.radians(lat1)
-    lat2_r = math.radians(lat2)
-    dlat = lat2_r - lat1_r
-    dlon = math.radians(lon2 - lon1)
-    a = math.sin(dlat / 2) ** 2 + math.cos(lat1_r) * math.cos(lat2_r) * math.sin(dlon / 2) ** 2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    return _EARTH_RADIUS_M * c
-
-
-def haversine_distances(
-    point: tuple[float, float], coordinates: Iterable[tuple[float, float]]
-) -> list[float]:
-    """Return Haversine distances in metres from one point to every coordinate.
-
-    Kept as a public helper for test / future callers that want the full list.
-    ``point`` and each entry of ``coordinates`` are ``(lat, lon)`` tuples in
-    degrees.
-    """
-    lat1, lon1 = point
-    return [_haversine_metres(lat1, lon1, lat2, lon2) for lat2, lon2 in coordinates]
-
-
-def get_distance_to_exterior_points(polygon: Polygon, point: Point) -> float:
-    """Haversine distance to the closest point on the polygon's exterior, in metres.
-
-    Uses ``(point.x, point.y)`` directly (which in shapely terms is ``(lon, lat)``
-    for GeoJSON-convention polygons) to preserve the exact numerics of the prior
-    numpy implementation — a byte-compatible drop of the numpy runtime dep.
-    """
-    return min(_haversine_metres(point.x, point.y, x, y) for x, y in polygon.exterior.coords)
-
-
-def get_distance_to_centroid(polygon: Polygon, point: Point) -> float:
-    """Haversine distance from ``point`` to the polygon's centroid, in metres (JSON-safe)."""
-    centroid = polygon.centroid
-    return _haversine_metres(point.x, point.y, centroid.x, centroid.y)
 
 
 def _parse_feature(feature: Any, default_priority: int) -> Zone:
@@ -258,8 +226,12 @@ def get_locations_zone(lat: float, lon: float, acc: float, zones: list[Zone]) ->
         zones: list of ``Zone`` objects to search.
 
     Returns:
-        ``{"name": ..., "distance_to_centroid": <metres>}`` or ``None`` if the
-        point falls outside every zone.
+        ``{"name": ..., "distance_to_centroid": <metres>, "matched_zones": [...]}``
+        or ``None`` if the point falls outside every zone.
+
+        ``matched_zones`` is the full list of zone names the buffered GPS point
+        intersects (including the winner) — used for overlap-debugging in the
+        mirror entity's attributes.
     """
     if not zones:
         return None
@@ -271,11 +243,14 @@ def get_locations_zone(lat: float, lon: float, acc: float, zones: list[Zone]) ->
     if not possible:
         return None
 
+    matched_names = [z.name for z in possible]
+
     if len(possible) == 1:
         z = possible[0]
         return {
             "name": z.name,
             "distance_to_centroid": get_distance_to_centroid(z.geometry, gps_point),
+            "matched_zones": matched_names,
         }
 
     # Filter to the highest-priority candidates (lowest priority value wins)
@@ -286,4 +261,5 @@ def get_locations_zone(lat: float, lon: float, acc: float, zones: list[Zone]) ->
     return {
         "name": closest.name,
         "distance_to_centroid": get_distance_to_centroid(closest.geometry, gps_point),
+        "matched_zones": matched_names,
     }
