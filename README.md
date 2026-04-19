@@ -1,5 +1,13 @@
 # Polygonal Zones
 
+[![Latest release](https://img.shields.io/github/v/release/MatthewHobbs/Homeassistant-polygonal-zones?display_name=tag&sort=semver)](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/releases/latest)
+[![Validate CI](https://img.shields.io/github/actions/workflow/status/MatthewHobbs/Homeassistant-polygonal-zones/validate.yml?branch=main&label=validate)](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/actions/workflows/validate.yml)
+[![Coverage](https://img.shields.io/badge/coverage-99%25-brightgreen)](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/blob/main/.github/workflows/validate.yml)
+[![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5)](https://hacs.xyz/)
+[![HA quality scale](https://img.shields.io/badge/quality--scale-platinum-e5e4e2)](https://developers.home-assistant.io/docs/core/integration-quality-scale/)
+[![License: MIT](https://img.shields.io/github/license/MatthewHobbs/Homeassistant-polygonal-zones)](LICENSE)
+[![Maintenance](https://img.shields.io/maintenance/yes/2026)](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/commits/main)
+
 This Home Assistant integration lets you define arbitrary polygonal zones from a GeoJSON file and resolve any tracked `device_tracker` entity into the zone it currently sits inside. Use it when the built-in circular HA zones aren't expressive enough — irregular property boundaries, school catchments, neighbourhoods, town centres, etc.
 
 **Status:** stable (v1.7.0). Actively maintained; HACS-ready; declares `quality_scale: platinum` in its manifest.
