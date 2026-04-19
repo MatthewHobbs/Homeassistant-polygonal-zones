@@ -51,7 +51,7 @@ def build_create_flow(
             ): selector.BooleanSelector(),
             vol.Optional(
                 "download_zones",
-                default=defaults.get("download_zones", False),
+                default=defaults.get("download_zones", True),
                 description={"advanced": True},
             ): selector.BooleanSelector(),
         }
