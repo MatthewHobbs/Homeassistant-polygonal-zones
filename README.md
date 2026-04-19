@@ -387,9 +387,26 @@ recorder:
 
 If you use Nabu Casa cloud backup (or any other backup that includes the recorder database), the location history above will be included in the backup. Apply the `recorder` exclude block before the next backup if you do not want that data leaving the local network.
 
+**Cross-border transfer note for EU users.** Nabu Casa infrastructure is hosted in the United States. Enabling Nabu Casa cloud backup with the recorder DB attached (default) transfers the location history of every tracked person to US infrastructure. Under GDPR Art. 46 / Schrems II this is a cross-border transfer of personal data. If you're tracking household members or third parties in the EU, review Nabu Casa's data-processing terms before enabling cloud backup, or keep the `recorder` exclude block applied so the recorder DB's location history is never included in the upload.
+
 The `polygonal_zones.reload_zones` service accepts an optional `return_response: true`. When set, it returns the loaded zone names and polygon coordinates to the caller. This is intended for debugging — be careful not to forward that response to external services (e.g. a notification body), as zone names and shapes are sensitive location data.
 
 Note that any person whose `device_tracker` entity you select will have their location continuously monitored. Please make sure they are aware before tracking them.
+
+### Responding to a right-to-erasure request
+
+A tracked person may ask for their location data to be removed. The steps:
+
+1. **Remove the source entity from the integration.** Settings → Devices & Services → Polygonal Zones → Configure → untick the entity; save. The mirror entity is deleted automatically.
+2. **Purge their history from the recorder DB.** Developer Tools → Services → `recorder.purge_entities` with:
+   ```yaml
+   entity_id:
+     - device_tracker.polygonal_zones_<original>
+     - device_tracker.<original>
+   ```
+   This removes every past state and attribute row for both the mirror and the source. The default `keep_days: 0` purges immediately.
+3. **Delete any locally-stored zone file that identifies the person.** If `download_zones=True` was used for this entry, remove `<config>/polygonal_zones/<entry_id>.json`. Even without personal data inside, the filename itself is an identifier for the config entry that tracked them.
+4. **Rotate backups.** Any HA backup (local or Nabu Casa cloud) taken before these steps still contains the history. Delete older backups if full erasure is required, or rely on the backup's own retention expiry.
 
 ## Roadmap
 
