@@ -298,8 +298,16 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
 
             self.async_write_ha_state()
 
-    async def async_reload_zones(self, call) -> dict | list | None:
-        """Reload the zones."""
+    async def async_reload_zones(self, call=None) -> dict | list | None:
+        """Reload the zones.
+
+        Called from two paths:
+        - The ``polygonal_zones.reload_zones`` entity service, which passes
+          a ``ServiceCall`` carrying ``return_response``.
+        - Mutation service handlers (``add_new_zone`` / ``edit_zone`` /
+          ``delete_zone`` / ``replace_all_zones``) which invoke it with no
+          ``call`` to sync in-memory state after writing to disk.
+        """
         try:
             self._zones = await get_zones(self._zones_urls, self.hass, self._prioritize_zone_files)
         except Exception:
@@ -307,12 +315,13 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
                 "Failed to reload zones for entry=%s entity=%s",
                 self._config_entry_id,
                 self._attr_unique_id,
+                exc_info=True,
             )
             return None
         _LOGGER.debug("Reloaded zones of entity: %s", self._attr_unique_id)
 
         await self._update_state()
-        if call.return_response:
+        if call is not None and call.return_response:
             return [
                 {
                     "name": z.name,
