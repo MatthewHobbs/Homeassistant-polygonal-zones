@@ -45,7 +45,9 @@ def _hass(tmp_path) -> SimpleNamespace:
 
 
 def _entity_stub() -> SimpleNamespace:
-    return SimpleNamespace(editable_file=True, zone_urls=["zones.json"])
+    return SimpleNamespace(
+        editable_file=True, zone_urls=["zones.json"], _config_entry_id="entry-id"
+    )
 
 
 # ---- TimeoutError wrapping in each service ----

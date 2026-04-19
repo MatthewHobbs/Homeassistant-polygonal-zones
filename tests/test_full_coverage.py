@@ -38,7 +38,9 @@ def _hass(tmp_path) -> SimpleNamespace:
 
 
 async def test_add_zone_non_editable_raises(tmp_path) -> None:
-    fake_entity = SimpleNamespace(editable_file=False, zone_urls=["https://x"])
+    fake_entity = SimpleNamespace(
+        editable_file=False, zone_urls=["https://x"], _config_entry_id="entry-id"
+    )
     action = add_builder(_hass(tmp_path))
     call = SimpleNamespace(
         data={

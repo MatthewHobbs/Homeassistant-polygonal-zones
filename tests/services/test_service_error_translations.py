@@ -48,7 +48,9 @@ def _hass(tmp_path) -> SimpleNamespace:
 
 
 def _entity() -> SimpleNamespace:
-    return SimpleNamespace(editable_file=True, zone_urls=["zones.json"])
+    return SimpleNamespace(
+        editable_file=True, zone_urls=["zones.json"], _config_entry_id="entry-id"
+    )
 
 
 def _add_call() -> SimpleNamespace:
@@ -257,7 +259,9 @@ async def test_replace_all_oserror_wrapped(tmp_path) -> None:
 
 async def test_replace_all_path_traversal_wrapped(tmp_path) -> None:
     action = replace_builder(_hass(tmp_path))
-    bad_entity = SimpleNamespace(editable_file=True, zone_urls=["../../../etc/passwd"])
+    bad_entity = SimpleNamespace(
+        editable_file=True, zone_urls=["../../../etc/passwd"], _config_entry_id="entry-id"
+    )
     call = SimpleNamespace(
         data={
             "device_id": "x",
