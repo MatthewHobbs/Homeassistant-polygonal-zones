@@ -1,6 +1,7 @@
 """Helper functions for the services for the polygonal zones integration."""
 
 import json
+import logging
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -10,6 +11,8 @@ from ..const import DOMAIN
 from ..device_tracker import PolygonalZoneEntity
 from .errors import InvalidZoneData
 
+_LOGGER = logging.getLogger(__name__)
+
 MAX_ZONE_JSON_BYTES = 1_048_576
 MAX_ZONE_NAME_LEN = 200
 MAX_FEATURES_PER_COLLECTION = 500
@@ -18,6 +21,10 @@ MAX_FEATURES_PER_COLLECTION = 500
 # state_changed — a 1 MiB JSON file can otherwise encode ~50k vertices.
 MAX_TOTAL_VERTICES_PER_COLLECTION = 10_000
 SUPPORTED_GEOMETRY_TYPES = {"Polygon", "MultiPolygon"}
+# Declared top-level feature property keys. Anything else is preserved through
+# round-trip but logged at WARNING so drift is visible. New producer-specific
+# fields belong under ``properties.polygonal_zones_ext``. See docs/ZONES_FORMAT.md.
+KNOWN_FEATURE_PROPERTY_KEYS = frozenset({"name", "priority", "polygonal_zones_ext"})
 
 
 def _count_geometry_vertices(geometry: dict) -> int:
@@ -72,6 +79,15 @@ def _validate_feature(feature: object) -> None:
         raise InvalidZoneData(
             f"Feature has {vertex_count} vertices; single-feature limit is "
             f"{MAX_TOTAL_VERTICES_PER_COLLECTION}"
+        )
+    unknown_keys = set(properties) - KNOWN_FEATURE_PROPERTY_KEYS
+    if unknown_keys:
+        _LOGGER.warning(
+            "Zone feature %r carries unknown property keys %s; "
+            "preserved but producers should move new fields under "
+            "properties.polygonal_zones_ext (see docs/ZONES_FORMAT.md)",
+            name,
+            sorted(unknown_keys),
         )
 
 
