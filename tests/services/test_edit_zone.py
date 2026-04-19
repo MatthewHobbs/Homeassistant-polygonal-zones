@@ -64,6 +64,46 @@ async def test_edit_existing_zone_replaces_geometry(tmp_path) -> None:
     fake_entity.async_reload_zones.assert_awaited_once_with()
 
 
+async def test_edit_preserves_feature_order(tmp_path) -> None:
+    """Editing a zone replaces it in place — surrounding features keep their indices."""
+    (tmp_path / "zones.json").write_text(
+        json.dumps(
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    _polygon_feature("Alpha"),
+                    _polygon_feature("Bravo"),
+                    _polygon_feature("Charlie"),
+                ],
+            }
+        )
+    )
+    fake_entity = SimpleNamespace(
+        editable_file=True, zone_urls=["zones.json"], async_reload_zones=AsyncMock()
+    )
+    action = action_builder(_make_hass(tmp_path))
+
+    call = SimpleNamespace(
+        data={
+            "device_id": "fake-device-id",
+            "zone_name": "Bravo",
+            "zone": json.dumps(_polygon_feature("Bravo", lat0=42)),
+        }
+    )
+
+    with patch(
+        "custom_components.polygonal_zones.services.edit_zone.get_entities_from_device_id",
+        return_value=[fake_entity],
+    ):
+        await action(call)
+
+    names = [
+        f["properties"]["name"]
+        for f in json.loads((tmp_path / "zones.json").read_text())["features"]
+    ]
+    assert names == ["Alpha", "Bravo", "Charlie"]
+
+
 async def test_edit_missing_zone_raises(tmp_path) -> None:
     (tmp_path / "zones.json").write_text(
         json.dumps({"type": "FeatureCollection", "features": [_polygon_feature("Home")]})
