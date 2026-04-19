@@ -1,7 +1,7 @@
 """Tests for services.helpers — get_entities_from_device_id branches."""
 
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -11,6 +11,7 @@ from custom_components.polygonal_zones.services.helpers import (
     get_entities_from_device_id,
     get_zone_idx,
     require_device_id,
+    sync_entities_after_write,
 )
 
 
@@ -102,3 +103,19 @@ def test_get_entities_from_device_id_happy_path() -> None:
     ):
         entities = get_entities_from_device_id("device-id", hass)
         assert entities == [fake_entity]
+
+
+async def test_sync_entities_after_write_calls_reload_on_each() -> None:
+    """Every entity under a single entry must be re-synced after a mutation write."""
+    a = SimpleNamespace(async_reload_zones=AsyncMock())
+    b = SimpleNamespace(async_reload_zones=AsyncMock())
+
+    await sync_entities_after_write([a, b])
+
+    a.async_reload_zones.assert_awaited_once_with()
+    b.async_reload_zones.assert_awaited_once_with()
+
+
+async def test_sync_entities_after_write_empty_list_is_noop() -> None:
+    """An empty entity list is a clean no-op, not an error."""
+    await sync_entities_after_write([])

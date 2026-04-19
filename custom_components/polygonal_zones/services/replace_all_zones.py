@@ -17,6 +17,7 @@ from .helpers import (
     get_entities_from_device_id,
     parse_zone_collection,
     require_device_id,
+    sync_entities_after_write,
 )
 
 
@@ -28,7 +29,8 @@ def action_builder(
     async def replace_all_zones(call: ServiceCall) -> None:
         """Handle the service action call."""
         device_id = require_device_id(call.data)
-        entity = get_entities_from_device_id(device_id, hass)[0]
+        entities = get_entities_from_device_id(device_id, hass)
+        entity = entities[0]
 
         if not entity.editable_file:
             raise ZoneFileNotEditable("Zone files of entity are not editable")
@@ -42,6 +44,7 @@ def action_builder(
             filepath = safe_config_path(hass.config.config_dir, filename)
             async with asyncio.timeout(LOCK_ACQUIRE_TIMEOUT), get_file_lock(filepath):
                 await save_zones(new_content, filepath, hass)
+                await sync_entities_after_write(entities)
         except TimeoutError as err:
             raise InvalidZoneData(
                 f"Timed out waiting for lock on {filename}; another operation may be in progress"
