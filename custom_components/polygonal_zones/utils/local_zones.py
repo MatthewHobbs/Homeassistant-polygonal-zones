@@ -23,11 +23,16 @@ def get_file_lock(path: Path) -> asyncio.Lock:
 
     Used to serialize read-modify-write service calls against the same
     zone file so two concurrent callers can't lose each other's changes.
+
+    Fast path: a bare ``dict.get`` avoids allocating a Lock when one is
+    already cached. Slow path: ``setdefault`` atomically publishes the new
+    lock, so a race between two coroutines hitting the slow path at the
+    same time can't install two different Lock objects for one key.
     """
     key = str(path)
     lock = _FILE_LOCKS.get(key)
     if lock is None:
-        lock = _FILE_LOCKS[key] = asyncio.Lock()
+        lock = _FILE_LOCKS.setdefault(key, asyncio.Lock())
     return lock
 
 

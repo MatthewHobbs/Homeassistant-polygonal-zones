@@ -51,8 +51,7 @@ def action_builder(hass: HomeAssistant) -> Callable[[ServiceCall], Awaitable[Non
                 if idx is None:
                     raise ZoneDoesNotExists(f'The zone with name "{old_name}" does not exists')
 
-                del existing_zones["features"][idx]
-                existing_zones["features"].append(new_zone)
+                existing_zones["features"][idx] = new_zone
 
                 new_content = dump_feature_collection(
                     existing_zones["features"], existing=existing_zones
