@@ -11,12 +11,14 @@
       "reconfigure": {
         "data": {
           "download_zones": "Download the GeoJSON files",
+          "expose_coordinates": "Expose GPS coordinates as entity attributes",
           "prioritize_zone_files": "Prioritize order of zone files",
           "registered_entities": "Entities",
           "zone_urls": "URLs of GeoJSON files"
         },
         "data_description": {
           "download_zones": "Use a local GeoJSON file to store the zones in. This will load the above defined files into a single file. The entities will only use this single file to retrieve the zones from. If no GeoJSON files are defined we will create an empty GeoJSON file.",
+          "expose_coordinates": "When enabled, the mirror entity writes latitude, longitude, and gps_accuracy to its attributes on every update — Home Assistant's recorder then persists a full location history. Disable to publish only the zone name (privacy-first). New installs default to off.",
           "prioritize_zone_files": "If you want to prioritize the order of the zone files, enable this option. This means that if a tracker is in multiple zones it will only consider those with the lowest priority.",
           "registered_entities": "Select the entities that you want to track in the zones.",
           "zone_urls": "Enter the URLs of the GeoJSON files that contain the zones you want to track. This supports both websites and files in the /config directory."
@@ -27,12 +29,14 @@
       "user": {
         "data": {
           "download_zones": "Download the GeoJSON files",
+          "expose_coordinates": "Expose GPS coordinates as entity attributes",
           "prioritize_zone_files": "Prioritize order of zone files",
           "registered_entities": "Entities",
           "zone_urls": "URLs of GeoJSON files"
         },
         "data_description": {
           "download_zones": "Use a local GeoJSON file to store the zones in. This will load the above defined files into a single file. The entities will only use this single file to retrieve the zones from. If no GeoJSON files are defined we will create an empty GeoJSON file.",
+          "expose_coordinates": "When enabled, the mirror entity writes latitude, longitude, and gps_accuracy to its attributes on every update — Home Assistant's recorder then persists a full location history. Disable to publish only the zone name (privacy-first). New installs default to off.",
           "prioritize_zone_files": "If you want to prioritize the order of the zone files, enable this option. This means that if a tracker is in multiple zones it will only consider those with the lowest priority.",
           "registered_entities": "Select the entities that you want to track in the zones.",
           "zone_urls": "Enter the URLs of the GeoJSON files that contain the zones you want to track. This supports both websites and files in the /config directory."
@@ -51,10 +55,12 @@
     "step": {
       "init": {
         "data": {
+          "expose_coordinates": "Expose GPS coordinates as entity attributes",
           "prioritize_zone_files": "Prioritize order of zone files",
           "zone_urls": "URLs of GeoJSON files"
         },
         "data_description": {
+          "expose_coordinates": "When enabled, the mirror entity writes latitude, longitude, and gps_accuracy to its attributes on every update — Home Assistant's recorder then persists a full location history. Disable to publish only the zone name (privacy-first).",
           "prioritize_zone_files": "If you want to prioritize the order of the zone files, enable this option. This means that if a tracker is in multiple zones it will only consider those with the lowest priority.",
           "zone_urls": "Enter the URLs of the GeoJSON files that contain the zones you want to track. This supports both websites and files in the /config directory."
         },

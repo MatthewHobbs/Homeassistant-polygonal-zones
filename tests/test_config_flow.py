@@ -49,6 +49,36 @@ def test_build_options_flow_has_zone_urls_and_priority() -> None:
     assert "prioritize_zone_files" in keys
 
 
+def test_build_create_flow_expose_coordinates_default_new_install_is_false() -> None:
+    """New installs opt out of coordinate attributes for privacy by default."""
+    schema = build_create_flow(new_entry=True)
+    key = next(k for k in schema.schema if str(k) == "expose_coordinates")
+    assert key.default() is False
+
+
+def test_build_create_flow_expose_coordinates_reconfigure_missing_key_defaults_true() -> None:
+    """Existing entries predating the option keep coordinates exposed until user opts out."""
+    schema = build_create_flow({})  # reconfigure path; no stored value
+    key = next(k for k in schema.schema if str(k) == "expose_coordinates")
+    assert key.default() is True
+
+
+def test_build_create_flow_expose_coordinates_stored_value_wins() -> None:
+    """A stored value always wins over either fallback, regardless of new_entry."""
+    schema = build_create_flow({"expose_coordinates": False}, new_entry=False)
+    key = next(k for k in schema.schema if str(k) == "expose_coordinates")
+    assert key.default() is False
+
+
+def test_build_options_flow_exposes_coordinate_toggle() -> None:
+    schema = build_options_flow()
+    keys = {str(k) for k in schema.schema}
+    assert "expose_coordinates" in keys
+    key = next(k for k in schema.schema if str(k) == "expose_coordinates")
+    # missing-key fallback preserves existing behaviour
+    assert key.default() is True
+
+
 async def test_config_flow_first_step_renders_form(tmp_path) -> None:
     flow = ConfigFlow()
     flow.hass = _hass(tmp_path)

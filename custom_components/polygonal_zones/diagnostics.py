@@ -39,6 +39,7 @@ async def async_get_config_entry_diagnostics(
             "zone_count": len(getattr(entity, "_zones", [])),
             "url_count": len(getattr(entity, "_zones_urls", []) or []),
             "prioritize_zone_files": bool(getattr(entity, "_prioritize_zone_files", False)),
+            "expose_coordinates": bool(getattr(entity, "_expose_coordinates", True)),
         }
         for entity in entities
     ]

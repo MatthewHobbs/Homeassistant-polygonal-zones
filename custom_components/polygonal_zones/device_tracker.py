@@ -20,6 +20,7 @@ from homeassistant.helpers.start import async_at_started
 
 from .const import (
     CONF_DOWNLOAD_ZONES,
+    CONF_EXPOSE_COORDINATES,
     CONF_PRIORITIZE_ZONE_FILES,
     CONF_ZONES_URL,
     DOMAIN,
@@ -55,6 +56,10 @@ async def async_setup_entry(
     zone_uris: list[str] = entry.data.get(CONF_ZONES_URL) or []
     zone_uris = [zone_uri for zone_uri in zone_uris if zone_uri]
     prioritize: bool = bool(entry.data.get(CONF_PRIORITIZE_ZONE_FILES))
+    # Existing entries (upgraded from < v1.11) have no stored value; default
+    # to True to preserve their current behaviour. New entries default to
+    # False via the config flow (privacy by default).
+    expose_coordinates: bool = bool(entry.data.get(CONF_EXPOSE_COORDINATES, True))
 
     editable_file = False
 
@@ -80,6 +85,7 @@ async def async_setup_entry(
             base_id,
             prioritize,
             editable_file,
+            expose_coordinates,
         )
         entities.append(entity)
 
@@ -111,12 +117,14 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         own_id: str,
         prioritized_zone_files: bool,
         editable_file: bool,
+        expose_coordinates: bool = True,
     ) -> None:
         """Initialize the entity."""
         self._config_entry_id = config_entry_id
         self._entity_id = tracked_entity_id
         self._zones_urls = zone_urls
         self._prioritize_zone_files = prioritized_zone_files
+        self._expose_coordinates = expose_coordinates
 
         self._zones: list[Zone] = []
         self._unsub: Callable[[], None] | None = None
@@ -262,13 +270,15 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         )
         _LOGGER.debug("State of entity '%s' changed. new zone: %s", self._attr_unique_id, zone)
         self._attr_location_name = zone["name"] if zone is not None else "away"
-        self._attr_extra_state_attributes = {
+        attributes: dict[str, Any] = {
             "source_entity": self._entity_id,
-            "latitude": latitude,
-            "longitude": longitude,
-            "gps_accuracy": gps_accuracy,
             "zone_uris": self._zones_urls,
         }
+        if self._expose_coordinates:
+            attributes["latitude"] = latitude
+            attributes["longitude"] = longitude
+            attributes["gps_accuracy"] = gps_accuracy
+        self._attr_extra_state_attributes = attributes
 
     def _handle_state_change_builder(
         self,
