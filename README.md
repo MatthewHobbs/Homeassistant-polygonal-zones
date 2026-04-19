@@ -345,7 +345,7 @@ If you rely on this integration, please consider getting involved:
 
 - **Found a bug or have an idea?** Open an issue — clear reproduction steps or a concrete use case make a big difference.
 - **Comfortable with Python?** Pull requests are very welcome, whether that's a small fix, a test, or a new feature. Smaller, focused PRs are easier to review and merge.
-- **Not a coder?** Help with documentation, translations, or triaging issues is just as valuable.
+- **Not a coder?** Help with documentation, translations, or triaging issues is just as valuable. The non-English translation files under `custom_components/polygonal_zones/translations/` (`de`, `fr`, `es`, `nl`, `it`) were machine-generated as a starting point — native-speaker corrections via PR are very welcome.
 
 I'll do my best to respond to issues and review pull requests as quickly as I can, but patience is appreciated.
 

@@ -1,7 +1,7 @@
 """definition file for the edit zone action."""
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 import json
 
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -17,7 +17,7 @@ from .helpers import (
 )
 
 
-def action_builder(hass: HomeAssistant) -> Callable[[ServiceCall], None]:
+def action_builder(hass: HomeAssistant) -> Callable[[ServiceCall], Awaitable[None]]:
     """Builder for the edit zone action."""
 
     async def edit_zone(call: ServiceCall) -> None:
@@ -30,7 +30,9 @@ def action_builder(hass: HomeAssistant) -> Callable[[ServiceCall], None]:
 
         filename = entity.zone_urls[0]
         filepath = safe_config_path(hass.config.config_dir, filename)
-        old_name = call.data.get("zone_name")
+        old_name: str = call.data.get("zone_name") or ""
+        if not old_name:
+            raise ZoneDoesNotExists("Service call is missing 'zone_name'")
         new_zone = parse_zone_feature(call.data.get("zone"))
 
         try:

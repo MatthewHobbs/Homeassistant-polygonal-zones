@@ -114,15 +114,14 @@ class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
     @callback
     def async_get_options_flow(config_entry: ConfigEntry):
         """Get the options flow handler."""
-        return OptionsFlowHandler(config_entry)
+        return OptionsFlowHandler()
 
 
 class OptionsFlowHandler(OptionsFlow):
-    """Options flow handler."""
+    """Options flow handler.
 
-    def __init__(self, config_entry: ConfigEntry):
-        """Initialize the OptionsFlowHandler with configuration data."""
-        self.config_entry = config_entry
+    Home Assistant injects ``self.config_entry`` automatically; do not assign it.
+    """
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Perform the initial step of the options flow, handling user input."""

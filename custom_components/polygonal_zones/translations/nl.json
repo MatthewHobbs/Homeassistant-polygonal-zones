@@ -1,0 +1,116 @@
+{
+  "config": {
+    "error": {
+      "download_or_no_zones": "Zones downloaden moet ingeschakeld zijn of er moeten links naar GeoJSON-bestanden zijn opgegeven",
+      "invalid_path": "Het bestand kon niet worden gevonden",
+      "invalid_url": "Een of meer URL's of bestandspaden zijn ongeldig",
+      "no_entities": "Geen entiteiten geselecteerd",
+      "unreachable_url": "Een of meer URL's zijn niet bereikbaar"
+    },
+    "step": {
+      "user": {
+        "data": {
+          "download_zones": "GeoJSON-bestanden downloaden",
+          "prioritize_zone_files": "Volgorde van zonebestanden prioriteren",
+          "registered_entities": "Entiteiten",
+          "zone_urls": "URL's van GeoJSON-bestanden"
+        },
+        "data_description": {
+          "download_zones": "Gebruikt een lokaal GeoJSON-bestand om de zones in op te slaan. De hierboven gedefinieerde bestanden worden samengevoegd tot één bestand. De entiteiten gebruiken alleen dit bestand om de zones op te halen. Als er geen GeoJSON-bestanden zijn opgegeven, wordt er een leeg GeoJSON-bestand aangemaakt.",
+          "prioritize_zone_files": "Schakel deze optie in om de volgorde van zonebestanden te prioriteren. Wanneer een tracker zich in meerdere zones bevindt, worden alleen de zones met de hoogste prioriteit in aanmerking genomen.",
+          "registered_entities": "Selecteer de entiteiten die u in de zones wilt volgen.",
+          "zone_urls": "Voer de URL's in van de GeoJSON-bestanden met de te volgen zones. Zowel webadressen als bestanden in de map /config worden ondersteund."
+        },
+        "description": "Selecteer de locatie van het GeoJSON-bestand. {consent_notice}",
+        "title": "Polygonal Zones-configuratie"
+      }
+    }
+  },
+  "options": {
+    "error": {
+      "invalid_path": "Het bestand kon niet worden gevonden",
+      "invalid_url": "Een of meer URL's of bestandspaden zijn ongeldig",
+      "unreachable_url": "Een of meer URL's zijn niet bereikbaar"
+    },
+    "step": {
+      "init": {
+        "data": {
+          "prioritize_zone_files": "Volgorde van zonebestanden prioriteren",
+          "zone_urls": "URL's van GeoJSON-bestanden"
+        },
+        "data_description": {
+          "prioritize_zone_files": "Schakel deze optie in om de volgorde van zonebestanden te prioriteren. Wanneer een tracker zich in meerdere zones bevindt, worden alleen de zones met de hoogste prioriteit in aanmerking genomen.",
+          "zone_urls": "Voer de URL's in van de GeoJSON-bestanden met de te volgen zones. Zowel webadressen als bestanden in de map /config worden ondersteund."
+        },
+        "description": "Werk de zonebronnen en prioriteitsinstellingen voor deze integratie bij.",
+        "title": "Polygonal Zones-opties"
+      }
+    }
+  },
+  "services": {
+    "add_new_zone": {
+      "description": "Voeg een nieuwe zone toe aan de bestaande zones.",
+      "fields": {
+        "device_id": {
+          "description": "Het Polygonal Zones-apparaat waaraan de zone wordt toegevoegd.",
+          "name": "Apparaat"
+        },
+        "zone": {
+          "description": "De GeoJSON-Feature die de nieuwe toe te voegen zone vertegenwoordigt.",
+          "name": "Zonegegevens"
+        }
+      },
+      "name": "Zone toevoegen"
+    },
+    "delete_zone": {
+      "description": "Verwijder een zone uit het systeem.",
+      "fields": {
+        "device_id": {
+          "description": "Het Polygonal Zones-apparaat waarvan de zone moet worden verwijderd.",
+          "name": "Apparaat"
+        },
+        "zone_name": {
+          "description": "De naam van de zone die moet worden verwijderd.",
+          "name": "Zonenaam"
+        }
+      },
+      "name": "Zone verwijderen"
+    },
+    "edit_zone": {
+      "description": "Wijzig de grenzen van een bestaande zone.",
+      "fields": {
+        "device_id": {
+          "description": "Het Polygonal Zones-apparaat waarvan de zone moet worden bewerkt.",
+          "name": "Apparaat"
+        },
+        "zone": {
+          "description": "De GeoJSON-Feature die de gewijzigde zone vertegenwoordigt.",
+          "name": "Zonegegevens"
+        },
+        "zone_name": {
+          "description": "De naam van de zone die moet worden bewerkt.",
+          "name": "Zonenaam"
+        }
+      },
+      "name": "Zone bewerken"
+    },
+    "reload_zones": {
+      "description": "Herlaad de zones die zijn opgeslagen in de GeoJSON-bestanden. Hiermee worden ze opgehaald van de opgeslagen locatie en wordt de interne zonecache van de entiteiten bijgewerkt.",
+      "name": "Zones herladen"
+    },
+    "replace_all_zones": {
+      "description": "Vervang alle bestaande zones door nieuwe zones gedefinieerd in GeoJSON-formaat.",
+      "fields": {
+        "device_id": {
+          "description": "Het Polygonal Zones-apparaat waarvan het zonebestand moet worden vervangen.",
+          "name": "Apparaat"
+        },
+        "zone": {
+          "description": "De GeoJSON-FeatureCollection die alle bestaande zones moet vervangen.",
+          "name": "GeoJSON-gegevens"
+        }
+      },
+      "name": "Alle zones vervangen"
+    }
+  }
+}

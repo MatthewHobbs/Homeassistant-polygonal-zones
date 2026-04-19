@@ -1,7 +1,7 @@
 """definition file for the delete zone action."""
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 import json
 
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -12,7 +12,7 @@ from .errors import InvalidZoneData, ZoneDoesNotExists, ZoneFileNotEditable
 from .helpers import get_entities_from_device_id, get_zone_idx, require_device_id
 
 
-def action_builder(hass: HomeAssistant) -> Callable[[ServiceCall], None]:
+def action_builder(hass: HomeAssistant) -> Callable[[ServiceCall], Awaitable[None]]:
     """Builder for the delete zone action."""
 
     async def delete_new_zone(call: ServiceCall) -> None:
@@ -25,7 +25,9 @@ def action_builder(hass: HomeAssistant) -> Callable[[ServiceCall], None]:
 
         filename = entity.zone_urls[0]
         filepath = safe_config_path(hass.config.config_dir, filename)
-        new_name = call.data.get("zone_name")
+        new_name: str = call.data.get("zone_name") or ""
+        if not new_name:
+            raise ZoneDoesNotExists("Service call is missing 'zone_name'")
 
         try:
             async with asyncio.timeout(LOCK_ACQUIRE_TIMEOUT), get_file_lock(filepath):

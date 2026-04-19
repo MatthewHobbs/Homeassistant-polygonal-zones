@@ -42,7 +42,7 @@ def _is_public_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     )
 
 
-class _PublicOnlyResolver(DefaultResolver):
+class _PublicOnlyResolver(DefaultResolver):  # type: ignore[misc, valid-type]
     """Resolver that rejects addresses on private/loopback/metadata ranges.
 
     Applying the check inside the aiohttp resolver closes the DNS-rebinding

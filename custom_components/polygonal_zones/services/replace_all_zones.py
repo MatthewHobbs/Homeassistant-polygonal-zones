@@ -1,7 +1,7 @@
 """definition file for the replace all zones action."""
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 import json
 
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -18,7 +18,7 @@ from .helpers import (
 
 def action_builder(
     hass: HomeAssistant,
-) -> Callable[[ServiceCall], None]:
+) -> Callable[[ServiceCall], Awaitable[None]]:
     """Builder for the replace all zones action."""
 
     async def replace_all_zones(call: ServiceCall) -> None:

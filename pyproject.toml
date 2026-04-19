@@ -4,6 +4,11 @@ pythonpath = ["."]
 addopts = "-p no:homeassistant -ra"
 asyncio_mode = "auto"
 
+[tool.mypy]
+ignore_missing_imports = true
+follow_imports = "silent"
+files = ["custom_components/polygonal_zones"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"

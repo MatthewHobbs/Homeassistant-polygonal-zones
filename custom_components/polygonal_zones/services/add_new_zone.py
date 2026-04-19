@@ -1,7 +1,7 @@
 """definition file for the add new zone action."""
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 import json
 
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -17,7 +17,7 @@ from .helpers import (
 )
 
 
-def action_builder(hass: HomeAssistant) -> Callable[[ServiceCall], None]:
+def action_builder(hass: HomeAssistant) -> Callable[[ServiceCall], Awaitable[None]]:
     """Builder for the add new zone action."""
 
     async def add_new_zone(call: ServiceCall) -> None:
