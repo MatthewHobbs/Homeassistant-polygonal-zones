@@ -40,6 +40,7 @@ async def async_get_config_entry_diagnostics(
             "url_count": len(getattr(entity, "_zones_urls", []) or []),
             "prioritize_zone_files": bool(getattr(entity, "_prioritize_zone_files", False)),
             "expose_coordinates": bool(getattr(entity, "_expose_coordinates", True)),
+            "allow_private_urls": bool(getattr(entity, "_allow_private_urls", False)),
             "last_load_result": getattr(entity, "_last_load_result", "never"),
             "last_zones_loaded_at": (
                 ts.isoformat()

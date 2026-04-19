@@ -144,10 +144,15 @@ def _parse_feature(feature: Any, default_priority: int) -> Zone:
 
 
 async def _load_zones_from_uri(
-    uri: str, idx: int, prioritize: bool, hass: HomeAssistant
+    uri: str,
+    idx: int,
+    prioritize: bool,
+    hass: HomeAssistant,
+    *,
+    allow_private_urls: bool = False,
 ) -> list[Zone]:
     """Load and parse one zone file. Returns a list of zones or raises a typed error."""
-    raw = await load_data(uri, hass)
+    raw = await load_data(uri, hass, allow_private_urls=allow_private_urls)
     try:
         data = json.loads(raw)
     except ValueError as err:
@@ -173,18 +178,31 @@ async def _load_zones_from_uri(
     return [_parse_feature(feature, default_priority) for feature in features]
 
 
-async def load_zones(uris: list[str], hass: HomeAssistant, prioritize: bool) -> ZoneLoadResult:
+async def load_zones(
+    uris: list[str],
+    hass: HomeAssistant,
+    prioritize: bool,
+    *,
+    allow_private_urls: bool = False,
+) -> ZoneLoadResult:
     """Load every URI independently; return successes plus per-URI failure records.
 
     Partial-success semantics: one flaky URI no longer kills the whole load.
     Each URI's failure is logged at WARNING with a stacktrace and recorded on the
     returned result, so the entity can still resolve zones from healthy sources
     and the failing sources can be surfaced in diagnostics.
+
+    ``allow_private_urls`` relaxes the SSRF resolver for RFC-1918 / ULA
+    addresses so a user can point the integration at a LAN-installed source.
     """
     result = ZoneLoadResult()
     for idx, uri in enumerate(uris):
         try:
-            result.zones.extend(await _load_zones_from_uri(uri, idx, prioritize, hass))
+            result.zones.extend(
+                await _load_zones_from_uri(
+                    uri, idx, prioritize, hass, allow_private_urls=allow_private_urls
+                )
+            )
         except UnsupportedSchemaVersion:
             # Schema-version mismatch means the file format is ahead of this
             # integration. Propagate as a hard error so the user sees it clearly
@@ -196,7 +214,13 @@ async def load_zones(uris: list[str], hass: HomeAssistant, prioritize: bool) -> 
     return result
 
 
-async def get_zones(uris: list[str], hass: HomeAssistant, prioritize: bool) -> list[Zone]:
+async def get_zones(
+    uris: list[str],
+    hass: HomeAssistant,
+    prioritize: bool,
+    *,
+    allow_private_urls: bool = False,
+) -> list[Zone]:
     """Load every URI; return successful zones or raise if all URIs failed.
 
     Backward-compatible wrapper around :func:`load_zones` for callers that only
@@ -205,7 +229,7 @@ async def get_zones(uris: list[str], hass: HomeAssistant, prioritize: bool) -> l
     the union is returned. When every URI fails, ``ZoneFileCorrupt`` is raised
     with the first failure's message so existing retry/backoff logic keeps working.
     """
-    result = await load_zones(uris, hass, prioritize)
+    result = await load_zones(uris, hass, prioritize, allow_private_urls=allow_private_urls)
     if uris and not result.zones and result.failures:
         first_uri, first_msg = result.failures[0]
         raise ZoneFileCorrupt(

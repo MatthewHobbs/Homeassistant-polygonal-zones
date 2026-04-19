@@ -79,6 +79,27 @@ def test_build_options_flow_exposes_coordinate_toggle() -> None:
     assert key.default() is True
 
 
+def test_build_create_flow_allow_private_urls_default_is_false() -> None:
+    """allow_private_urls defaults strict (off) in the create flow."""
+    schema = build_create_flow(new_entry=True)
+    key = next(k for k in schema.schema if str(k) == "allow_private_urls")
+    assert key.default() is False
+
+
+def test_build_options_flow_exposes_allow_private_urls_toggle() -> None:
+    schema = build_options_flow()
+    keys = {str(k) for k in schema.schema}
+    assert "allow_private_urls" in keys
+    key = next(k for k in schema.schema if str(k) == "allow_private_urls")
+    assert key.default() is False
+
+
+def test_build_create_flow_allow_private_urls_stored_value_wins() -> None:
+    schema = build_create_flow({"allow_private_urls": True})
+    key = next(k for k in schema.schema if str(k) == "allow_private_urls")
+    assert key.default() is True
+
+
 async def test_config_flow_first_step_renders_form(tmp_path) -> None:
     flow = ConfigFlow()
     flow.hass = _hass(tmp_path)

@@ -94,10 +94,15 @@ def zones_to_geojson(zones: list[Zone]) -> str:
 
 
 async def download_zones(
-    source_uris: list[str], dest_uri: Path, prioritize: bool, hass: HomeAssistant
+    source_uris: list[str],
+    dest_uri: Path,
+    prioritize: bool,
+    hass: HomeAssistant,
+    *,
+    allow_private_urls: bool = False,
 ) -> None:
     """Download the zones in sources_uris to."""
-    zones = await get_zones(source_uris, hass, prioritize)
+    zones = await get_zones(source_uris, hass, prioritize, allow_private_urls=allow_private_urls)
     geo_json = zones_to_geojson(zones)
 
     await save_zones(geo_json, dest_uri, hass)

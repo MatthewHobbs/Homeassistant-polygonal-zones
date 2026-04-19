@@ -9,14 +9,16 @@
           "prioritize_zone_files": "Prioritize order of zone files",
           "registered_entities": "Entities",
           "download_zones": "Download the GeoJSON files",
-          "expose_coordinates": "Expose GPS coordinates as entity attributes"
+          "expose_coordinates": "Expose GPS coordinates as entity attributes",
+          "allow_private_urls": "Allow private-network URLs (LAN)"
         },
         "data_description": {
           "zone_urls": "Enter the URLs of the GeoJSON files that contain the zones you want to track. This supports both websites and files in the /config directory.",
           "prioritize_zone_files": "If you want to prioritize the order of the zone files, enable this option. This means that if a tracker is in multiple zones it will only consider those with the lowest priority.",
           "download_zones": "Use a local GeoJSON file to store the zones in. This will load the above defined files into a single file. The entities will only use this single file to retrieve the zones from. If no GeoJSON files are defined we will create an empty GeoJSON file.",
           "registered_entities": "Select the entities that you want to track in the zones.",
-          "expose_coordinates": "When enabled, the mirror entity writes latitude, longitude, and gps_accuracy to its attributes on every update — Home Assistant's recorder then persists a full location history. Disable to publish only the zone name (privacy-first). New installs default to off."
+          "expose_coordinates": "When enabled, the mirror entity writes latitude, longitude, and gps_accuracy to its attributes on every update — Home Assistant's recorder then persists a full location history. Disable to publish only the zone name (privacy-first). New installs default to off.",
+          "allow_private_urls": "⚠️ Accept zone_urls that resolve to RFC-1918 private addresses (e.g. 192.168.x.x, 10.x.x.x, fd00::/8). Needed when the zone source lives on your LAN — typically the companion editor add-on. Loopback (127.0.0.1 / ::1), link-local (169.254.x, cloud metadata), multicast, and reserved ranges stay blocked regardless. Leave off unless you know you need it."
         }
       },
       "reconfigure": {
@@ -27,14 +29,16 @@
           "prioritize_zone_files": "Prioritize order of zone files",
           "registered_entities": "Entities",
           "download_zones": "Download the GeoJSON files",
-          "expose_coordinates": "Expose GPS coordinates as entity attributes"
+          "expose_coordinates": "Expose GPS coordinates as entity attributes",
+          "allow_private_urls": "Allow private-network URLs (LAN)"
         },
         "data_description": {
           "zone_urls": "Enter the URLs of the GeoJSON files that contain the zones you want to track. This supports both websites and files in the /config directory.",
           "prioritize_zone_files": "If you want to prioritize the order of the zone files, enable this option. This means that if a tracker is in multiple zones it will only consider those with the lowest priority.",
           "download_zones": "Use a local GeoJSON file to store the zones in. This will load the above defined files into a single file. The entities will only use this single file to retrieve the zones from. If no GeoJSON files are defined we will create an empty GeoJSON file.",
           "registered_entities": "Select the entities that you want to track in the zones.",
-          "expose_coordinates": "When enabled, the mirror entity writes latitude, longitude, and gps_accuracy to its attributes on every update — Home Assistant's recorder then persists a full location history. Disable to publish only the zone name (privacy-first). New installs default to off."
+          "expose_coordinates": "When enabled, the mirror entity writes latitude, longitude, and gps_accuracy to its attributes on every update — Home Assistant's recorder then persists a full location history. Disable to publish only the zone name (privacy-first). New installs default to off.",
+          "allow_private_urls": "⚠️ Accept zone_urls that resolve to RFC-1918 private addresses (e.g. 192.168.x.x, 10.x.x.x, fd00::/8). Needed when the zone source lives on your LAN — typically the companion editor add-on. Loopback (127.0.0.1 / ::1), link-local (169.254.x, cloud metadata), multicast, and reserved ranges stay blocked regardless. Leave off unless you know you need it."
         }
       }
     },
@@ -54,12 +58,14 @@
         "data": {
           "zone_urls": "URLs of GeoJSON files",
           "prioritize_zone_files": "Prioritize order of zone files",
-          "expose_coordinates": "Expose GPS coordinates as entity attributes"
+          "expose_coordinates": "Expose GPS coordinates as entity attributes",
+          "allow_private_urls": "Allow private-network URLs (LAN)"
         },
         "data_description": {
           "zone_urls": "Enter the URLs of the GeoJSON files that contain the zones you want to track. This supports both websites and files in the /config directory.",
           "prioritize_zone_files": "If you want to prioritize the order of the zone files, enable this option. This means that if a tracker is in multiple zones it will only consider those with the lowest priority.",
-          "expose_coordinates": "When enabled, the mirror entity writes latitude, longitude, and gps_accuracy to its attributes on every update — Home Assistant's recorder then persists a full location history. Disable to publish only the zone name (privacy-first)."
+          "expose_coordinates": "When enabled, the mirror entity writes latitude, longitude, and gps_accuracy to its attributes on every update — Home Assistant's recorder then persists a full location history. Disable to publish only the zone name (privacy-first).",
+          "allow_private_urls": "⚠️ Accept zone_urls that resolve to RFC-1918 private addresses (e.g. 192.168.x.x, 10.x.x.x, fd00::/8). Needed when the zone source lives on your LAN — typically the companion editor add-on. Loopback / link-local / multicast / metadata ranges stay blocked. Leave off unless you know you need it."
         }
       }
     },
