@@ -11,6 +11,7 @@ from .errors import InvalidZoneData
 
 MAX_ZONE_JSON_BYTES = 1_048_576
 MAX_ZONE_NAME_LEN = 200
+SUPPORTED_GEOMETRY_TYPES = {"Polygon", "MultiPolygon"}
 
 
 def _validate_feature(feature: object) -> None:
@@ -25,8 +26,15 @@ def _validate_feature(feature: object) -> None:
         raise InvalidZoneData("Feature must have a non-empty 'name' property")
     if len(name) > MAX_ZONE_NAME_LEN:
         raise InvalidZoneData(f"Zone name exceeds {MAX_ZONE_NAME_LEN} characters")
-    if "geometry" not in feature:
-        raise InvalidZoneData("Feature must have a geometry")
+    geometry = feature.get("geometry")
+    if not isinstance(geometry, dict):
+        raise InvalidZoneData("Feature must have a geometry object")
+    geom_type = geometry.get("type")
+    if geom_type not in SUPPORTED_GEOMETRY_TYPES:
+        raise InvalidZoneData(
+            f"Unsupported geometry type {geom_type!r}; "
+            f"expected one of {sorted(SUPPORTED_GEOMETRY_TYPES)}"
+        )
 
 
 def parse_zone_feature(raw: str | None) -> dict:
