@@ -1,0 +1,93 @@
+reload_zones:
+  target:
+    entity:
+      integration: "polygonal_zones"
+
+replace_all_zones:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: "polygonal_zones"
+    zone:
+      required: true
+      example: |
+        {
+          "type": "FeatureCollection",
+          "features": [
+            {
+              "type": "Feature",
+              "properties": {"name": "Home", "priority": 0},
+              "geometry": {
+                "type": "Polygon",
+                "coordinates": [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]]
+              }
+            }
+          ]
+        }
+      selector:
+        text:
+          multiline: true
+
+add_new_zone:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: "polygonal_zones"
+    zone:
+      required: true
+      example: |
+        {
+          "type": "Feature",
+          "properties": {"name": "Shopping mall", "priority": 0},
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]]
+          }
+        }
+      selector:
+        text:
+          multiline: true
+
+edit_zone:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: "polygonal_zones"
+    zone_name:
+      required: true
+      example: "Shopping mall"
+      selector:
+        text:
+    zone:
+      required: true
+      example: |
+        {
+          "type": "Feature",
+          "properties": {"name": "Shopping mall", "priority": 0},
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]]
+          }
+        }
+      selector:
+        text:
+          multiline: true
+
+delete_zone:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: "polygonal_zones"
+    zone_name:
+      required: true
+      example: "Shopping mall"
+      selector:
+        text: {}

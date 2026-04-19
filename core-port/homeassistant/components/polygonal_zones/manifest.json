@@ -1,0 +1,11 @@
+{
+  "domain": "polygonal_zones",
+  "name": "Polygonal Zones",
+  "codeowners": ["@MatthewHobbs"],
+  "config_flow": true,
+  "documentation": "https://www.home-assistant.io/integrations/polygonal_zones",
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "quality_scale": "bronze",
+  "requirements": ["shapely==2.0.6"]
+}
