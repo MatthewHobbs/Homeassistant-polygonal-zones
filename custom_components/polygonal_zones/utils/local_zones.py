@@ -65,11 +65,19 @@ def dump_feature_collection(
 
 
 def zones_to_geojson(zones: list[Zone]) -> str:
-    """Convert a list of ``Zone`` objects back into a GeoJSON string."""
+    """Convert a list of ``Zone`` objects back into a GeoJSON string.
+
+    Preserves every key stored on ``Zone.properties`` so round-tripping (parse
+    → serialize) doesn't silently drop producer-specific fields such as
+    ``polygonal_zones_ext.*``. ``name`` and ``priority`` are written last so
+    the authoritative dataclass values override any stale copies sitting in
+    ``zone.properties``.
+    """
     features = [
         {
             "type": "Feature",
             "properties": {
+                **zone.properties,
                 "name": zone.name,
                 "priority": zone.priority,
             },
