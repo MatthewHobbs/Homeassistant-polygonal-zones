@@ -26,9 +26,19 @@ _LOGGER = logging.getLogger(__name__)
 
 def build_create_flow(
     defaults: dict[str, Any] | MappingProxyType[str, Any] | None = None,
+    *,
+    new_entry: bool = False,
 ) -> vol.Schema:
-    """Create the schema for the configuration flow."""
+    """Create the schema for the configuration flow.
+
+    ``new_entry`` swaps the fallback for ``expose_coordinates`` between the
+    privacy-safe default (``False`` for new installs) and the back-compat
+    default (``True`` for existing entries being reconfigured that were
+    created before the option existed). Keys that are already present in
+    ``defaults`` always win over both fallbacks.
+    """
     defaults = defaults or {}
+    expose_fallback = not new_entry
 
     return vol.Schema(
         {
@@ -54,6 +64,11 @@ def build_create_flow(
                 default=defaults.get("download_zones", True),
                 description={"advanced": True},
             ): selector.BooleanSelector(),
+            vol.Optional(
+                "expose_coordinates",
+                default=defaults.get("expose_coordinates", expose_fallback),
+                description={"advanced": True},
+            ): selector.BooleanSelector(),
         }
     )
 
@@ -64,6 +79,8 @@ def build_options_flow(
     """Create the schema for the options flow.
 
     This function differs from the config schema by not adding the options for the entities.
+    Existing entries created before the ``expose_coordinates`` option existed keep
+    their current behaviour (coordinates exposed) until the user opts out.
     """
     defaults = defaults or {}
     return vol.Schema(
@@ -77,6 +94,10 @@ def build_options_flow(
             vol.Required(
                 "prioritize_zone_files",
                 default=defaults.get("prioritize_zone_files", False),
+            ): selector.BooleanSelector(selector.BooleanSelectorConfig()),
+            vol.Required(
+                "expose_coordinates",
+                default=defaults.get("expose_coordinates", True),
             ): selector.BooleanSelector(selector.BooleanSelectorConfig()),
         }
     )
@@ -99,7 +120,7 @@ class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="user",
-            data_schema=build_create_flow(user_input),
+            data_schema=build_create_flow(user_input, new_entry=True),
             errors=errors,
             description_placeholders={
                 "consent_notice": (
