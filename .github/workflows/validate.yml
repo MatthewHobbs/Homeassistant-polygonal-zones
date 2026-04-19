@@ -61,7 +61,7 @@ jobs:
           cache: pip
           cache-dependency-path: requirements_test.txt
       - run: pip install -r requirements_test.txt
-      - run: pytest --cov=custom_components/polygonal_zones --cov-report=term --cov-fail-under=99
+      - run: pytest --cov=custom_components/polygonal_zones --cov-report=term --cov-fail-under=100
 
   mypy:
     name: Mypy
