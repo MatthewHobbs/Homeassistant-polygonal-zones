@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from shapely.geometry import Polygon
 
 from custom_components.polygonal_zones.device_tracker import PolygonalZoneEntity
-from custom_components.polygonal_zones.utils.zones import Zone
+from custom_components.polygonal_zones.utils.zones import Zone, ZoneLoadResult
 
 
 def _make_entity(zone_urls=None) -> PolygonalZoneEntity:
@@ -136,8 +136,8 @@ async def test_async_reload_zones_returns_payload_when_requested() -> None:
 
     call = SimpleNamespace(return_response=True)
     with patch(
-        "custom_components.polygonal_zones.device_tracker.get_zones",
-        new=AsyncMock(return_value=zones),
+        "custom_components.polygonal_zones.device_tracker.load_zones",
+        new=AsyncMock(return_value=ZoneLoadResult(zones=zones)),
     ):
         result = await entity.async_reload_zones(call)
 
@@ -154,8 +154,8 @@ async def test_async_reload_zones_empty_returns_empty_list() -> None:
 
     call = SimpleNamespace(return_response=True)
     with patch(
-        "custom_components.polygonal_zones.device_tracker.get_zones",
-        new=AsyncMock(return_value=[]),
+        "custom_components.polygonal_zones.device_tracker.load_zones",
+        new=AsyncMock(return_value=ZoneLoadResult(zones=[])),
     ):
         result = await entity.async_reload_zones(call)
 
@@ -169,8 +169,8 @@ async def test_async_reload_zones_returns_none_when_response_not_requested() -> 
 
     call = SimpleNamespace(return_response=False)
     with patch(
-        "custom_components.polygonal_zones.device_tracker.get_zones",
-        new=AsyncMock(return_value=[]),
+        "custom_components.polygonal_zones.device_tracker.load_zones",
+        new=AsyncMock(return_value=ZoneLoadResult(zones=[])),
     ):
         result = await entity.async_reload_zones(call)
 
@@ -183,7 +183,7 @@ async def test_async_reload_zones_handles_failure() -> None:
 
     call = SimpleNamespace(return_response=False)
     with patch(
-        "custom_components.polygonal_zones.device_tracker.get_zones",
+        "custom_components.polygonal_zones.device_tracker.load_zones",
         new=AsyncMock(side_effect=RuntimeError("boom")),
     ):
         result = await entity.async_reload_zones(call)
@@ -201,8 +201,8 @@ async def test_async_reload_zones_accepts_no_call() -> None:
     zones = [Zone(name="Home", geometry=polygon, priority=0)]
 
     with patch(
-        "custom_components.polygonal_zones.device_tracker.get_zones",
-        new=AsyncMock(return_value=zones),
+        "custom_components.polygonal_zones.device_tracker.load_zones",
+        new=AsyncMock(return_value=ZoneLoadResult(zones=zones)),
     ):
         result = await entity.async_reload_zones()
 

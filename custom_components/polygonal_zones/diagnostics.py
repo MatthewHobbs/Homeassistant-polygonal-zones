@@ -40,6 +40,13 @@ async def async_get_config_entry_diagnostics(
             "url_count": len(getattr(entity, "_zones_urls", []) or []),
             "prioritize_zone_files": bool(getattr(entity, "_prioritize_zone_files", False)),
             "expose_coordinates": bool(getattr(entity, "_expose_coordinates", True)),
+            # Redact the URI to avoid leaking host names in the diagnostics dump;
+            # surface the count + failure message so the user can see "which
+            # source broke and why" without a fresh log scrape.
+            "last_load_failures": [
+                {"uri": f"<redacted-{i}>", "error": err}
+                for i, (_uri, err) in enumerate(getattr(entity, "_last_load_failures", []))
+            ],
         }
         for entity in entities
     ]
