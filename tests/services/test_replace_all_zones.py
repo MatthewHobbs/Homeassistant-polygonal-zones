@@ -39,7 +39,10 @@ async def test_replace_writes_full_collection(tmp_path) -> None:
         json.dumps({"type": "FeatureCollection", "features": [_polygon_feature("Old")]})
     )
     fake_entity = SimpleNamespace(
-        editable_file=True, zone_urls=["zones.json"], async_reload_zones=AsyncMock()
+        editable_file=True,
+        zone_urls=["zones.json"],
+        async_reload_zones=AsyncMock(),
+        _config_entry_id="entry-id",
     )
     action = action_builder(_make_hass(tmp_path))
 
@@ -63,7 +66,10 @@ async def test_replace_writes_full_collection(tmp_path) -> None:
 
 async def test_replace_invalid_payload_raises(tmp_path) -> None:
     fake_entity = SimpleNamespace(
-        editable_file=True, zone_urls=["zones.json"], async_reload_zones=AsyncMock()
+        editable_file=True,
+        zone_urls=["zones.json"],
+        async_reload_zones=AsyncMock(),
+        _config_entry_id="entry-id",
     )
     action = action_builder(_make_hass(tmp_path))
 
@@ -80,7 +86,9 @@ async def test_replace_invalid_payload_raises(tmp_path) -> None:
 
 
 async def test_replace_non_editable_raises(tmp_path) -> None:
-    fake_entity = SimpleNamespace(editable_file=False, zone_urls=["https://x"])
+    fake_entity = SimpleNamespace(
+        editable_file=False, zone_urls=["https://x"], _config_entry_id="entry-id"
+    )
     action = action_builder(_make_hass(tmp_path))
 
     call = SimpleNamespace(

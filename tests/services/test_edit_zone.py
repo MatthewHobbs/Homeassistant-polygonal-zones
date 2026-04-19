@@ -39,7 +39,10 @@ async def test_edit_existing_zone_replaces_geometry(tmp_path) -> None:
         json.dumps({"type": "FeatureCollection", "features": [_polygon_feature("Home", lat0=0)]})
     )
     fake_entity = SimpleNamespace(
-        editable_file=True, zone_urls=["zones.json"], async_reload_zones=AsyncMock()
+        editable_file=True,
+        zone_urls=["zones.json"],
+        async_reload_zones=AsyncMock(),
+        _config_entry_id="entry-id",
     )
     action = action_builder(_make_hass(tmp_path))
 
@@ -79,7 +82,10 @@ async def test_edit_preserves_feature_order(tmp_path) -> None:
         )
     )
     fake_entity = SimpleNamespace(
-        editable_file=True, zone_urls=["zones.json"], async_reload_zones=AsyncMock()
+        editable_file=True,
+        zone_urls=["zones.json"],
+        async_reload_zones=AsyncMock(),
+        _config_entry_id="entry-id",
     )
     action = action_builder(_make_hass(tmp_path))
 
@@ -109,7 +115,10 @@ async def test_edit_missing_zone_raises(tmp_path) -> None:
         json.dumps({"type": "FeatureCollection", "features": [_polygon_feature("Home")]})
     )
     fake_entity = SimpleNamespace(
-        editable_file=True, zone_urls=["zones.json"], async_reload_zones=AsyncMock()
+        editable_file=True,
+        zone_urls=["zones.json"],
+        async_reload_zones=AsyncMock(),
+        _config_entry_id="entry-id",
     )
     action = action_builder(_make_hass(tmp_path))
 
@@ -133,7 +142,10 @@ async def test_edit_missing_zone_raises(tmp_path) -> None:
 
 async def test_edit_missing_zone_name_raises(tmp_path) -> None:
     fake_entity = SimpleNamespace(
-        editable_file=True, zone_urls=["zones.json"], async_reload_zones=AsyncMock()
+        editable_file=True,
+        zone_urls=["zones.json"],
+        async_reload_zones=AsyncMock(),
+        _config_entry_id="entry-id",
     )
     action = action_builder(_make_hass(tmp_path))
 
@@ -152,7 +164,9 @@ async def test_edit_missing_zone_name_raises(tmp_path) -> None:
 
 
 async def test_edit_non_editable_raises(tmp_path) -> None:
-    fake_entity = SimpleNamespace(editable_file=False, zone_urls=["https://x"])
+    fake_entity = SimpleNamespace(
+        editable_file=False, zone_urls=["https://x"], _config_entry_id="entry-id"
+    )
     action = action_builder(_make_hass(tmp_path))
 
     call = SimpleNamespace(

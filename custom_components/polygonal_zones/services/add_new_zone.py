@@ -16,6 +16,8 @@ from ..utils.local_zones import (
 )
 from .errors import InvalidZoneData, ZoneAlreadyExists, ZoneFileNotEditable
 from .helpers import (
+    audit_mutation_call,
+    enforce_mutation_rate_limit,
     get_entities_from_device_id,
     parse_zone_feature,
     require_device_id,
@@ -32,6 +34,9 @@ def action_builder(hass: HomeAssistant) -> Callable[[ServiceCall], Awaitable[Non
         device_id = require_device_id(call.data)
         entities = get_entities_from_device_id(device_id, hass)
         entity = entities[0]
+
+        audit_mutation_call(call, "add_new_zone", entity._config_entry_id)
+        enforce_mutation_rate_limit(entity._config_entry_id)
 
         if not entity.editable_file:
             raise ZoneFileNotEditable("Zone files of entity are not editable")
