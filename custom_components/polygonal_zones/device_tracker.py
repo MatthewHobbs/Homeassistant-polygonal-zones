@@ -29,6 +29,7 @@ from .const import (
     DOMAIN,
 )
 from .utils import event_should_trigger, get_locations_zone
+from .utils.geometry import exterior_coords
 from .utils.local_zones import download_zones
 from .utils.zones import Zone, ZoneFileCorrupt, load_zones
 
@@ -423,7 +424,7 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
                 {
                     "name": z.name,
                     "priority": z.priority,
-                    "geometry": list(z.geometry.exterior.coords),
+                    "geometry": list(exterior_coords(z.geometry)),
                 }
                 for z in self._zones
             ]
