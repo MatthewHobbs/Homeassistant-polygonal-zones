@@ -1,0 +1,79 @@
+name: Playwright config-flow smoke
+
+# Boots a REAL Home Assistant instance in CI, installs this integration into
+# its custom_components/, and drives the "Add Integration -> Polygonal Zones"
+# config flow in a browser. This exercises the actual frontend rendering of
+# config_flow.py + strings.json + translations + manifest.json — surfaces that
+# the pytest suite never renders (it uses HA's Python test harness, not the
+# real UI).
+#
+# It is heavyweight (full HA boot + Chromium) and not wired into branch
+# protection, so it can NEVER block a merge. It runs nightly and on demand.
+# The first runs are expected to need tuning — see tests/e2e/README.md.
+
+on:
+  schedule:
+    - cron: "30 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  config-flow:
+    name: Config flow (Playwright)
+    runs-on: ubuntu-latest
+    env:
+      HA_URL: "http://127.0.0.1:8123"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Home Assistant + runtime deps
+        run: pip install "homeassistant>=2026.1,<2027" "shapely>=2.0,<3"
+
+      - name: Stage HA config dir with the integration installed
+        run: |
+          set -eux
+          HA_CONFIG="$RUNNER_TEMP/ha-config"
+          mkdir -p "$HA_CONFIG/custom_components"
+          cp -r custom_components/polygonal_zones "$HA_CONFIG/custom_components/"
+          # Minimal config; the frontend is enabled by default via `default_config`.
+          printf 'default_config:\n' > "$HA_CONFIG/configuration.yaml"
+          echo "HA_CONFIG=$HA_CONFIG" >> "$GITHUB_ENV"
+
+      - name: Start Home Assistant
+        run: |
+          set -eux
+          nohup hass --config "$HA_CONFIG" --log-file "$RUNNER_TEMP/ha.log" >/dev/null 2>&1 &
+          echo "HA_PID=$!" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+
+      - name: Install Playwright
+        working-directory: tests/e2e
+        run: |
+          npm install
+          npx playwright install --with-deps chromium
+
+      - name: Run config-flow smoke
+        working-directory: tests/e2e
+        run: npx playwright test
+
+      - name: Dump Home Assistant log on failure
+        if: failure()
+        run: cat "$RUNNER_TEMP/ha.log" || true
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-report
+          path: tests/e2e/playwright-report
+          if-no-files-found: ignore
+          retention-days: 7
