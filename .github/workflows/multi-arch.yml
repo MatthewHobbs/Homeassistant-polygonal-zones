@@ -1,0 +1,47 @@
+name: Multi-arch smoke
+
+# This integration ships as pure-Python files copied into custom_components/ —
+# there is no Docker image to build (HACS/HA Supervisor never pulls an image
+# for an integration). The only architecture-sensitive surface is the native
+# runtime dependency `shapely` (a C extension over GEOS). This workflow proves
+# shapely resolves an installable wheel and its geometry ops work on every
+# architecture Home Assistant supports, using QEMU emulation. It is
+# intentionally NOT a multi-arch image build — there is nothing here to
+# containerise.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+jobs:
+  shapely-import:
+    name: shapely import (${{ matrix.platform }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+          - platform: linux/arm64
+          - platform: linux/arm/v7
+            # 32-bit armv7: shapely may not publish a manylinux wheel, which
+            # forces a slow GEOS source build under emulation. Treat as
+            # informational so a missing wheel surfaces in the logs without
+            # failing the workflow (and so this never becomes a merge-blocker).
+            experimental: true
+    continue-on-error: ${{ matrix.experimental || false }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Enable QEMU for cross-architecture emulation
+        run: docker run --privileged --rm tonistiigi/binfmt --install all
+
+      - name: Import shapely on ${{ matrix.platform }}
+        run: |
+          docker run --rm --platform=${{ matrix.platform }} \
+            -v "$PWD:/src" -w /src python:3.13-slim \
+            bash -euxc 'pip install --quiet "shapely>=2.0,<3" && python tests/smoke/shapely_smoke.py'

@@ -1,0 +1,11 @@
+{
+  "name": "polygonal-zones-e2e",
+  "private": true,
+  "description": "Playwright config-flow smoke test against a real Home Assistant instance",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}

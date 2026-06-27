@@ -171,11 +171,7 @@ A point inside both zones resolves to `Shop` because its `priority` is lower.
   },
   "geometry": {
     "type": "Polygon",
-    "coordinates": [
-      [
-        /* ... */
-      ]
-    ]
+    "coordinates": [[/* ... */]]
   }
 }
 ```
