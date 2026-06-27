@@ -8,6 +8,8 @@
 [![License: MIT](https://img.shields.io/github/license/MatthewHobbs/Homeassistant-polygonal-zones)](LICENSE)
 [![Maintenance](https://img.shields.io/maintenance/yes/2026)](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/commits/main)
 
+**Full documentation (install guide, zone format reference, privacy notice):** [matthewhobbs.github.io/Homeassistant-polygonal-zones](https://matthewhobbs.github.io/Homeassistant-polygonal-zones)
+
 This Home Assistant integration lets you define arbitrary polygonal zones from a GeoJSON file and resolve any tracked `device_tracker` entity into the zone it currently sits inside. Use it when the built-in circular HA zones aren't expressive enough — irregular property boundaries, school catchments, neighbourhoods, town centres, etc.
 
 **Status:** stable (v1.9.0). Actively maintained; HACS-ready. Manifest declares `quality_scale: bronze`; the rules for Silver, Gold, and Platinum are implemented and tracked in [`quality_scale.yaml`](custom_components/polygonal_zones/quality_scale.yaml), but a higher tier can only be claimed after a Home Assistant architecture-team review (which happens through the [core-integration submission process](https://developers.home-assistant.io/docs/creating_component_index/), not by self-declaration).
@@ -21,6 +23,7 @@ This Home Assistant integration lets you define arbitrary polygonal zones from a
 
 ## Contents
 
+- [Companion add-on](#companion-add-on)
 - [Installation](#installation)
 - [First-time setup](#first-time-setup)
 - [Configuration options](#configuration-options)
@@ -36,6 +39,12 @@ This Home Assistant integration lets you define arbitrary polygonal zones from a
 - [Roadmap](#roadmap)
 - [Contributing](#contributing)
 - [License](#license)
+
+## Companion add-on
+
+This integration is one half of a paired system. The other half is the **[Polygonal Zones Editor add-on](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon)** — a map editor that runs inside Home Assistant where you draw zones and save them. It serves the `zones.json` file this integration reads.
+
+If you're setting up for the first time, install the add-on first: it gives you a URL (`http://<your-ha-host>:8000/zones.json`) to paste into the integration's `zone_urls` field. See the [full install guide](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/install/) for a step-by-step walkthrough of both.
 
 ## Installation
 
