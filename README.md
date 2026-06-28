@@ -275,13 +275,9 @@ Full privacy details (logging, outbound requests, cloud-backup GDPR note, deleti
 
 ## Roadmap
 
-Open work items are tracked as [GitHub issues](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues). Current themes:
+Open work items are tracked as [GitHub issues](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues); editor add-on work lives in the [add-on repo's issues](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon/issues).
 
-- **[Submit to Home Assistant core for a reviewed quality scale tier](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/23)** — the Silver/Gold/Platinum rules are implemented (see [`quality_scale.yaml`](custom_components/polygonal_zones/quality_scale.yaml)), but a tier above `bronze` requires Home Assistant architecture-team review via core submission. Deferred until there's adoption evidence; it trades HACS autonomy for a reviewed tier.
-- **[Test coverage gaps](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/19)** — SSRF-wiring end-to-end test, cross-repo zone-format conformance, Playwright on PRs.
-- **[Distance-accuracy decision](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/21)** — the haversine latitude/longitude argument order.
-
-Editor add-on work (mobile UX, base-image currency, CI) is tracked in the [add-on repo's issues](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon/issues).
+**Distribution.** This integration is intentionally distributed through **HACS** and is **not** being submitted to Home Assistant core. The Silver/Gold/Platinum quality-scale rules are implemented (see [`quality_scale.yaml`](custom_components/polygonal_zones/quality_scale.yaml)), but the manifest stays at `bronze` because a higher tier requires HA architecture-team review via core submission — a trade we deliberately decline, to keep HACS's release autonomy. (Revisitable if adoption grows substantially.)
 
 ## Contributing
 
