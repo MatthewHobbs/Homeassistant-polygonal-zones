@@ -59,8 +59,15 @@ jobs:
           HA_CONFIG="$RUNNER_TEMP/ha-config"
           mkdir -p "$HA_CONFIG/custom_components"
           cp -r custom_components/polygonal_zones "$HA_CONFIG/custom_components/"
-          # Minimal config; the frontend is enabled by default via `default_config`.
-          printf 'default_config:\n' > "$HA_CONFIG/configuration.yaml"
+          # Minimal config rather than `default_config`. default_config drags in
+          # dozens of optional integrations (cloud, bluetooth, stream, camera,
+          # assist_pipeline, mobile_app, …) whose system/Python deps (ffmpeg,
+          # usb, turbojpeg, aiohasupervisor, …) aren't present in a bare pip
+          # install, so default_config's setup *fails* and floods the log. The
+          # smoke only needs the SPA shell (`frontend`) and the integrations
+          # config panel (`config`); `onboarding` and `websocket_api`/`http`
+          # load automatically (bootstrap + frontend deps).
+          printf 'frontend:\nconfig:\n' > "$HA_CONFIG/configuration.yaml"
           echo "HA_CONFIG=$HA_CONFIG" >> "$GITHUB_ENV"
 
       - name: Start Home Assistant
