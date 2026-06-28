@@ -21,12 +21,14 @@ export default defineConfig({
   },
   projects: [
     // `setup` waits for HA to come up, completes onboarding via the REST API,
-    // and writes an authenticated storage state the smoke test reuses.
+    // and writes the auth tokens to .auth/tokens.json. The chromium project
+    // injects those tokens via addInitScript (see config-flow.spec.ts) rather
+    // than via storageState, so no storageState file is configured here.
     { name: "setup", testMatch: /global\.setup\.ts/ },
     {
       name: "chromium",
       dependencies: ["setup"],
-      use: { ...devices["Desktop Chrome"], storageState: ".auth/state.json" }
+      use: { ...devices["Desktop Chrome"] }
     }
   ]
 });

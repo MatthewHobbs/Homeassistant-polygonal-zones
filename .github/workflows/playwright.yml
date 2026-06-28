@@ -40,7 +40,39 @@ jobs:
           python-version: "3.14"
 
       - name: Install Home Assistant + runtime deps
-        run: pip install "homeassistant>=2026.6.4,<2027" "shapely>=2.0,<3"
+        run: |
+          set -eux
+          pip install "homeassistant>=2026.6.4,<2027" "shapely>=2.0,<3"
+          # `pip install homeassistant` does NOT pull integration requirements
+          # (HA installs them at runtime, which is not effective in this CI), so
+          # the frontend package (hass_frontend) and the auto-loaded assist/media
+          # stack are all absent. The SPA's initial load calls get_services,
+          # which imports every services.yaml-bearing integration to describe its
+          # services; any that can't import make get_services error and the UI
+          # hangs forever on "Loading data". Pre-install the pinned requirements
+          # of the frontend + that stack, read straight from each component's
+          # manifest (so versions match this HA build) and resolved in one pip
+          # pass. Components absent in this HA version are skipped. Only the
+          # Python modules are needed — get_services imports them to read service
+          # descriptions but never instantiates them, so no system libs (the
+          # ffmpeg binary, libturbojpeg) are required just to clear "Loading data".
+          python - <<'PY' > /tmp/ha-reqs.txt
+          import json, pathlib, homeassistant
+          base = pathlib.Path(homeassistant.__path__[0]) / "components"
+          comps = (
+              "frontend recorder conversation assist_pipeline tts ffmpeg camera "
+              "analytics ai_task image_processing met radio_browser google_translate"
+          ).split()
+          reqs = []
+          for c in comps:
+              m = base / c / "manifest.json"
+              if m.exists():
+                  reqs += json.loads(m.read_text()).get("requirements", [])
+          print("\n".join(sorted(set(reqs))))
+          PY
+          echo "Pre-installing integration requirements:"
+          cat /tmp/ha-reqs.txt
+          pip install -r /tmp/ha-reqs.txt
 
       - name: Stage HA config dir with the integration installed
         run: |
@@ -48,8 +80,15 @@ jobs:
           HA_CONFIG="$RUNNER_TEMP/ha-config"
           mkdir -p "$HA_CONFIG/custom_components"
           cp -r custom_components/polygonal_zones "$HA_CONFIG/custom_components/"
-          # Minimal config; the frontend is enabled by default via `default_config`.
-          printf 'default_config:\n' > "$HA_CONFIG/configuration.yaml"
+          # Minimal config rather than `default_config`. default_config drags in
+          # dozens of optional integrations (cloud, bluetooth, stream, camera,
+          # assist_pipeline, mobile_app, …) whose system/Python deps (ffmpeg,
+          # usb, turbojpeg, aiohasupervisor, …) aren't present in a bare pip
+          # install, so default_config's setup *fails* and floods the log. The
+          # smoke only needs the SPA shell (`frontend`) and the integrations
+          # config panel (`config`); `onboarding` and `websocket_api`/`http`
+          # load automatically (bootstrap + frontend deps).
+          printf 'frontend:\nconfig:\n' > "$HA_CONFIG/configuration.yaml"
           echo "HA_CONFIG=$HA_CONFIG" >> "$GITHUB_ENV"
 
       - name: Start Home Assistant
