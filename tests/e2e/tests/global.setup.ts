@@ -6,7 +6,6 @@ const HA_URL = process.env.HA_URL ?? "http://127.0.0.1:8123";
 // be tied to the same client_id we later seed into localStorage.
 const CLIENT_ID = `${HA_URL}/`;
 const AUTH_DIR = ".auth";
-const STATE_PATH = `${AUTH_DIR}/state.json`;
 
 // Demo owner account created via the onboarding API. CI-only throwaway creds.
 const USER = { name: "CI", username: "ci", password: "ci-smoke-password" };
@@ -29,7 +28,7 @@ async function waitForHA(api: import("@playwright/test").APIRequestContext) {
   throw new Error("Home Assistant did not become reachable within 120s");
 }
 
-setup("boot HA, onboard, and persist auth", async ({ browser }) => {
+setup("boot HA, onboard, and persist auth", async () => {
   const api = await request.newContext();
   await waitForHA(api);
 
@@ -96,8 +95,12 @@ setup("boot HA, onboard, and persist auth", async ({ browser }) => {
     ).toBeTruthy();
   }
 
-  // 4) Seed the tokens into localStorage the way the HA frontend stores them,
-  //    so the browser context is logged in without driving the login form.
+  // 4) Persist the tokens in the shape the HA frontend keeps under localStorage
+  //    "hassTokens". The config-flow spec reads this file and injects it via
+  //    addInitScript before each navigation — more reliable than Playwright
+  //    storageState, whose localStorage restore raced the frontend bootstrap
+  //    (and whose capture step here destroyed the page context mid-redirect).
+  //    No browser is needed in setup.
   const hassTokens = {
     ...tokens,
     expires: Date.now() + tokens.expires_in * 1000,
@@ -105,19 +108,8 @@ setup("boot HA, onboard, and persist auth", async ({ browser }) => {
     clientId: CLIENT_ID
   };
 
-  const context = await browser.newContext();
-  const page = await context.newPage();
-  await page.goto(`${HA_URL}/`);
-  await page.evaluate((t) => {
-    window.localStorage.setItem("hassTokens", JSON.stringify(t));
-  }, hassTokens);
-
   mkdirSync(AUTH_DIR, { recursive: true });
-  await context.storageState({ path: STATE_PATH });
-  // storageState only persists cookies + origin localStorage Playwright knows
-  // about; write a copy so a flaky persist still leaves usable creds behind.
   writeFileSync(`${AUTH_DIR}/tokens.json`, JSON.stringify(hassTokens, null, 2));
 
-  await context.close();
   await api.dispose();
 });
