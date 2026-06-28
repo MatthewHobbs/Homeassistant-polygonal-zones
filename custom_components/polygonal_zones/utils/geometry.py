@@ -12,10 +12,26 @@ from __future__ import annotations
 from collections.abc import Iterable
 import math
 
-from shapely.geometry import Point
+from shapely.geometry import MultiPolygon, Point
 from shapely.geometry.polygon import Polygon
 
 _EARTH_RADIUS_M = 6371000
+
+
+def exterior_coords(geometry: Polygon | MultiPolygon) -> Iterable[tuple[float, float]]:
+    """Yield exterior-ring coordinates of a Polygon or every part of a MultiPolygon.
+
+    The GeoJSON spec and the editor add-on both allow ``MultiPolygon`` zones, so
+    callers must not assume ``geometry.exterior`` exists (``MultiPolygon`` has no
+    ``.exterior`` — only ``.geoms``). Interior rings (holes) are intentionally
+    ignored: distance-to-zone is measured to the outer boundary only, matching
+    the prior Polygon-only behaviour.
+    """
+    if isinstance(geometry, MultiPolygon):
+        for part in geometry.geoms:
+            yield from part.exterior.coords
+    else:
+        yield from geometry.exterior.coords
 
 
 def _haversine_metres(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -46,17 +62,24 @@ def haversine_distances(
     return [_haversine_metres(lat1, lon1, lat2, lon2) for lat2, lon2 in coordinates]
 
 
-def get_distance_to_exterior_points(polygon: Polygon, point: Point) -> float:
-    """Haversine distance to the closest point on the polygon's exterior, in metres.
+def get_distance_to_exterior_points(polygon: Polygon | MultiPolygon, point: Point) -> float:
+    """Haversine distance to the closest point on the zone's exterior, in metres.
+
+    Accepts ``Polygon`` and ``MultiPolygon`` (the latter previously raised
+    ``AttributeError`` here, crashing zone tie-breaking).
 
     Uses ``(point.x, point.y)`` directly (which in shapely terms is ``(lon, lat)``
     for GeoJSON-convention polygons) to preserve the exact numerics of the prior
     numpy implementation.
     """
-    return min(_haversine_metres(point.x, point.y, x, y) for x, y in polygon.exterior.coords)
+    return min(_haversine_metres(point.x, point.y, x, y) for x, y in exterior_coords(polygon))
 
 
-def get_distance_to_centroid(polygon: Polygon, point: Point) -> float:
-    """Haversine distance from ``point`` to the polygon's centroid, in metres (JSON-safe)."""
+def get_distance_to_centroid(polygon: Polygon | MultiPolygon, point: Point) -> float:
+    """Haversine distance from ``point`` to the zone's centroid, in metres (JSON-safe).
+
+    ``.centroid`` is defined for ``MultiPolygon`` too, so no special-casing is
+    needed here.
+    """
     centroid = polygon.centroid
     return _haversine_metres(point.x, point.y, centroid.x, centroid.y)
