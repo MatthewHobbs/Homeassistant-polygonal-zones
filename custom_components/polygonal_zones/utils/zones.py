@@ -19,6 +19,11 @@ from .geometry import (
     get_distance_to_exterior_points,
     haversine_distances,
 )
+from .limits import (
+    MAX_FEATURES_PER_COLLECTION,
+    MAX_TOTAL_VERTICES_PER_COLLECTION,
+    count_geometry_vertices,
+)
 
 # Re-exported for back-compat with call sites / tests that imported from zones.
 __all__ = [
@@ -121,16 +126,14 @@ def _parse_feature(feature: Any, default_priority: int) -> Zone:
     )
 
 
-async def _load_zones_from_uri(
-    uri: str,
-    idx: int,
-    prioritize: bool,
-    hass: HomeAssistant,
-    *,
-    allow_private_urls: bool = False,
-) -> list[Zone]:
-    """Load and parse one zone file. Returns a list of zones or raises a typed error."""
-    raw = await load_data(uri, hass, allow_private_urls=allow_private_urls)
+def _parse_zone_document(raw: str, idx: int, prioritize: bool, uri: str) -> list[Zone]:
+    """Parse + validate one zone document into ``Zone`` objects (CPU-only).
+
+    Runs in an executor (see :func:`_load_zones_from_uri`): ``json.loads`` on a
+    multi-MiB file and shapely geometry construction for up to
+    ``MAX_TOTAL_VERTICES_PER_COLLECTION`` vertices can each take tens to hundreds
+    of milliseconds, which must not block the event loop on every reload.
+    """
     try:
         data = json.loads(raw)
     except ValueError as err:
@@ -158,8 +161,43 @@ async def _load_zones_from_uri(
     if not isinstance(features, list):
         raise ZoneFileCorrupt("'features' is missing or not a list")
 
+    # Read-time caps. A remote/file producer is not bound by the mutation
+    # service's validator, so enforce the same bounds here — otherwise a large
+    # (or adversarial) zones.json makes every state_changed event run shapely
+    # over an unbounded vertex set on the event loop.
+    if len(features) > MAX_FEATURES_PER_COLLECTION:
+        raise ZoneFileCorrupt(
+            f"zone file has {len(features)} features; limit is {MAX_FEATURES_PER_COLLECTION}"
+        )
+    total_vertices = sum(
+        count_geometry_vertices(feature["geometry"])
+        for feature in features
+        if isinstance(feature, dict) and isinstance(feature.get("geometry"), dict)
+    )
+    if total_vertices > MAX_TOTAL_VERTICES_PER_COLLECTION:
+        raise ZoneFileCorrupt(
+            f"zone file has {total_vertices} vertices; limit is {MAX_TOTAL_VERTICES_PER_COLLECTION}"
+        )
+
     default_priority = idx if prioritize else 0
     return [_parse_feature(feature, default_priority) for feature in features]
+
+
+async def _load_zones_from_uri(
+    uri: str,
+    idx: int,
+    prioritize: bool,
+    hass: HomeAssistant,
+    *,
+    allow_private_urls: bool = False,
+) -> list[Zone]:
+    """Fetch one zone file and parse it off the event loop.
+
+    The network fetch stays on the loop; the CPU-heavy parse (``json.loads`` +
+    shapely construction) is offloaded to the executor.
+    """
+    raw = await load_data(uri, hass, allow_private_urls=allow_private_urls)
+    return await hass.async_add_executor_job(_parse_zone_document, raw, idx, prioritize, uri)
 
 
 async def load_zones(

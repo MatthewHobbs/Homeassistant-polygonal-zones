@@ -18,6 +18,15 @@ from custom_components.polygonal_zones.services.helpers import KNOWN_FEATURE_PRO
 from custom_components.polygonal_zones.utils.general import FETCH_TIMEOUT
 from custom_components.polygonal_zones.utils.zones import ZoneFileCorrupt, get_zones
 
+
+async def _run_executor_job(func, *args):
+    return func(*args)
+
+
+def _make_hass() -> SimpleNamespace:
+    return SimpleNamespace(async_add_executor_job=_run_executor_job)
+
+
 _FEATURE = {
     "type": "Feature",
     "properties": {"name": "Home"},
@@ -36,7 +45,7 @@ async def test_loader_rejects_non_feature_collection() -> None:
         pytest.raises(ZoneFileCorrupt),
     ):
         # Single URI; it fails the type check, so all URIs failed -> raises.
-        await get_zones(["http://example.com/zones.json"], SimpleNamespace(), False)
+        await get_zones(["http://example.com/zones.json"], _make_hass(), False)
 
 
 async def test_loader_accepts_valid_feature_collection() -> None:
@@ -45,8 +54,25 @@ async def test_loader_accepts_valid_feature_collection() -> None:
         "custom_components.polygonal_zones.utils.zones.load_data",
         new=AsyncMock(return_value=payload),
     ):
-        zones = await get_zones(["http://example.com/zones.json"], SimpleNamespace(), False)
+        zones = await get_zones(["http://example.com/zones.json"], _make_hass(), False)
     assert [z.name for z in zones] == ["Home"]
+
+
+async def test_loader_rejects_too_many_features() -> None:
+    """Read-time cap: a file exceeding the feature limit is rejected, not parsed."""
+    from custom_components.polygonal_zones.utils.limits import MAX_FEATURES_PER_COLLECTION
+
+    payload = json.dumps(
+        {"type": "FeatureCollection", "features": [_FEATURE] * (MAX_FEATURES_PER_COLLECTION + 1)}
+    )
+    with (
+        patch(
+            "custom_components.polygonal_zones.utils.zones.load_data",
+            new=AsyncMock(return_value=payload),
+        ),
+        pytest.raises(ZoneFileCorrupt),
+    ):
+        await get_zones(["http://example.com/zones.json"], _make_hass(), False)
 
 
 def test_fetch_timeout_has_sub_timeouts() -> None:
