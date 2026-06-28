@@ -31,14 +31,23 @@ def build_create_flow(
 ) -> vol.Schema:
     """Create the schema for the configuration flow.
 
-    ``new_entry`` swaps the fallback for ``expose_coordinates`` between the
-    privacy-safe default (``False`` for new installs) and the back-compat
-    default (``True`` for existing entries being reconfigured that were
-    created before the option existed). Keys that are already present in
-    ``defaults`` always win over both fallbacks.
+    ``new_entry`` swaps the fallbacks for ``expose_coordinates`` and
+    ``download_zones`` between the new-install default and the back-compat
+    default for an existing entry created before the option existed:
+
+    - ``expose_coordinates``: ``False`` for new installs (privacy-safe),
+      ``True`` for reconfigured legacy entries.
+    - ``download_zones``: ``True`` for new installs (CRUD works out of the
+      box), ``False`` for reconfigured legacy entries — so opening the
+      reconfigure form on an old read-only entry and submitting without
+      touching the toggle does NOT silently convert it to a writable local
+      snapshot.
+
+    Keys already present in ``defaults`` always win over both fallbacks.
     """
     defaults = defaults or {}
     expose_fallback = not new_entry
+    download_fallback = new_entry
 
     return vol.Schema(
         {
@@ -61,7 +70,7 @@ def build_create_flow(
             ): selector.BooleanSelector(),
             vol.Optional(
                 "download_zones",
-                default=defaults.get("download_zones", True),
+                default=defaults.get("download_zones", download_fallback),
                 description={"advanced": True},
             ): selector.BooleanSelector(),
             vol.Optional(
@@ -86,6 +95,10 @@ def build_options_flow(
     This function differs from the config schema by not adding the options for the entities.
     Existing entries created before the ``expose_coordinates`` option existed keep
     their current behaviour (coordinates exposed) until the user opts out.
+
+    ``download_zones`` is exposed here too so it can be toggled after setup
+    without a full reconfigure. Its fallback is ``False`` so a legacy entry
+    that never stored the key stays read-only until the user opts in.
     """
     defaults = defaults or {}
     return vol.Schema(
@@ -99,6 +112,10 @@ def build_options_flow(
             vol.Required(
                 "prioritize_zone_files",
                 default=defaults.get("prioritize_zone_files", False),
+            ): selector.BooleanSelector(selector.BooleanSelectorConfig()),
+            vol.Required(
+                "download_zones",
+                default=defaults.get("download_zones", False),
             ): selector.BooleanSelector(selector.BooleanSelectorConfig()),
             vol.Required(
                 "expose_coordinates",
