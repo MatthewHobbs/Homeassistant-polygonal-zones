@@ -123,12 +123,26 @@ async def save_zones(geojson: str, destination: Path, hass: HomeAssistant) -> No
 
     def _write() -> None:
         destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        # Symlink hardening (CWE-59): an attacker with /config write access
+        # could pre-plant a symlink at the destination or the .tmp path to
+        # redirect this write elsewhere. Refuse a symlinked destination
+        # (os.replace would overwrite it rather than follow it, but rejecting
+        # surfaces tampering instead of silently clobbering), and open the .tmp
+        # with O_NOFOLLOW so a symlinked temp path fails instead of being
+        # followed through to its target.
+        if destination.is_symlink():
+            raise OSError(f"Refusing to write zones: {destination} is a symlink")
         tmp = destination.with_suffix(destination.suffix + ".tmp")
         # os.open used here (rather than Path.write_text) so we can pass an
         # explicit 0o600 mode atomically — Path.open doesn't accept mode for new
         # files until Python 3.13's Path.open(mode_arg=...) and even then we'd
         # need a chmod follow-up which leaves a brief world-readable window.
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        # O_NOFOLLOW: fail (ELOOP) rather than follow a pre-planted symlink at tmp.
+        fd = os.open(
+            tmp,
+            os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+        )
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 f.write(geojson)
