@@ -26,7 +26,10 @@ SUPPORTED_GEOMETRY_TYPES = {"Polygon", "MultiPolygon"}
 # Declared top-level feature property keys. Anything else is preserved through
 # round-trip but logged at WARNING so drift is visible. New producer-specific
 # fields belong under ``properties.polygonal_zones_ext``. See docs/ZONES_FORMAT.md.
-KNOWN_FEATURE_PROPERTY_KEYS = frozenset({"name", "priority", "polygonal_zones_ext"})
+# ``id`` is the editor add-on's stable per-feature handle (uuid4 hex) used to
+# bind automations across renames — it appears on every add-on-produced file,
+# so it is a known key, not drift (otherwise every mutation logs a WARNING).
+KNOWN_FEATURE_PROPERTY_KEYS = frozenset({"name", "priority", "id", "polygonal_zones_ext"})
 
 # Minimum seconds between mutation-service calls for a single config entry.
 # A low-privilege authenticated user can't wedge the event loop by spamming
