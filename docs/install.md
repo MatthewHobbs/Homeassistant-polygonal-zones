@@ -87,14 +87,15 @@ Or navigate manually: **Settings → Devices & Services → Add Integration** �
 
 Fill in the setup form:
 
-| Field                              | What to enter                                                                               |
-| ---------------------------------- | ------------------------------------------------------------------------------------------- |
-| **URLs of GeoJSON files**          | `http://<your-ha-host>:8000/zones.json` — the add-on URL from Step 1d.                      |
-| **Entities**                       | The `device_tracker.*` entities you want to track against your zones.                       |
-| **Prioritize order of zone files** | _(advanced)_ When a position matches zones from multiple files, prefer the earlier file.    |
-| **Download the GeoJSON files**     | _(advanced)_ Copies the remote file locally so you can mutate zones via automation actions. |
+| Field                              | What to enter                                                                                                                                         |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **URLs of GeoJSON files**          | `http://<your-ha-host>:8000/zones.json` — the add-on URL from Step 1d.                                                                                |
+| **Entities**                       | The `device_tracker.*` entities you want to track against your zones.                                                                                 |
+| **Tracking consent**               | A required checkbox: "I confirm everyone whose device I'm adding has been told it will be location-tracked." The form won't submit until you tick it. |
+| **Prioritize order of zone files** | _(advanced)_ When a position matches zones from multiple files, prefer the earlier file.                                                              |
+| **Download the GeoJSON files**     | _(advanced)_ Copies the remote file locally so you can mutate zones via automation actions.                                                           |
 
-> **LAN URL note.** The integration's SSRF defence blocks private network addresses (`192.168.x.x`, `10.x.x.x`, etc.) by default. Because the add-on URL is a LAN address, you need to enable **Allow private-network URLs (LAN)** in the integration's advanced options. This unlocks RFC-1918 space; loopback, link-local, and metadata ranges stay blocked regardless.
+> **LAN URL note.** The integration's SSRF defence blocks private network addresses (`192.168.x.x`, `10.x.x.x`, etc.) by default. Because the add-on URL is a LAN address, you need to enable **Allow private-network URLs (LAN)** in the integration's advanced options. This unlocks private home-network addresses (`192.168.x.x`, `10.x.x.x`, …); other internal-only ranges (loopback, link-local) stay blocked regardless.
 >
 > In the add-on, also make sure `allow_all_ips: true` is set under **Settings → Add-ons → Polygonal Zones → Configuration** so the integration's requests are accepted.
 
