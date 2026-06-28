@@ -275,13 +275,15 @@ Full privacy details (logging, outbound requests, cloud-backup GDPR note, deleti
 
 ## Roadmap
 
-Open work items are tracked as GitHub issues: [MatthewHobbs/Homeassistant-polygonal-zones/issues](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues).
+Open work items are tracked as [GitHub issues](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues). Current themes:
 
-Named goals:
+- **[Submit to Home Assistant core for a reviewed quality scale tier](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/23)** — the Silver/Gold/Platinum rules are implemented (see [`quality_scale.yaml`](custom_components/polygonal_zones/quality_scale.yaml)), but a tier above `bronze` requires Home Assistant architecture-team review via core submission. Deferred until there's adoption evidence; it trades HACS autonomy for a reviewed tier.
+- **[Privacy hardening](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/18)** — make tracking consent an explicit opt-in and notify legacy installs about coordinate recording.
+- **[Test coverage gaps](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/19)** — SSRF-wiring end-to-end test, cross-repo zone-format conformance, Playwright on PRs.
+- **[Security hardening](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/20)** — symlink guard on the zone-file write.
+- **[Distance-accuracy decision](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/21)** — the haversine latitude/longitude argument order.
 
-- [#8 Submit integration to Home Assistant core for review](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/8) — the only path to a panel-validated `quality_scale` tier above bronze. The Silver/Gold/Platinum rules are already implemented (see [`quality_scale.yaml`](custom_components/polygonal_zones/quality_scale.yaml)) but a real tier claim requires HA architecture-team review. Substantial effort; weigh trade-offs (HACS autonomy vs. core distribution + reviewed tier).
-
-The implementation work for the [Silver](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/5), [Gold](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/6), and [Platinum](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/7) rules is done — those issues are closed. Tier certification is what #8 tracks.
+Editor add-on work (mobile UX, base-image currency, CI) is tracked in the [add-on repo's issues](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon/issues).
 
 ## Contributing
 
