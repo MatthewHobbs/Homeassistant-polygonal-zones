@@ -140,3 +140,42 @@ async def test_public_only_resolver_accepts_public_addresses() -> None:
     ):
         infos = await resolver.resolve("example.com", 443)
         assert infos == public
+
+
+async def test_public_only_resolver_allow_private_accepts_private_addresses() -> None:
+    """With allow_private=True a private IP is permitted (LAN add-on path)."""
+    resolver = _PublicOnlyResolver(allow_private=True)
+    private = [{"host": "192.168.1.50"}]
+    with patch(
+        "aiohttp.resolver.DefaultResolver.resolve",
+        new=AsyncMock(return_value=private),
+    ):
+        infos = await resolver.resolve("addon.local", 8000)
+        assert infos == private
+
+
+@pytest.mark.parametrize("flag", [True, False])
+async def test_load_data_wires_allow_private_urls_to_resolver(tmp_path, flag) -> None:
+    """End-to-end wiring: the allow_private_urls argument to load_data must reach the
+    SSRF resolver's allow_private setting. A regression here would silently re-block
+    (or un-block) LAN URLs without any unit test noticing."""
+    captured = {}
+
+    def fake_connector(*_a, resolver=None, **_k):
+        captured["resolver"] = resolver
+        return MagicMock()
+
+    with (
+        patch(
+            "custom_components.polygonal_zones.utils.general.aiohttp.TCPConnector",
+            side_effect=fake_connector,
+        ),
+        patch(
+            "custom_components.polygonal_zones.utils.general.aiohttp.ClientSession",
+            return_value=_FakeSession(_FakeResponse()),
+        ),
+    ):
+        await load_data("https://example.com/zones.json", _hass(tmp_path), allow_private_urls=flag)
+
+    assert isinstance(captured["resolver"], _PublicOnlyResolver)
+    assert captured["resolver"]._allow_private is flag
