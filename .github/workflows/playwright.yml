@@ -40,7 +40,18 @@ jobs:
           python-version: "3.14"
 
       - name: Install Home Assistant + runtime deps
-        run: pip install "homeassistant>=2026.6.4,<2027" "shapely>=2.0,<3"
+        run: |
+          set -eux
+          pip install "homeassistant>=2026.6.4,<2027" "shapely>=2.0,<3"
+          # `pip install homeassistant` does NOT pull the frontend package
+          # (hass_frontend). Without it the `frontend` component fails to set up
+          # ("No module named 'hass_frontend'") and every UI route 404s — so the
+          # SPA never loads and this smoke can't drive it. Install the exact
+          # version HA pins in its frontend component manifest so the served SPA
+          # matches this HA build.
+          FRONTEND_REQ=$(python -c "import json, pathlib, homeassistant.components.frontend as f; print(json.loads((pathlib.Path(f.__path__[0]) / 'manifest.json').read_text())['requirements'][0])")
+          echo "Resolved frontend requirement: $FRONTEND_REQ"
+          pip install "$FRONTEND_REQ"
 
       - name: Stage HA config dir with the integration installed
         run: |
