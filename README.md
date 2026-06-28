@@ -14,7 +14,7 @@ This Home Assistant integration lets you define arbitrary polygonal zones from a
 
 **Status:** Actively maintained; HACS-ready. Manifest declares `quality_scale: bronze`; the rules for Silver, Gold, and Platinum are implemented and tracked in [`quality_scale.yaml`](custom_components/polygonal_zones/quality_scale.yaml), but a higher tier can only be claimed after a Home Assistant architecture-team review (which happens through the [core-integration submission process](https://developers.home-assistant.io/docs/creating_component_index/), not by self-declaration).
 
-> ℹ️ **Fork Notice**
+> **Fork Notice**
 >
 > This is a community-maintained continuation of the original [MichelGerding/Homeassistant-polygonal-zones](https://github.com/MichelGerding/Homeassistant-polygonal-zones), which is no longer actively maintained.
 > Development continues here at [MatthewHobbs/Homeassistant-polygonal-zones](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones).
@@ -29,13 +29,12 @@ This Home Assistant integration lets you define arbitrary polygonal zones from a
 4. **Configure it**: paste your zones URL (or a file path under `/config`), select the `device_tracker` entities to follow, and submit. If you're using a LAN address from the editor add-on, enable **Allow private-network URLs (LAN)** in the advanced options — the integration blocks private addresses by default as an SSRF protection (a protection that stops the server being tricked into fetching internal addresses).
 5. **Done**: each tracked entity now has a mirror `device_tracker.polygonal_zones_*` whose state is the zone name (`Home`, `School`, …) or `away`.
 
-> Need more detail? See [First-time setup](#first-time-setup) below, or the [full install guide](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/install/).
+> Need more detail? See the [full install guide](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/install/).
 
 ## Contents
 
 - [Companion add-on](#companion-add-on)
 - [Installation](#installation)
-- [First-time setup](#first-time-setup)
 - [Configuration options](#configuration-options)
 - [Usage](#usage)
 - [Use cases](#use-cases)
@@ -58,45 +57,11 @@ If you're setting up for the first time, install the add-on first: it gives you 
 
 ## Installation
 
-Two paths: HACS (recommended) or manual copy.
-
-### Install via HACS
-
 [![Add to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=MatthewHobbs&repository=Homeassistant-polygonal-zones&category=integration)
 
-If the button doesn't work: HACS → ⋮ → Custom repositories → add `https://github.com/MatthewHobbs/Homeassistant-polygonal-zones` as an Integration.
+If the button doesn't work: HACS → ⋮ → Custom repositories → add `https://github.com/MatthewHobbs/Homeassistant-polygonal-zones` as an Integration. For manual installation, copy `custom_components/polygonal_zones/` into your HA config's `custom_components/` directory and restart. For beta releases, open the integration's HACS card → ⋮ → **Redownload** → toggle **Show beta versions**.
 
-#### Opt into beta releases (early adopters)
-
-Stable releases ship as regular GitHub releases; early-access builds ship as **pre-releases** (tagged `-rc1`, `-rc2`, …). To see them in HACS, open this integration's HACS card → ⋮ → **Redownload** → toggle **Show beta versions**. Pre-releases are visible only while that toggle is on; stable users are never prompted to upgrade to an `-rc`.
-
-### Manual installation
-
-Copy `custom_components/polygonal_zones/` into the `custom_components/` directory inside your Home Assistant config folder, then restart Home Assistant.
-
-## First-time setup
-
-1. **Add the integration**: Settings → Devices & Services → Add Integration → search "Polygonal Zones".
-2. **Fill in the form**:
-   - **URLs of GeoJSON files**: one or more `https://…/zones.json` URLs, or relative paths under `/config` (e.g. `polygonal_zones/my_zones.json`). Leave empty if you want a blank file created for you (toggle **Download the GeoJSON files** below).
-     - 💡 **Using the companion add-on, or any URL on your LAN?** A local address like `http://192.168.x.x:8000/zones.json` is private and is **blocked by default** (SSRF protection). Enable **Allow private-network URLs (LAN)** in the same form to permit it — or place the file under `/config` and reference the path instead. This is the most common first-run snag.
-   - **Entities**: the `device_tracker.*` entities whose location you want to evaluate against the zones.
-   - **Prioritize order of zone files** _(advanced)_: when one position falls inside zones from more than one file, prefer the earlier file in the list.
-   - **Download the GeoJSON files** _(advanced)_: download / merge the source URLs into a single local file under `<config>/polygonal_zones/<entry_id>.json`. **Required if you want to mutate zones from automations** via the action services below.
-3. **Submit**. The integration creates one new entity per selected device, named `device_tracker.polygonal_zones_<original_entity>`. The state is the zone name (e.g. `Home`, `School`) or `away` if the device falls outside every zone.
-4. **Verify**: open Developer Tools → States and find `device_tracker.polygonal_zones_*`. The `zone_uris`, `source_entity`, `last_load_result`, `last_zones_loaded_at`, and `matched_zones` attributes are always present; `latitude`, `longitude`, and `gps_accuracy` are only present when **Expose GPS coordinates** is enabled (off by default for new installs).
-5. **(Recommended) Exclude the mirror entities from the recorder** to stop Home Assistant's database from accumulating a full coordinate history for every tracked person. In `configuration.yaml`:
-
-   ```yaml
-   recorder:
-     exclude:
-       entity_globs:
-         - device_tracker.polygonal_zones_*
-   ```
-
-   New installs default `Expose GPS coordinates` to **off**, which publishes only the zone name — but the recorder will still record state-change timestamps unless you exclude the entity globally. See [Privacy and data handling](#privacy-and-data-handling) for the full rationale.
-
-If the entity stays unknown for more than a minute, see [Troubleshooting](#troubleshooting).
+Full guide (add-on setup, post-install verification, first-run tips): [matthewhobbs.github.io/Homeassistant-polygonal-zones/install/](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/install/)
 
 ## Configuration options
 
@@ -157,73 +122,11 @@ The integration is **push-based**. There is no polling schedule.
 
 ## GeoJSON file format
 
-[GeoJSON](https://geojson.org/) is a standard text format for shapes on a map. This integration accepts a `FeatureCollection` containing `Feature` objects whose geometry is a `Polygon` or `MultiPolygon`. Other geometry types (`Point`, `LineString`, etc.) are rejected.
+[GeoJSON](https://geojson.org/) is a standard text format for shapes on a map. This integration accepts a `FeatureCollection` where each `Feature` has a `Polygon` or `MultiPolygon` geometry, a `name` property (shown as the entity state), and an optional integer `priority` (lower = higher priority when zones overlap). Coordinates are WGS-84 `[longitude, latitude]` order; polygon rings must close (first == last coordinate).
 
-Each Feature must have:
-
-- `properties.name` — display name shown as the entity state.
-- `properties.priority` — _(optional)_ integer, lower number = higher priority when zones overlap and `prioritize_zone_files` is off.
-- `geometry` — `Polygon` or `MultiPolygon` with coordinates in WGS-84 (standard GPS latitude/longitude) `[longitude, latitude]` order.
-
-For convenience, an optional add-on with a UI editor lives at the [polygonal zones editor repo](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon/):
+Full format specification (schema, size limits, versioning, examples): [matthewhobbs.github.io/Homeassistant-polygonal-zones/zones-format/](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/zones-format/)
 
 [![Add zone editor add-on to Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FMatthewHobbs%2FHomeassistant-polygonal-zones-addon.git)
-
-### Example file
-
-A minimal file with two zones — `Home` (a small square in central London for illustration) and `Park` (a higher-priority overlapping area):
-
-```json
-{
-  "type": "FeatureCollection",
-  "features": [
-    {
-      "type": "Feature",
-      "properties": {
-        "name": "Home",
-        "priority": 1
-      },
-      "geometry": {
-        "type": "Polygon",
-        "coordinates": [
-          [
-            [-0.135, 51.51],
-            [-0.125, 51.51],
-            [-0.125, 51.515],
-            [-0.135, 51.515],
-            [-0.135, 51.51]
-          ]
-        ]
-      }
-    },
-    {
-      "type": "Feature",
-      "properties": {
-        "name": "Park",
-        "priority": 0
-      },
-      "geometry": {
-        "type": "Polygon",
-        "coordinates": [
-          [
-            [-0.131, 51.512],
-            [-0.128, 51.512],
-            [-0.128, 51.514],
-            [-0.131, 51.514],
-            [-0.131, 51.512]
-          ]
-        ]
-      }
-    }
-  ]
-}
-```
-
-Things worth knowing:
-
-- The first and last coordinate of each polygon ring **must be identical** (the ring closes itself).
-- Coordinates are `[longitude, latitude]` — that's the GeoJSON convention, the opposite of how Home Assistant usually displays positions.
-- A point that lies in `Park` and `Home` will resolve to `Park` because its priority value is lower.
 
 ## Actions / services
 
@@ -343,92 +246,32 @@ data:
 ### The mirror entity stays `unknown` or `away`
 
 - Check the source `device_tracker.*` actually has `latitude`, `longitude`, and `gps_accuracy` attributes. Many wifi-only trackers don't.
-- Look in the HA log for messages tagged `custom_components.polygonal_zones`. A `WARNING` line that says "Failed to load zones for entry=…" means the GeoJSON couldn't be fetched on startup. The integration retries with exponential backoff (30s, 60s, 120s, 240s, 480s) before giving up. Call `reload_zones` after the source recovers.
+- Look in the HA log for messages tagged `custom_components.polygonal_zones`. A `WARNING` line that says "Failed to load zones for entry=…" means the GeoJSON couldn't be fetched on startup. The integration retries with exponential backoff (30 s, 60 s, 120 s, 240 s, 480 s) before giving up. Call `reload_zones` after the source recovers.
 - Confirm the polygon ring is closed (first coordinate == last coordinate) and the geometry type is `Polygon` or `MultiPolygon`.
-
-### Config-flow errors
-
-| Banner            | Meaning                                                                                                                                     |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `invalid_url`     | One of the entries isn't a valid `http(s)` URL. Check the protocol and that the host is present.                                            |
-| `invalid_path`    | A non-URL entry doesn't resolve to an existing file inside `/config`, or it tries to escape the config directory (e.g. `../../etc/passwd`). |
-| `unreachable_url` | The URL passed shape validation but couldn't be fetched.                                                                                    |
 
 ### "Refusing to connect to non-public address"
 
-The integration won't fetch from `127.0.0.1`, `192.168.x.x`, `10.x.x.x`, `169.254.x.x`, or any other private / loopback / link-local / metadata IP. This is to prevent SSRF. Solutions:
+The integration won't fetch from `192.168.x.x`, `10.x.x.x`, `169.254.x.x`, or any other private / loopback / link-local / metadata IP by default (SSRF protection). To fix: enable **Allow private-network URLs (LAN)** in the integration's Configure dialog, or place the file under `/config` and reference it as a path.
 
-- Host the GeoJSON on a public URL.
-- Place the file in `/config` and reference it as a path (e.g. `polygonal_zones/zones.json`).
-
-### `ZoneFileNotEditable` from a service call
-
-The mutating actions only work when **Download the GeoJSON files** is enabled in the integration options. Without it, the integration reads the source URL directly on every reload and has no local file to mutate.
-
-### `Path '…' resolves outside config directory`
-
-A path you supplied (in `zone_urls` or via a service call) resolves outside `/config` when normalised. Fix the path so it stays within the HA config directory.
-
-### `Timed out waiting for lock on …`
-
-A previous service call against the same zone file hasn't finished within 15 seconds. Usually transient (e.g. slow remote fetch). Retry the action.
-
-### Increasing log verbosity
-
-Set the integration's logger to `DEBUG` to see GPS coordinates, zone resolution, and full lifecycle events:
-
-```yaml
-logger:
-  default: info
-  logs:
-    custom_components.polygonal_zones: debug
-```
-
-GPS coordinates and zone names are **only** emitted at DEBUG level — see [Privacy](#privacy-and-data-handling) for details.
+For config-flow error banners (`invalid_url`, `invalid_path`, `unreachable_url`), `ZoneFileNotEditable`, lock-timeout errors, and log verbosity: [matthewhobbs.github.io/Homeassistant-polygonal-zones/troubleshooting/](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/troubleshooting/)
 
 ## Privacy and data handling
 
-This integration processes real-time GPS coordinates of the `device_tracker` entities you choose to track. Everything runs locally inside your Home Assistant instance — no analytics, telemetry, or third-party reporting is performed by the integration itself.
+The integration continuously processes real-time GPS coordinates of the tracked `device_tracker` entities. Everything runs locally — no analytics or third-party reporting. Key points:
 
-What is stored where:
+- **Coordinates in attributes**: latitude, longitude, and GPS accuracy are only written to entity attributes when **Expose GPS coordinates** is enabled. New installs default this to **off**; only the zone name is published.
+- **Recorder**: even with coordinates off, the recorder logs state-change timestamps (zone entry/exit events) unless you explicitly exclude the entities:
 
-- **Entity state**: the resolved zone name (e.g. `Home`) is the entity state. The source entity, zone URIs, and load-status fields are always written to entity attributes. Latitude, longitude, and GPS accuracy are only written when **Expose GPS coordinates** is enabled (off by default for new installs).
-- **Recorder history**: by default Home Assistant's recorder will persist these attributes, which means a full location history of tracked devices accumulates in the HA database unless you exclude it.
-- **Zone files**: when `download_zones` is enabled, the integration writes a GeoJSON file under `<config>/polygonal_zones/<entry_id>.json` with mode `0600` inside a directory with mode `0700`.
-- **Outbound requests**: when `zone_urls` points at an http(s) URL, the integration fetches it from your HA instance. The server hosting the GeoJSON learns your public IP. Private, loopback, and link-local addresses are rejected to prevent SSRF.
-- **Logging**: GPS coordinates and zone names are only logged at `DEBUG` level. At default log levels they are not written to the HA log. `WARNING`-level logs (raised when a zone fetch fails) include the source `entity_id` (e.g. `device_tracker.alice_phone`) — if you ship Home Assistant logs to an external aggregator, consider filtering or redacting these.
+  ```yaml
+  recorder:
+    exclude:
+      entity_globs:
+        - device_tracker.polygonal_zones_*
+  ```
 
-If you do not want location history retained, add something like the following to your HA configuration:
+- **Consent**: any person whose `device_tracker` entity you select will have their location continuously monitored. Make sure they are aware before tracking them.
 
-```yaml
-recorder:
-  exclude:
-    entity_globs:
-      - device_tracker.polygonal_zones_*
-```
-
-If you use Nabu Casa cloud backup (or any other backup that includes the recorder database), the location history above will be included in the backup. Apply the `recorder` exclude block before the next backup if you do not want that data leaving the local network.
-
-**Cross-border transfer note for EU users.** Nabu Casa infrastructure is hosted in the United States. Enabling Nabu Casa cloud backup with the recorder DB attached (default) transfers the location history of every tracked person to US infrastructure. Under GDPR Art. 46 / Schrems II this is a cross-border transfer of personal data. If you're tracking household members or third parties in the EU, review Nabu Casa's data-processing terms before enabling cloud backup, or keep the `recorder` exclude block applied so the recorder DB's location history is never included in the upload.
-
-The `polygonal_zones.reload_zones` service accepts an optional `return_response: true`. When set, it returns the loaded zone names and polygon coordinates to the caller. This is intended for debugging — be careful not to forward that response to external services (e.g. a notification body), as zone names and shapes are sensitive location data.
-
-Note that any person whose `device_tracker` entity you select will have their location continuously monitored. Please make sure they are aware before tracking them.
-
-### Responding to a right-to-erasure request
-
-A tracked person may ask for their location data to be removed. The steps:
-
-1. **Remove the source entity from the integration.** Settings → Devices & Services → Polygonal Zones → Configure → untick the entity; save. The mirror entity is deleted automatically.
-2. **Purge their history from the recorder DB.** Developer Tools → Actions → `recorder.purge_entities` with:
-   ```yaml
-   entity_id:
-     - device_tracker.polygonal_zones_<original>
-     - device_tracker.<original>
-   ```
-   This removes every past state and attribute row for both the mirror and the source. The default `keep_days: 0` purges immediately.
-3. **Delete any locally-stored zone file that identifies the person.** If `download_zones=True` was used for this entry, remove `<config>/polygonal_zones/<entry_id>.json`. Even without personal data inside, the filename itself is an identifier for the config entry that tracked them.
-4. **Rotate backups.** Any HA backup (local or Nabu Casa cloud) taken before these steps still contains the history. Delete older backups if full erasure is required, or rely on the backup's own retention expiry.
+Full privacy details (logging, outbound requests, cloud-backup GDPR note, deletion/right-to-erasure steps): [matthewhobbs.github.io/Homeassistant-polygonal-zones/privacy/](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/privacy/)
 
 ## Roadmap
 
