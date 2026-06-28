@@ -69,6 +69,7 @@ Copy `custom_components/polygonal_zones/` into the `custom_components/` director
 1. **Add the integration**: Settings → Devices & Services → Add Integration → search "Polygonal Zones".
 2. **Fill in the form**:
    - **URLs of GeoJSON files**: one or more `https://…/zones.json` URLs, or relative paths under `/config` (e.g. `polygonal_zones/my_zones.json`). Leave empty if you want a blank file created for you (toggle **Download the GeoJSON files** below).
+     - 💡 **Using the companion add-on, or any URL on your LAN?** A local address like `http://192.168.x.x:8000/zones.json` is private and is **blocked by default** (SSRF protection). Enable **Allow private-network URLs (LAN)** in the same form to permit it — or place the file under `/config` and reference the path instead. This is the most common first-run snag.
    - **Entities**: the `device_tracker.*` entities whose location you want to evaluate against the zones.
    - **Prioritize order of zone files** _(advanced)_: when one position falls inside zones from more than one file, prefer the earlier file in the list.
    - **Download the GeoJSON files** _(advanced)_: download / merge the source URLs into a single local file under `<config>/polygonal_zones/<entry_id>.json`. **Required if you want to mutate zones from automations** via the action services below.
