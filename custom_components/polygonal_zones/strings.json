@@ -10,7 +10,8 @@
           "registered_entities": "Entities",
           "download_zones": "Download the GeoJSON files",
           "expose_coordinates": "Expose GPS coordinates as entity attributes",
-          "allow_private_urls": "Allow private-network URLs (LAN)"
+          "allow_private_urls": "Allow private-network URLs (LAN)",
+          "consent": "I confirm everyone whose device I'm adding has been told it will be location-tracked"
         },
         "data_description": {
           "zone_urls": "Enter the URLs of the GeoJSON files that contain the zones you want to track. This supports both websites and files in the /config directory.",
@@ -18,7 +19,8 @@
           "download_zones": "Use a local GeoJSON file to store the zones in. This will load the above defined files into a single file. The entities will only use this single file to retrieve the zones from. If no GeoJSON files are defined we will create an empty GeoJSON file.",
           "registered_entities": "Select the entities that you want to track in the zones.",
           "expose_coordinates": "When enabled, the mirror entity writes latitude, longitude, and gps_accuracy to its attributes on every update — Home Assistant's recorder then persists a full location history. Disable to publish only the zone name (privacy-first). New installs default to off.",
-          "allow_private_urls": "Turn this on only if your zone source is on your local network — e.g. the companion editor add-on at http://192.168.x.x:8000/zones.json. Public https:// URLs and files in /config work without it. Loopback, link-local, and cloud-metadata addresses stay blocked either way."
+          "allow_private_urls": "Turn this on only if your zone source is on your local network — e.g. the companion editor add-on at http://192.168.x.x:8000/zones.json. Public https:// URLs and files in /config work without it. Loopback, link-local, and cloud-metadata addresses stay blocked either way.",
+          "consent": "This integration continuously records the GPS location of the device_tracker entities you select. Tick to confirm before continuing."
         }
       },
       "reconfigure": {
@@ -47,7 +49,8 @@
       "unreachable_url": "One or more URLs cannot be reached",
       "no_entities": "No entities selected",
       "invalid_path": "The file could not be found",
-      "download_or_no_zones": "Download zones needs to be enabled or links to GeoJSON files need to be defined"
+      "download_or_no_zones": "Download zones needs to be enabled or links to GeoJSON files need to be defined",
+      "consent_required": "Please confirm tracking consent to continue."
     }
   },
   "options": {
@@ -164,6 +167,10 @@
     "zone_load_failed": {
       "title": "Polygonal Zones could not load zones",
       "description": "The integration was unable to load the GeoJSON zone file for `{entity_id}` after several retry attempts. Check that the URL is reachable or the local path is correct, then call the `polygonal_zones.reload_zones` action or reload the integration."
+    },
+    "legacy_expose_coordinates": {
+      "title": "Polygonal Zones is recording GPS coordinates",
+      "description": "The Polygonal Zones entry \"{title}\" was created before the privacy option existed, so it exposes latitude/longitude/accuracy as entity attributes and Home Assistant records a full location history. To stop this, open the integration's options and turn off \"Expose GPS coordinates\"."
     }
   }
 }
