@@ -138,6 +138,12 @@ async def _load_zones_from_uri(
     if not isinstance(data, dict):
         raise ZoneFileCorrupt("top-level payload is not an object")
 
+    # Be at least as strict as the mutation-service validator, which rejects a
+    # non-FeatureCollection. Without this, a payload missing the type member
+    # (e.g. ``{"features": [...]}``) was silently accepted on the load path.
+    if data.get("type") != "FeatureCollection":
+        raise ZoneFileCorrupt("top-level 'type' must be 'FeatureCollection'")
+
     pz = data.get("polygonal_zones")
     if isinstance(pz, dict):
         declared_version = pz.get("schema_version", 1)
