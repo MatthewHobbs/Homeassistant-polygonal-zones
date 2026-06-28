@@ -1,15 +1,23 @@
 import { test, expect } from "@playwright/test";
+import { readFileSync } from "node:fs";
 
 const HA_URL = process.env.HA_URL ?? "http://127.0.0.1:8123";
 
-// Re-seed the auth tokens into localStorage on every page we open. HA's login
-// state lives in localStorage, which Playwright's storageState restores, but
-// we set it defensively here too in case the origin wasn't captured.
+// HA's login state lives in localStorage under `hassTokens`. Relying on
+// Playwright's storageState to carry localStorage proved flaky (it only
+// persists localStorage for origins captured at storageState() time, and the
+// restore raced the frontend bootstrap), so the browser kept landing on the
+// login page. Instead inject the tokens the setup wrote to .auth/tokens.json
+// via addInitScript — that runs BEFORE the HA frontend's scripts on every
+// navigation, so the token is always present when the app reads it. The file is
+// read inside beforeEach (not at module scope) so it exists: the `setup`
+// project dependency has already run by the time the chromium test executes,
+// whereas module scope evaluates during collection, before setup runs.
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
-    // No-op placeholder hook; storageState already carries hassTokens. Kept so
-    // a future token refresh can be injected here without touching each test.
-  });
+  const tokens = readFileSync(".auth/tokens.json", "utf8");
+  await page.addInitScript((t) => {
+    window.localStorage.setItem("hassTokens", t);
+  }, tokens);
   void HA_URL;
 });
 
