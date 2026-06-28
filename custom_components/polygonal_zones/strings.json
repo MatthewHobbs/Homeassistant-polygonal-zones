@@ -14,7 +14,7 @@
         },
         "data_description": {
           "zone_urls": "Enter the URLs of the GeoJSON files that contain the zones you want to track. This supports both websites and files in the /config directory.",
-          "prioritize_zone_files": "If you want to prioritize the order of the zone files, enable this option. This means that if a tracker is in multiple zones it will only consider those with the lowest priority.",
+          "prioritize_zone_files": "When a device is inside zones from more than one file, zones from the file higher in your list win by default. A zone can override this by setting its own priority value.",
           "download_zones": "Use a local GeoJSON file to store the zones in. This will load the above defined files into a single file. The entities will only use this single file to retrieve the zones from. If no GeoJSON files are defined we will create an empty GeoJSON file.",
           "registered_entities": "Select the entities that you want to track in the zones.",
           "expose_coordinates": "When enabled, the mirror entity writes latitude, longitude, and gps_accuracy to its attributes on every update — Home Assistant's recorder then persists a full location history. Disable to publish only the zone name (privacy-first). New installs default to off.",
@@ -34,7 +34,7 @@
         },
         "data_description": {
           "zone_urls": "Enter the URLs of the GeoJSON files that contain the zones you want to track. This supports both websites and files in the /config directory.",
-          "prioritize_zone_files": "If you want to prioritize the order of the zone files, enable this option. This means that if a tracker is in multiple zones it will only consider those with the lowest priority.",
+          "prioritize_zone_files": "When a device is inside zones from more than one file, zones from the file higher in your list win by default. A zone can override this by setting its own priority value.",
           "download_zones": "Use a local GeoJSON file to store the zones in. This will load the above defined files into a single file. The entities will only use this single file to retrieve the zones from. If no GeoJSON files are defined we will create an empty GeoJSON file.",
           "registered_entities": "Select the entities that you want to track in the zones.",
           "expose_coordinates": "When enabled, the mirror entity writes latitude, longitude, and gps_accuracy to its attributes on every update — Home Assistant's recorder then persists a full location history. Disable to publish only the zone name (privacy-first). New installs default to off.",
@@ -64,7 +64,7 @@
         },
         "data_description": {
           "zone_urls": "Enter the URLs of the GeoJSON files that contain the zones you want to track. This supports both websites and files in the /config directory.",
-          "prioritize_zone_files": "If you want to prioritize the order of the zone files, enable this option. This means that if a tracker is in multiple zones it will only consider those with the lowest priority.",
+          "prioritize_zone_files": "When a device is inside zones from more than one file, zones from the file higher in your list win by default. A zone can override this by setting its own priority value.",
           "download_zones": "Use a local GeoJSON file to store the zones in. This will load the above defined files into a single file. The entities will only use this single file to retrieve the zones from. If no GeoJSON files are defined we will create an empty GeoJSON file.",
           "expose_coordinates": "When enabled, the mirror entity writes latitude, longitude, and gps_accuracy to its attributes on every update — Home Assistant's recorder then persists a full location history. Disable to publish only the zone name (privacy-first).",
           "allow_private_urls": "Turn this on only if your zone source is on your local network — e.g. the companion editor add-on at http://192.168.x.x:8000/zones.json. Public https:// URLs and files in /config work without it. Loopback, link-local, and cloud-metadata addresses stay blocked either way."

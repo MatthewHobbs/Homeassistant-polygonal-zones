@@ -6,4 +6,4 @@ Track Home Assistant `device_tracker` entities against custom polygonal zones de
 - Overlapping zones resolved by optional priority.
 - Services for add, edit, delete, and replace-all zone operations.
 
-See the [full installation, configuration, and privacy guide](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones#readme) for details.
+See the [full documentation](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/) (install guide, zone format reference, privacy notice) for details. Source and issue tracker: [GitHub README](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones#readme).

@@ -65,11 +65,12 @@ Each element of `features` is a GeoJSON `Feature`.
 
 ### `properties`
 
-| Property                | Required | Type    | Notes                                                           |
-| ----------------------- | -------- | ------- | --------------------------------------------------------------- |
-| `name`                  | yes      | string  | Non-empty, ≤200 characters. Surfaced as the HA entity state.    |
-| `priority`              | no       | integer | Lower value = higher priority when zones overlap. Default: `0`. |
-| `polygonal_zones_ext.*` | no       | object  | Reserved namespace for additive extensions. Free-form.          |
+| Property                | Required | Type    | Notes                                                                                                                                                                                                                                                        |
+| ----------------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `name`                  | yes      | string  | Non-empty, ≤200 characters. Surfaced as the HA entity state.                                                                                                                                                                                                 |
+| `priority`              | no       | integer | Lower value = higher priority when zones overlap. Default: `0`. When `prioritize_zone_files` is enabled and a feature omits `priority`, the integration assigns the feature's file index as its default instead of `0` — earlier files in your URL list win. |
+| `id`                    | no       | string  | Stable per-zone handle stamped by the editor add-on (a UUID4 hex string). Pass-through only — the integration preserves it through every read-modify-write but does not interpret it. Useful if you build automations that need to survive a zone rename.    |
+| `polygonal_zones_ext.*` | no       | object  | Reserved namespace for additive extensions. Free-form.                                                                                                                                                                                                       |
 
 Unknown keys under `properties` are preserved round-trip but produce a WARNING log so drift is visible. Do **not** add new keys at the top-level `properties` map — put extensions under `properties.polygonal_zones_ext` so the canonical namespace stays small.
 
@@ -77,15 +78,15 @@ Unknown keys under `properties` are preserved round-trip but produce a WARNING l
 
 Applied at read time; the integration rejects anything that exceeds them.
 
-| Limit                                                   | Value     | Source                |
-| ------------------------------------------------------- | --------- | --------------------- |
-| Remote HTTP body                                        | 5 MiB     | `utils/general.py`    |
-| Service-call payload (one Feature or FeatureCollection) | 1 MiB     | `services/helpers.py` |
-| Zone name length                                        | 200 chars | `services/helpers.py` |
-| Features per FeatureCollection                          | 500       | `services/helpers.py` |
-| Total vertices across a FeatureCollection               | 10 000    | `services/helpers.py` |
+| Limit                                                   | Value     | Source                                                  |
+| ------------------------------------------------------- | --------- | ------------------------------------------------------- |
+| Remote HTTP body                                        | 5 MiB     | `utils/general.py`                                      |
+| Service-call payload (one Feature or FeatureCollection) | 1 MiB     | `services/helpers.py`                                   |
+| Zone name length                                        | 200 chars | `services/helpers.py`                                   |
+| Features per FeatureCollection                          | 500       | `utils/limits.py` (`MAX_FEATURES_PER_COLLECTION`)       |
+| Total vertices across all features in a collection      | 10 000    | `utils/limits.py` (`MAX_TOTAL_VERTICES_PER_COLLECTION`) |
 
-The vertex cap defends against event-loop stalls from pathological polygons.
+The vertex cap is a **collection total** — it counts every ring of every polygon in the file combined, not a per-feature limit. It defends against event-loop stalls from large or pathological polygon sets.
 
 ## Versioning rules
 

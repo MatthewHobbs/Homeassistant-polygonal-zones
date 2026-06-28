@@ -12,7 +12,7 @@
 
 This Home Assistant integration lets you define arbitrary polygonal zones from a GeoJSON file and resolve any tracked `device_tracker` entity into the zone it currently sits inside. Use it when the built-in circular HA zones aren't expressive enough — irregular property boundaries, school catchments, neighbourhoods, town centres, etc.
 
-**Status:** stable (v1.9.0). Actively maintained; HACS-ready. Manifest declares `quality_scale: bronze`; the rules for Silver, Gold, and Platinum are implemented and tracked in [`quality_scale.yaml`](custom_components/polygonal_zones/quality_scale.yaml), but a higher tier can only be claimed after a Home Assistant architecture-team review (which happens through the [core-integration submission process](https://developers.home-assistant.io/docs/creating_component_index/), not by self-declaration).
+**Status:** Actively maintained; HACS-ready. Manifest declares `quality_scale: bronze`; the rules for Silver, Gold, and Platinum are implemented and tracked in [`quality_scale.yaml`](custom_components/polygonal_zones/quality_scale.yaml), but a higher tier can only be claimed after a Home Assistant architecture-team review (which happens through the [core-integration submission process](https://developers.home-assistant.io/docs/creating_component_index/), not by self-declaration).
 
 > ℹ️ **Fork Notice**
 >
@@ -20,6 +20,16 @@ This Home Assistant integration lets you define arbitrary polygonal zones from a
 > Development continues here at [MatthewHobbs/Homeassistant-polygonal-zones](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones).
 >
 > Pull requests and contributions are welcome.
+
+## Quick start
+
+1. **Install the editor add-on** (optional but recommended): add the [Polygonal Zones Editor add-on](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon) to your HA Supervisor, start it, and draw your zones. It serves a GeoJSON (a text format for shapes on a map) file at `http://<your-ha-host>:8000/zones.json`.
+2. **Install this integration** via HACS (see the button below) or by copying `custom_components/polygonal_zones/` into your HA config.
+3. **Add the integration**: Settings → Devices & Services → Add Integration → "Polygonal Zones".
+4. **Configure it**: paste your zones URL (or a file path under `/config`), select the `device_tracker` entities to follow, and submit. If you're using a LAN address from the editor add-on, enable **Allow private-network URLs (LAN)** in the advanced options — the integration blocks private addresses by default as an SSRF protection (a protection that stops the server being tricked into fetching internal addresses).
+5. **Done**: each tracked entity now has a mirror `device_tracker.polygonal_zones_*` whose state is the zone name (`Home`, `School`, …) or `away`.
+
+> Need more detail? See [First-time setup](#first-time-setup) below, or the [full install guide](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/install/).
 
 ## Contents
 
@@ -74,7 +84,7 @@ Copy `custom_components/polygonal_zones/` into the `custom_components/` director
    - **Prioritize order of zone files** _(advanced)_: when one position falls inside zones from more than one file, prefer the earlier file in the list.
    - **Download the GeoJSON files** _(advanced)_: download / merge the source URLs into a single local file under `<config>/polygonal_zones/<entry_id>.json`. **Required if you want to mutate zones from automations** via the action services below.
 3. **Submit**. The integration creates one new entity per selected device, named `device_tracker.polygonal_zones_<original_entity>`. The state is the zone name (e.g. `Home`, `School`) or `away` if the device falls outside every zone.
-4. **Verify**: open Developer Tools → States and find `device_tracker.polygonal_zones_*`. The `latitude`, `longitude`, `gps_accuracy`, and `zone_uris` attributes should populate within a few seconds.
+4. **Verify**: open Developer Tools → States and find `device_tracker.polygonal_zones_*`. The `zone_uris`, `source_entity`, `last_load_result`, `last_zones_loaded_at`, and `matched_zones` attributes are always present; `latitude`, `longitude`, and `gps_accuracy` are only present when **Expose GPS coordinates** is enabled (off by default for new installs).
 5. **(Recommended) Exclude the mirror entities from the recorder** to stop Home Assistant's database from accumulating a full coordinate history for every tracked person. In `configuration.yaml`:
 
    ```yaml
@@ -90,14 +100,16 @@ If the entity stays unknown for more than a minute, see [Troubleshooting](#troub
 
 ## Configuration options
 
-| Field                   | Required | Notes                                                                                                                                                            |
-| ----------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `zone_urls`             | yes\*    | List of `http(s)://…` URLs or paths inside `/config`. \*Can be empty if `download_zones` is enabled.                                                             |
-| `prioritize_zone_files` | no       | Prefer earlier files when a position matches zones in multiple files.                                                                                            |
-| `download_zones`        | no       | Materialise the source files into a single editable local file. Required to use the `add_new_zone` / `edit_zone` / `delete_zone` / `replace_all_zones` services. |
-| `entities`              | yes      | `device_tracker.*` entities to evaluate. Selectable from the entity picker.                                                                                      |
+| Field                   | Required | Default (new install)                                                     | Notes                                                                                                                                                            |
+| ----------------------- | -------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `zone_urls`             | yes\*    | —                                                                         | List of `http(s)://…` URLs or paths inside `/config`. \*Can be empty if `download_zones` is enabled.                                                             |
+| `prioritize_zone_files` | no       | off                                                                       | Prefer earlier files when a position matches zones in multiple files.                                                                                            |
+| `download_zones`        | no       | **on** (new installs); **off** when reconfiguring a legacy entry          | Materialise the source files into a single editable local file. Required to use the `add_new_zone` / `edit_zone` / `delete_zone` / `replace_all_zones` services. |
+| `expose_coordinates`    | no       | **off** (new installs); on for entries created before this option existed | Write `latitude`, `longitude`, and `gps_accuracy` to entity attributes on every update. When off, only the zone name is published.                               |
+| `allow_private_urls`    | no       | off                                                                       | Relax the SSRF block for RFC-1918 (private home-network addresses like 192.168.x.x) and similar private ranges. Required when using the add-on's LAN URL.        |
+| `entities`              | yes      | —                                                                         | `device_tracker.*` entities to evaluate. Selectable from the entity picker.                                                                                      |
 
-Re-open the integration's Configure dialog to change `zone_urls` and `prioritize_zone_files` later. To add or remove tracked entities, delete and re-add the integration entry.
+To change any of these settings after setup: Settings → Devices & Services → Polygonal Zones → ⋮ → Reconfigure.
 
 ## Usage
 
@@ -122,7 +134,7 @@ automation:
           message: "Alice has arrived at school"
 ```
 
-The mirror entity also exposes the source coordinates in its attributes (`latitude`, `longitude`, `gps_accuracy`) so templates can read them directly without referencing the underlying tracker.
+The mirror entity always exposes `zone_uris`, `source_entity`, `last_load_result`, `last_zones_loaded_at`, and `matched_zones` in its attributes. When **Expose GPS coordinates** is enabled, `latitude`, `longitude`, and `gps_accuracy` are also written on each update, so templates can read them without referencing the underlying tracker.
 
 ## Use cases
 
@@ -145,13 +157,13 @@ The integration is **push-based**. There is no polling schedule.
 
 ## GeoJSON file format
 
-[GeoJSON](https://geojson.org/) is a standard JSON-based geospatial format. This integration accepts a `FeatureCollection` containing `Feature` objects whose geometry is a `Polygon` or `MultiPolygon`. Other geometry types (`Point`, `LineString`, etc.) are rejected.
+[GeoJSON](https://geojson.org/) is a standard text format for shapes on a map. This integration accepts a `FeatureCollection` containing `Feature` objects whose geometry is a `Polygon` or `MultiPolygon`. Other geometry types (`Point`, `LineString`, etc.) are rejected.
 
 Each Feature must have:
 
 - `properties.name` — display name shown as the entity state.
 - `properties.priority` — _(optional)_ integer, lower number = higher priority when zones overlap and `prioritize_zone_files` is off.
-- `geometry` — `Polygon` or `MultiPolygon` with coordinates in standard GeoJSON `[longitude, latitude]` order.
+- `geometry` — `Polygon` or `MultiPolygon` with coordinates in WGS-84 (standard GPS latitude/longitude) `[longitude, latitude]` order.
 
 For convenience, an optional add-on with a UI editor lives at the [polygonal zones editor repo](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon/):
 
@@ -324,7 +336,7 @@ data:
 - **No 3xx redirects**: HTTP responses with status 300–399 are rejected (the redirect target hasn't been validated by our DNS resolver).
 - **Service mutations require a downloaded local file**: `add_new_zone`, `edit_zone`, `delete_zone`, and `replace_all_zones` are refused with `ZoneFileNotEditable` when the integration is reading directly from a remote URL. Toggle **Download the GeoJSON files** in the integration options to enable mutations.
 - **Single point in time per device**: only the source device's most recent GPS fix is evaluated; history isn't replayed.
-- **Async constraints**: `shapely` and `pandas` are sync compute libraries — geometry math runs on the event loop. For typical home setups (≤20 tracked devices, ≤100 zones) this is imperceptible. Very large zone sets may stall the loop.
+- **Async constraints**: `shapely` is a sync compute library — geometry math runs on the event loop. For typical home setups (≤20 tracked devices, ≤100 zones) this is imperceptible. Very large zone sets may stall the loop.
 
 ## Troubleshooting
 
@@ -380,7 +392,7 @@ This integration processes real-time GPS coordinates of the `device_tracker` ent
 
 What is stored where:
 
-- **Entity state**: the resolved zone name (e.g. `Home`) is the entity state. Latitude, longitude, GPS accuracy, and the source entity are written to the entity's attributes on every update.
+- **Entity state**: the resolved zone name (e.g. `Home`) is the entity state. The source entity, zone URIs, and load-status fields are always written to entity attributes. Latitude, longitude, and GPS accuracy are only written when **Expose GPS coordinates** is enabled (off by default for new installs).
 - **Recorder history**: by default Home Assistant's recorder will persist these attributes, which means a full location history of tracked devices accumulates in the HA database unless you exclude it.
 - **Zone files**: when `download_zones` is enabled, the integration writes a GeoJSON file under `<config>/polygonal_zones/<entry_id>.json` with mode `0600` inside a directory with mode `0700`.
 - **Outbound requests**: when `zone_urls` points at an http(s) URL, the integration fetches it from your HA instance. The server hosting the GeoJSON learns your public IP. Private, loopback, and link-local addresses are rejected to prevent SSRF.
@@ -408,7 +420,7 @@ Note that any person whose `device_tracker` entity you select will have their lo
 A tracked person may ask for their location data to be removed. The steps:
 
 1. **Remove the source entity from the integration.** Settings → Devices & Services → Polygonal Zones → Configure → untick the entity; save. The mirror entity is deleted automatically.
-2. **Purge their history from the recorder DB.** Developer Tools → Services → `recorder.purge_entities` with:
+2. **Purge their history from the recorder DB.** Developer Tools → Actions → `recorder.purge_entities` with:
    ```yaml
    entity_id:
      - device_tracker.polygonal_zones_<original>
