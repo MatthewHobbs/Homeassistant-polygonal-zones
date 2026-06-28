@@ -68,11 +68,14 @@ def get_distance_to_exterior_points(polygon: Polygon | MultiPolygon, point: Poin
     Accepts ``Polygon`` and ``MultiPolygon`` (the latter previously raised
     ``AttributeError`` here, crashing zone tie-breaking).
 
-    Uses ``(point.x, point.y)`` directly (which in shapely terms is ``(lon, lat)``
-    for GeoJSON-convention polygons) to preserve the exact numerics of the prior
-    numpy implementation.
+    shapely stores GeoJSON coordinates as ``(x, y) = (lon, lat)``, but
+    ``_haversine_metres`` expects ``(lat, lon)`` pairs — so pass ``point.y``
+    (lat) before ``point.x`` (lon), and likewise ``y`` before ``x`` for each
+    exterior vertex. (The earlier code passed them lon-first, producing
+    incorrect great-circle distances that skewed tie-breaking, worst near the
+    poles.)
     """
-    return min(_haversine_metres(point.x, point.y, x, y) for x, y in exterior_coords(polygon))
+    return min(_haversine_metres(point.y, point.x, y, x) for x, y in exterior_coords(polygon))
 
 
 def get_distance_to_centroid(polygon: Polygon | MultiPolygon, point: Point) -> float:
@@ -80,6 +83,9 @@ def get_distance_to_centroid(polygon: Polygon | MultiPolygon, point: Point) -> f
 
     ``.centroid`` is defined for ``MultiPolygon`` too, so no special-casing is
     needed here.
+
+    Passes ``(lat, lon)`` to ``_haversine_metres`` (i.e. ``.y`` before ``.x``);
+    shapely's ``.x``/``.y`` are lon/lat for GeoJSON coordinates.
     """
     centroid = polygon.centroid
-    return _haversine_metres(point.x, point.y, centroid.x, centroid.y)
+    return _haversine_metres(point.y, point.x, centroid.y, centroid.x)
