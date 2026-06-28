@@ -50,11 +50,22 @@ setup("boot HA, onboard, and persist auth", async ({ browser }) => {
   const tokens = await tokenRes.json();
 
   // 3) Finish the remaining onboarding steps so the UI lands on the normal
-  //    dashboard rather than the wizard. Best-effort: a non-200 here is not
-  //    fatal to the smoke test, so we don't assert.
+  //    dashboard rather than the wizard. The `integration` step is the one that
+  //    actually marks onboarding COMPLETE — without it HA keeps redirecting the
+  //    frontend back to /onboarding, so /config/integrations never renders and
+  //    the "Add integration" button is never found (the original flake). We
+  //    assert it; core_config/analytics stay best-effort.
   const auth = { Authorization: `Bearer ${tokens.access_token}` };
   await api.post(`${HA_URL}/api/onboarding/core_config`, { headers: auth, data: {} });
   await api.post(`${HA_URL}/api/onboarding/analytics`, { headers: auth, data: {} });
+  const integrationRes = await api.post(`${HA_URL}/api/onboarding/integration`, {
+    headers: auth,
+    data: { client_id: CLIENT_ID, redirect_uri: `${HA_URL}/?auth_callback=1` }
+  });
+  expect(
+    integrationRes.ok(),
+    `onboarding/integration failed: ${await integrationRes.text()}`
+  ).toBeTruthy();
 
   // 4) Seed the tokens into localStorage the way the HA frontend stores them,
   //    so the browser context is logged in without driving the login form.

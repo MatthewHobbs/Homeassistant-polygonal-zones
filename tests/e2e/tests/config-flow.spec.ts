@@ -14,13 +14,26 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("Polygonal Zones appears in the Add Integration dialog", async ({ page }) => {
-  // Deep-link straight into the integrations page to avoid depending on the
+  // Land on the app root first so the frontend bundle hydrates and the
+  // websocket authenticates against the seeded token. Going straight to a deep
+  // panel on a cold instance can race the auth/bootstrap and bounce to
+  // /onboarding or /auth, after which the "Add integration" button never
+  // appears — wait for the top-level <home-assistant> shell before navigating.
+  await page.goto("/");
+  await expect(page.locator("home-assistant")).toBeAttached({ timeout: 30_000 });
+  // If onboarding/auth didn't complete we'd be parked on those routes; fail
+  // fast with a clear message instead of a generic button-not-found timeout.
+  await expect(page, "redirected away from the app — auth/onboarding incomplete")
+    .not.toHaveURL(/\/(onboarding|auth)\b/, { timeout: 30_000 });
+
+  // Now deep-link into the integrations page. Avoid depending on the
   // sidebar/dashboard layout, which changes between HA frontend versions.
   await page.goto("/config/integrations/dashboard");
 
   // The HA frontend is a deep web-component tree; getByRole pierces shadow DOM.
+  // Allow extra time on the first cold render of this panel.
   const addButton = page.getByRole("button", { name: /add integration/i });
-  await expect(addButton).toBeVisible();
+  await expect(addButton).toBeVisible({ timeout: 30_000 });
   await addButton.click();
 
   // The Add Integration dialog has a search box; type the integration name.
