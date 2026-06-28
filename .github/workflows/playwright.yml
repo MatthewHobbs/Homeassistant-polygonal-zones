@@ -8,12 +8,15 @@ name: Playwright config-flow smoke
 # real UI).
 #
 # It is heavyweight (full HA boot + Chromium) and not wired into branch
-# protection, so it can NEVER block a merge. It runs nightly and on demand.
+# protection, so it can NEVER block a merge. It runs nightly, on demand, and on
+# pull requests (as a non-blocking, continue-on-error signal so a config-flow
+# regression surfaces same-day instead of in the next nightly run).
 # The first runs are expected to need tuning — see tests/e2e/README.md.
 
 on:
   schedule:
     - cron: "30 3 * * *"
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -23,6 +26,10 @@ jobs:
   config-flow:
     name: Config flow (Playwright)
     runs-on: ubuntu-latest
+    # Non-blocking on PRs only: this heavyweight smoke must never fail a PR (it
+    # is not a required check). Scheduled/manual runs keep failing visibly so
+    # the nightly signal isn't lost.
+    continue-on-error: ${{ github.event_name == 'pull_request' }}
     env:
       HA_URL: "http://127.0.0.1:8123"
     steps:
