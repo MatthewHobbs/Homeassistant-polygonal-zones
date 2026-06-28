@@ -73,4 +73,6 @@ The `validate.yml` workflow runs: `hassfest`, `HACS`, `Ruff (lint + format)`, `P
 
 ## Translations
 
-The non-EN translation files (`de`, `fr`, `es`, `nl`, `it`) under `custom_components/polygonal_zones/translations/` were machine-generated as a starting point. Native-speaker corrections via PR are very welcome — just edit the JSON and open a PR.
+Only English ships today: `strings.json` (the source) and `translations/en.json`. The earlier machine-generated `de`/`fr`/`es`/`nl`/`it` files were removed — an incorrect machine translation in a visible error message is worse than the English fallback. Home Assistant automatically falls back to English for any language without a file, so nothing is broken by their absence.
+
+To contribute a language: copy `translations/en.json` to `translations/<lang>.json`, translate the user-facing values (keep the JSON keys and any `{placeholders}` unchanged), and open a PR. Native-speaker translations are very welcome.
