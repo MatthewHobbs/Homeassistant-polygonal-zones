@@ -13,7 +13,11 @@ from homeassistant.core import Event, HomeAssistant, State
 _LOGGER = logging.getLogger(__name__)
 
 MAX_RESPONSE_BYTES = 5 * 1024 * 1024
-FETCH_TIMEOUT = aiohttp.ClientTimeout(total=10)
+# Sub-timeouts as well as the overall budget: a slow TLS handshake or a
+# server that dribbles the body must not consume the whole 10s window and
+# starve the retry budget. connect caps the handshake; sock_read caps any
+# single read stall.
+FETCH_TIMEOUT = aiohttp.ClientTimeout(total=10, connect=5, sock_read=8)
 
 
 def safe_config_path(config_dir: str, user_path: str) -> Path:
