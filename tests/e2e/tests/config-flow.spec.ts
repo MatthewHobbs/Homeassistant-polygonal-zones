@@ -48,6 +48,11 @@ test("Polygonal Zones appears in the Add Integration dialog", async ({ page }) =
   const search = page.getByRole("textbox").first();
   await search.fill("Polygonal Zones");
 
-  // The integration must be discoverable by its manifest `name`.
-  await expect(page.getByText("Polygonal Zones", { exact: false })).toBeVisible();
+  // The integration must be discoverable by its manifest `name`. The dialog
+  // builds the full integration list on first open — a cold WS fetch that can
+  // exceed the 15s default in CI (it passed only on the warm retry otherwise) —
+  // so give it the same 30s budget as the earlier steps.
+  await expect(page.getByText("Polygonal Zones", { exact: false })).toBeVisible({
+    timeout: 30_000
+  });
 });
