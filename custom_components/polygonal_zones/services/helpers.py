@@ -11,17 +11,19 @@ from homeassistant.helpers import device_registry as dr
 
 from ..const import DOMAIN
 from ..device_tracker import PolygonalZoneEntity
+from ..utils.limits import (
+    MAX_FEATURES_PER_COLLECTION,
+    MAX_TOTAL_VERTICES_PER_COLLECTION,
+)
+from ..utils.limits import (
+    count_geometry_vertices as _count_geometry_vertices,
+)
 from .errors import InvalidZoneData, RateLimited
 
 _LOGGER = logging.getLogger(__name__)
 
 MAX_ZONE_JSON_BYTES = 1_048_576
 MAX_ZONE_NAME_LEN = 200
-MAX_FEATURES_PER_COLLECTION = 500
-# Total vertex count across every ring of every polygon in the collection.
-# Caps event-loop stall time inside shapely.buffer()/.intersects() on each
-# state_changed — a 1 MiB JSON file can otherwise encode ~50k vertices.
-MAX_TOTAL_VERTICES_PER_COLLECTION = 10_000
 SUPPORTED_GEOMETRY_TYPES = {"Polygon", "MultiPolygon"}
 # Declared top-level feature property keys. Anything else is preserved through
 # round-trip but logged at WARNING so drift is visible. New producer-specific
@@ -80,29 +82,6 @@ def audit_mutation_call(call: ServiceCall, service_name: str, entry_id: str) -> 
         user_id or "<automation/system>",
         entry_id,
     )
-
-
-def _count_geometry_vertices(geometry: dict) -> int:
-    """Sum the vertex count across every ring of a Polygon / MultiPolygon.
-
-    Walks the ``coordinates`` tree instead of calling into shapely so the cap
-    can be enforced before geometry construction, which is the expensive step
-    we are trying to keep off the event loop.
-    """
-    coordinates = geometry.get("coordinates")
-    if not isinstance(coordinates, list):
-        return 0
-
-    polygons = [coordinates] if geometry.get("type") == "Polygon" else coordinates
-
-    total = 0
-    for polygon in polygons:
-        if not isinstance(polygon, list):
-            continue
-        for ring in polygon:
-            if isinstance(ring, list):
-                total += len(ring)
-    return total
 
 
 def _validate_feature(feature: object) -> None:

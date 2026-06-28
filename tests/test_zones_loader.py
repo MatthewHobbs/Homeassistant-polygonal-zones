@@ -19,6 +19,16 @@ from custom_components.polygonal_zones.utils.zones import (
 )
 
 
+async def _run_executor_job(func, *args):
+    """Inline stand-in for hass.async_add_executor_job (runs the func directly)."""
+    return func(*args)
+
+
+def _make_hass() -> SimpleNamespace:
+    """Minimal hass stub: the loader offloads parsing via async_add_executor_job."""
+    return SimpleNamespace(async_add_executor_job=_run_executor_job)
+
+
 def _polygon(name: str, priority: int | None = None) -> dict:
     feature = {
         "type": "Feature",
@@ -45,7 +55,7 @@ async def test_get_zones_parses_feature_collection() -> None:
         "custom_components.polygonal_zones.utils.zones.load_data",
         new=AsyncMock(return_value=payload),
     ):
-        zones = await get_zones(["http://example.com/zones.json"], SimpleNamespace(), False)
+        zones = await get_zones(["http://example.com/zones.json"], _make_hass(), False)
 
     assert len(zones) == 2
     assert {z.name for z in zones} == {"Home", "Work"}
@@ -67,7 +77,7 @@ async def test_get_zones_prioritise_uses_file_index() -> None:
     ):
         zones = await get_zones(
             ["http://example.com/a.json", "http://example.com/b.json"],
-            SimpleNamespace(),
+            _make_hass(),
             True,
         )
 
@@ -117,7 +127,7 @@ async def test_prioritize_file_index_resolves_overlapping_point_to_file_0() -> N
     ):
         zones = await get_zones(
             ["http://example.com/primary.json", "http://example.com/backup.json"],
-            SimpleNamespace(),
+            _make_hass(),
             True,
         )
 
@@ -163,7 +173,7 @@ def test_get_zones_empty_uri_list_returns_empty_list() -> None:
     """Edge case: zero URIs → empty list, not a crash."""
 
     async def _go():
-        return await get_zones([], SimpleNamespace(), False)
+        return await get_zones([], _make_hass(), False)
 
     zones = asyncio.run(_go())
     assert zones == []
@@ -176,7 +186,7 @@ async def test_get_zones_accepts_missing_schema_version() -> None:
         "custom_components.polygonal_zones.utils.zones.load_data",
         new=AsyncMock(return_value=payload),
     ):
-        zones = await get_zones(["http://x"], SimpleNamespace(), False)
+        zones = await get_zones(["http://x"], _make_hass(), False)
     assert zones[0].name == "Home"
 
 
@@ -192,7 +202,7 @@ async def test_get_zones_accepts_known_schema_version() -> None:
         "custom_components.polygonal_zones.utils.zones.load_data",
         new=AsyncMock(return_value=payload),
     ):
-        zones = await get_zones(["http://x"], SimpleNamespace(), False)
+        zones = await get_zones(["http://x"], _make_hass(), False)
     assert zones[0].name == "Home"
 
 
@@ -226,7 +236,7 @@ async def test_parse_serialize_roundtrip_preserves_extra_properties() -> None:
         "custom_components.polygonal_zones.utils.zones.load_data",
         new=AsyncMock(return_value=source),
     ):
-        first = await get_zones(["http://x"], SimpleNamespace(), False)
+        first = await get_zones(["http://x"], _make_hass(), False)
 
     serialized = zones_to_geojson(first)
 
@@ -234,7 +244,7 @@ async def test_parse_serialize_roundtrip_preserves_extra_properties() -> None:
         "custom_components.polygonal_zones.utils.zones.load_data",
         new=AsyncMock(return_value=serialized),
     ):
-        second = await get_zones(["http://x"], SimpleNamespace(), False)
+        second = await get_zones(["http://x"], _make_hass(), False)
 
     assert second[0].properties["description"] == "front door"
     assert second[0].properties["polygonal_zones_ext"] == {"color": "#f00"}
@@ -256,7 +266,7 @@ async def test_get_zones_rejects_future_schema_version() -> None:
         ),
         pytest.raises(UnsupportedSchemaVersion, match="schema_version=99"),
     ):
-        await get_zones(["http://x"], SimpleNamespace(), False)
+        await get_zones(["http://x"], _make_hass(), False)
 
 
 # ---------- Structural validation: _parse_feature via _load_zones_from_uri ----------
@@ -271,7 +281,7 @@ async def test_get_zones_rejects_top_level_not_object() -> None:
         ),
         pytest.raises(ZoneFileCorrupt, match="top-level payload is not an object"),
     ):
-        await get_zones(["http://x"], SimpleNamespace(), False)
+        await get_zones(["http://x"], _make_hass(), False)
 
 
 async def test_get_zones_rejects_non_json_body() -> None:
@@ -282,7 +292,7 @@ async def test_get_zones_rejects_non_json_body() -> None:
         ),
         pytest.raises(ZoneFileCorrupt, match="not valid JSON"),
     ):
-        await get_zones(["http://x"], SimpleNamespace(), False)
+        await get_zones(["http://x"], _make_hass(), False)
 
 
 async def test_get_zones_rejects_missing_features_list() -> None:
@@ -294,7 +304,7 @@ async def test_get_zones_rejects_missing_features_list() -> None:
         ),
         pytest.raises(ZoneFileCorrupt, match="'features' is missing"),
     ):
-        await get_zones(["http://x"], SimpleNamespace(), False)
+        await get_zones(["http://x"], _make_hass(), False)
 
 
 async def test_get_zones_rejects_feature_missing_geometry() -> None:
@@ -307,7 +317,7 @@ async def test_get_zones_rejects_feature_missing_geometry() -> None:
         ),
         pytest.raises(ZoneFileCorrupt, match="no 'geometry' object"),
     ):
-        await get_zones(["http://x"], SimpleNamespace(), False)
+        await get_zones(["http://x"], _make_hass(), False)
 
 
 async def test_get_zones_rejects_feature_blank_name() -> None:
@@ -324,7 +334,7 @@ async def test_get_zones_rejects_feature_blank_name() -> None:
         ),
         pytest.raises(ZoneFileCorrupt, match=r"properties\.name"),
     ):
-        await get_zones(["http://x"], SimpleNamespace(), False)
+        await get_zones(["http://x"], _make_hass(), False)
 
 
 async def test_get_zones_rejects_feature_unparseable_priority() -> None:
@@ -341,7 +351,7 @@ async def test_get_zones_rejects_feature_unparseable_priority() -> None:
         ),
         pytest.raises(ZoneFileCorrupt, match="non-integer priority"),
     ):
-        await get_zones(["http://x"], SimpleNamespace(), False)
+        await get_zones(["http://x"], _make_hass(), False)
 
 
 # ---------- Per-URI partial success via load_zones ----------
@@ -361,7 +371,7 @@ async def test_load_zones_partial_success_keeps_successful_uris() -> None:
         "custom_components.polygonal_zones.utils.zones.load_data",
         side_effect=fake_load,
     ):
-        result = await load_zones(["http://good", "http://bad"], SimpleNamespace(), False)
+        result = await load_zones(["http://good", "http://bad"], _make_hass(), False)
 
     assert [z.name for z in result.zones] == ["Home"]
     assert len(result.failures) == 1
@@ -380,7 +390,7 @@ async def test_load_zones_all_fail_returns_empty_with_failures() -> None:
         "custom_components.polygonal_zones.utils.zones.load_data",
         side_effect=fake_load,
     ):
-        result = await load_zones(["http://a", "http://b"], SimpleNamespace(), False)
+        result = await load_zones(["http://a", "http://b"], _make_hass(), False)
 
     assert result.zones == []
     assert {uri for uri, _ in result.failures} == {"http://a", "http://b"}
@@ -399,7 +409,7 @@ async def test_get_zones_raises_when_all_uris_fail() -> None:
         ),
         pytest.raises(ZoneFileCorrupt, match="All 2 zone URIs failed"),
     ):
-        await get_zones(["http://a", "http://b"], SimpleNamespace(), False)
+        await get_zones(["http://a", "http://b"], _make_hass(), False)
 
 
 async def test_load_zones_unsupported_schema_propagates_as_hard_error() -> None:
@@ -418,4 +428,4 @@ async def test_load_zones_unsupported_schema_propagates_as_hard_error() -> None:
         ),
         pytest.raises(UnsupportedSchemaVersion),
     ):
-        await load_zones(["http://x"], SimpleNamespace(), False)
+        await load_zones(["http://x"], _make_hass(), False)
