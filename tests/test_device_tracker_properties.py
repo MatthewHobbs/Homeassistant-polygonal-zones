@@ -89,6 +89,7 @@ async def test_async_setup_entry_no_download(hass_with_setup) -> None:
         data={
             "zone_urls": ["https://example.com/zones.json"],
             "entities": ["device_tracker.alice", "device_tracker.bob"],
+            "expose_coordinates": True,
         },
     )
 
@@ -103,6 +104,10 @@ async def test_async_setup_entry_no_download(hass_with_setup) -> None:
             "custom_components.polygonal_zones.device_tracker.generate_entity_id",
             side_effect=lambda fmt, name, hass=None: fmt.format(name),
         ),
+        # modern entry (expose_coordinates present) → setup clears any legacy
+        # privacy issue via ir.async_delete_issue; patch it (stub hass has no
+        # issue registry).
+        patch("custom_components.polygonal_zones.device_tracker.ir.async_delete_issue"),
     ):
         await async_setup_entry(hass, entry, add_entities)
 
@@ -110,6 +115,42 @@ async def test_async_setup_entry_no_download(hass_with_setup) -> None:
     entities = add_entities.call_args.args[0]
     assert len(entities) == 2
     assert entry.runtime_data.entities == entities
+
+
+async def test_async_setup_entry_legacy_entry_raises_expose_coordinates_issue(
+    hass_with_setup,
+) -> None:
+    """A legacy entry with no expose_coordinates key raises a privacy repair issue."""
+    from custom_components.polygonal_zones import PolygonalZonesData
+
+    hass, platform = hass_with_setup
+    entry = SimpleNamespace(
+        entry_id="entry-legacy",
+        title="Legacy",
+        runtime_data=PolygonalZonesData(),
+        data={
+            "zone_urls": ["https://example.com/zones.json"],
+            "entities": ["device_tracker.alice"],
+        },  # no expose_coordinates key -> legacy default True
+    )
+    add_entities = MagicMock()
+    with (
+        patch(
+            "custom_components.polygonal_zones.device_tracker.entity_platform.async_get_current_platform",
+            return_value=platform,
+        ),
+        patch(
+            "custom_components.polygonal_zones.device_tracker.generate_entity_id",
+            side_effect=lambda fmt, name, hass=None: fmt.format(name),
+        ),
+        patch(
+            "custom_components.polygonal_zones.device_tracker.ir.async_create_issue"
+        ) as create_issue,
+    ):
+        await async_setup_entry(hass, entry, add_entities)
+
+    create_issue.assert_called_once()
+    assert create_issue.call_args.args[2] == "legacy_expose_coordinates_entry-legacy"
 
 
 async def test_async_setup_entry_download_creates_local_path(hass_with_setup, tmp_path) -> None:
@@ -127,6 +168,7 @@ async def test_async_setup_entry_download_creates_local_path(hass_with_setup, tm
             "zone_urls": ["https://example.com/zones.json"],
             "entities": ["device_tracker.alice"],
             "download_zones": True,
+            "expose_coordinates": True,
         },
     )
 
@@ -145,6 +187,9 @@ async def test_async_setup_entry_download_creates_local_path(hass_with_setup, tm
             "custom_components.polygonal_zones.device_tracker.download_zones",
             new=AsyncMock(),
         ) as download_mock,
+        # modern entry → setup clears any legacy privacy issue (stub hass has
+        # no issue registry, so patch the delete call).
+        patch("custom_components.polygonal_zones.device_tracker.ir.async_delete_issue"),
     ):
         await async_setup_entry(hass, entry, add_entities)
 

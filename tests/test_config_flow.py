@@ -139,7 +139,23 @@ async def test_config_flow_invalid_url_renders_form_with_errors(tmp_path) -> Non
     result = await flow.async_step_user({"zone_urls": ["ftp://nope"], "entities": []})
     assert result == {"type": "form"}
     args = flow.async_show_form.call_args.kwargs
-    assert args["errors"] == {"zone_urls": "invalid_url"}
+    # Invalid URL plus the unticked consent checkbox both surface as errors.
+    assert args["errors"] == {"zone_urls": "invalid_url", "consent": "consent_required"}
+
+
+async def test_config_flow_requires_consent(tmp_path) -> None:
+    """A valid form without the consent checkbox ticked is refused."""
+    flow = ConfigFlow()
+    flow.hass = _hass(tmp_path)
+    flow.async_show_form = MagicMock(return_value={"type": "form"})
+    flow.async_create_entry = MagicMock(return_value={"type": "create_entry"})
+
+    result = await flow.async_step_user(
+        {"zone_urls": ["https://example.com/x.json"], "entities": ["device_tracker.x"]}
+    )
+    assert result == {"type": "form"}
+    assert flow.async_show_form.call_args.kwargs["errors"]["consent"] == "consent_required"
+    flow.async_create_entry.assert_not_called()
 
 
 async def test_config_flow_valid_input_creates_entry(tmp_path) -> None:
@@ -149,11 +165,17 @@ async def test_config_flow_valid_input_creates_entry(tmp_path) -> None:
     flow.async_create_entry = MagicMock(return_value={"type": "create_entry"})
 
     result = await flow.async_step_user(
-        {"zone_urls": ["https://example.com/x.json"], "entities": ["device_tracker.x"]}
+        {
+            "zone_urls": ["https://example.com/x.json"],
+            "entities": ["device_tracker.x"],
+            "consent": True,
+        }
     )
 
     assert result == {"type": "create_entry"}
     flow.async_create_entry.assert_called_once()
+    # consent is a gate, not a stored setting
+    assert "consent" not in flow.async_create_entry.call_args.kwargs["data"]
 
 
 async def test_options_flow_invalid_url_renders_form(tmp_path) -> None:

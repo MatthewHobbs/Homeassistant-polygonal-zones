@@ -269,7 +269,7 @@ The integration continuously processes real-time GPS coordinates of the tracked 
         - device_tracker.polygonal_zones_*
   ```
 
-- **Consent**: any person whose `device_tracker` entity you select will have their location continuously monitored. Make sure they are aware before tracking them.
+- **Consent**: any person whose `device_tracker` entity you select will have their location continuously monitored. Setup requires you to tick a confirmation that everyone being tracked has been told — make sure that's true before you do.
 
 Full privacy details (logging, outbound requests, cloud-backup GDPR note, deletion/right-to-erasure steps): [matthewhobbs.github.io/Homeassistant-polygonal-zones/privacy/](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/privacy/)
 
@@ -278,9 +278,7 @@ Full privacy details (logging, outbound requests, cloud-backup GDPR note, deleti
 Open work items are tracked as [GitHub issues](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues). Current themes:
 
 - **[Submit to Home Assistant core for a reviewed quality scale tier](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/23)** — the Silver/Gold/Platinum rules are implemented (see [`quality_scale.yaml`](custom_components/polygonal_zones/quality_scale.yaml)), but a tier above `bronze` requires Home Assistant architecture-team review via core submission. Deferred until there's adoption evidence; it trades HACS autonomy for a reviewed tier.
-- **[Privacy hardening](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/18)** — make tracking consent an explicit opt-in and notify legacy installs about coordinate recording.
 - **[Test coverage gaps](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/19)** — SSRF-wiring end-to-end test, cross-repo zone-format conformance, Playwright on PRs.
-- **[Security hardening](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/20)** — symlink guard on the zone-file write.
 - **[Distance-accuracy decision](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/21)** — the haversine latitude/longitude argument order.
 
 Editor add-on work (mobile UX, base-image currency, CI) is tracked in the [add-on repo's issues](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon/issues).

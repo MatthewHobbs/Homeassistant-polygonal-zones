@@ -5,7 +5,8 @@
       "invalid_path": "The file could not be found",
       "invalid_url": "One or more URLs or file paths are invalid",
       "no_entities": "No entities selected",
-      "unreachable_url": "One or more URLs cannot be reached"
+      "unreachable_url": "One or more URLs cannot be reached",
+      "consent_required": "Please confirm tracking consent to continue."
     },
     "step": {
       "reconfigure": {
@@ -31,6 +32,7 @@
       "user": {
         "data": {
           "allow_private_urls": "Allow private-network URLs (LAN)",
+          "consent": "I confirm everyone whose device I'm adding has been told it will be location-tracked",
           "download_zones": "Download the GeoJSON files",
           "expose_coordinates": "Expose GPS coordinates as entity attributes",
           "prioritize_zone_files": "Prioritize order of zone files",
@@ -39,6 +41,7 @@
         },
         "data_description": {
           "allow_private_urls": "Turn this on only if your zone source is on your local network — e.g. the companion editor add-on at http://192.168.x.x:8000/zones.json. Public https:// URLs and files in /config work without it. Loopback, link-local, and cloud-metadata addresses stay blocked either way.",
+          "consent": "This integration continuously records the GPS location of the device_tracker entities you select. Tick to confirm before continuing.",
           "download_zones": "Use a local GeoJSON file to store the zones in. This will load the above defined files into a single file. The entities will only use this single file to retrieve the zones from. If no GeoJSON files are defined we will create an empty GeoJSON file.",
           "expose_coordinates": "When enabled, the mirror entity writes latitude, longitude, and gps_accuracy to its attributes on every update — Home Assistant's recorder then persists a full location history. Disable to publish only the zone name (privacy-first). New installs default to off.",
           "prioritize_zone_files": "When a device is inside zones from more than one file, zones from the file higher in your list win by default. A zone can override this by setting its own priority value.",
@@ -164,6 +167,10 @@
     "zone_load_failed": {
       "title": "Polygonal Zones could not load zones",
       "description": "The integration was unable to load the GeoJSON zone file for `{entity_id}` after several retry attempts. Check that the URL is reachable or the local path is correct, then call the `polygonal_zones.reload_zones` action or reload the integration."
+    },
+    "legacy_expose_coordinates": {
+      "title": "Polygonal Zones is recording GPS coordinates",
+      "description": "The Polygonal Zones entry \"{title}\" was created before the privacy option existed, so it exposes latitude/longitude/accuracy as entity attributes and Home Assistant records a full location history. To stop this, open the integration's options and turn off \"Expose GPS coordinates\"."
     }
   }
 }
