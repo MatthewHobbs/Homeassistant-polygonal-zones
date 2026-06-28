@@ -32,9 +32,9 @@ The integration continuously monitors the GPS position of every `device_tracker`
 This option controls whether latitude, longitude, and GPS accuracy are written to entity attributes on each update.
 
 - **New installs** default this to **off** — only the zone name is published.
-- **Existing installs** that were created before this option was added keep their old default of **on**, for backwards compatibility. If you upgraded from an earlier version, check your setting under **Settings → Devices & Services → Polygonal Zones → Configure → Advanced options**.
+- **Existing installs** that were created before this option was added keep their old default of **on**, for backwards compatibility. If you upgraded from an earlier version, check your setting under **Settings → Devices & Services → Polygonal Zones → ⋮ → Reconfigure**.
 
-When `Expose GPS coordinates` is **on**, Home Assistant's recorder accumulates a full location history for every tracked person in its SQLite database (including backups). To disable coordinate exposure, re-open the integration's Configure dialog and un-tick the option.
+When `Expose GPS coordinates` is **on**, Home Assistant's recorder accumulates a full location history for every tracked person in its SQLite database (including backups). To disable coordinate exposure, re-open the integration (⋮ → Reconfigure) and un-tick the option.
 
 ### Recorder history
 
@@ -51,7 +51,7 @@ Restart Home Assistant after adding it.
 
 ### Tracking other people
 
-Any person whose `device_tracker` entity you select will have their location continuously monitored. If that includes people other than yourself — household members, children — please make sure they are aware and have agreed to it before you add their device.
+Any person whose `device_tracker` entity you select will have their location continuously monitored. If that includes people other than yourself — household members, children — please make sure they are aware and have agreed to it before you add their device. The setup form makes this explicit: it requires you to tick a confirmation ("everyone whose device I'm adding has been told it will be location-tracked") before it will continue. Don't tick it until that's actually true.
 
 ### Outbound requests
 
@@ -91,7 +91,7 @@ Your `zones.json` file contains the precise polygon coordinates of every place y
 
 If a tracked person asks for their location data to be removed:
 
-1. **Remove the entity from the integration.** Settings → Devices & Services → Polygonal Zones → Configure → untick their entity → Save. The mirror entity is deleted automatically.
+1. **Remove the entity from the integration.** Settings → Devices & Services → Polygonal Zones → ⋮ → Reconfigure → untick their entity → Save. The mirror entity is deleted automatically.
 2. **Purge recorder history.** Developer Tools → Actions → `recorder.purge_entities`:
    ```yaml
    entity_id:

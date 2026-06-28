@@ -26,7 +26,7 @@ This Home Assistant integration lets you define arbitrary polygonal zones from a
 1. **Install the editor add-on** (optional but recommended): add the [Polygonal Zones Editor add-on](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon) to your HA Supervisor, start it, and draw your zones. It serves a GeoJSON (a text format for shapes on a map) file at `http://<your-ha-host>:8000/zones.json`.
 2. **Install this integration** via HACS (see the button below) or by copying `custom_components/polygonal_zones/` into your HA config.
 3. **Add the integration**: Settings → Devices & Services → Add Integration → "Polygonal Zones".
-4. **Configure it**: paste your zones URL (or a file path under `/config`), select the `device_tracker` entities to follow, and submit. If you're using a LAN address from the editor add-on, enable **Allow private-network URLs (LAN)** in the advanced options — the integration blocks private addresses by default as an SSRF protection (a protection that stops the server being tricked into fetching internal addresses).
+4. **Configure it**: paste your zones URL (or a file path under `/config`), select the `device_tracker` entities to follow, and tick the box confirming everyone whose device you're adding knows they'll be location-tracked (the form won't continue without it). If you're using a LAN address from the editor add-on, enable **Allow private-network URLs (LAN)** in the advanced options — the integration blocks private addresses by default as an SSRF protection (a protection that stops the server being tricked into fetching internal addresses).
 5. **Done**: each tracked entity now has a mirror `device_tracker.polygonal_zones_*` whose state is the zone name (`Home`, `School`, …) or `away`.
 
 > Need more detail? See the [full install guide](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/install/).
@@ -56,6 +56,8 @@ This integration is one half of a paired system. The other half is the **[Polygo
 If you're setting up for the first time, install the add-on first: it gives you a URL (`http://<your-ha-host>:8000/zones.json`) to paste into the integration's `zone_urls` field. See the [full install guide](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/install/) for a step-by-step walkthrough of both.
 
 ## Installation
+
+**Requirements:** Home Assistant 2026.6.4 or later (it runs on Python 3.14, which is bundled with HA OS/Supervised — so there's nothing extra to install there).
 
 [![Add to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=MatthewHobbs&repository=Homeassistant-polygonal-zones&category=integration)
 
@@ -287,7 +289,7 @@ If you rely on this integration, please consider getting involved:
 
 - **Found a bug or have an idea?** Open an issue — clear reproduction steps or a concrete use case make a big difference.
 - **Comfortable with Python?** Pull requests are very welcome, whether that's a small fix, a test, or a new feature. Smaller, focused PRs are easier to review and merge.
-- **Not a coder?** Help with documentation, translations, or triaging issues is just as valuable. The non-English translation files under `custom_components/polygonal_zones/translations/` (`de`, `fr`, `es`, `nl`, `it`) were machine-generated as a starting point — native-speaker corrections via PR are very welcome.
+- **Not a coder?** Help with documentation, translations, or triaging issues is just as valuable. Only English (`custom_components/polygonal_zones/translations/en.json`) ships today — to add a language, copy `en.json` to `translations/<lang>.json`, translate the user-facing strings, and open a PR.
 
 I'll do my best to respond to issues and review pull requests as quickly as I can, but patience is appreciated.
 
