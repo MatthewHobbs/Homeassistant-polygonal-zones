@@ -41,6 +41,35 @@ async def test_save_zones_writes_atomically(tmp_path) -> None:
     assert not target.with_suffix(".json.tmp").exists()
 
 
+async def test_save_zones_refuses_symlinked_destination(tmp_path) -> None:
+    """A symlink planted at the destination must be refused, not written through (CWE-59)."""
+    target = tmp_path / "polygonal_zones" / "out.json"
+    target.parent.mkdir(parents=True)
+    secret = tmp_path / "secret.txt"
+    secret.write_text("original")
+    target.symlink_to(secret)
+
+    with pytest.raises(OSError, match="symlink"):
+        await save_zones('{"evil": true}', target, _hass(tmp_path))
+
+    # The symlink target must be untouched.
+    assert secret.read_text() == "original"
+
+
+async def test_save_zones_refuses_symlinked_tmp_path(tmp_path) -> None:
+    """A symlink planted at the .tmp path must not be followed (O_NOFOLLOW)."""
+    target = tmp_path / "polygonal_zones" / "out.json"
+    target.parent.mkdir(parents=True)
+    secret = tmp_path / "secret.txt"
+    secret.write_text("original")
+    target.with_suffix(".json.tmp").symlink_to(secret)
+
+    with pytest.raises(OSError):
+        await save_zones('{"evil": true}', target, _hass(tmp_path))
+
+    assert secret.read_text() == "original"
+
+
 async def test_save_zones_cleans_up_tmp_on_failure(tmp_path) -> None:
     target = tmp_path / "polygonal_zones" / "out.json"
     target.parent.mkdir(parents=True)
