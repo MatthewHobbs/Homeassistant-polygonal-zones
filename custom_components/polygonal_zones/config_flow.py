@@ -139,14 +139,24 @@ class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             errors = await validate_zone_urls(user_input["zone_urls"], self.hass)
+            # Affirmative tracking consent: a required checkbox the installer must
+            # tick. The integration continuously records the GPS position of the
+            # selected device_tracker entities — possibly belonging to other
+            # people — so an explicit opt-in is the lawful-basis floor, not a
+            # passive notice. ``consent`` is a gate, not a stored setting.
+            if not user_input.get("consent"):
+                errors["consent"] = "consent_required"
             if not errors:
+                user_input.pop("consent", None)
                 return self.async_create_entry(title="Polygonal Zones", data=user_input)
 
         user_input = user_input or {}
 
         return self.async_show_form(
             step_id="user",
-            data_schema=build_create_flow(user_input, new_entry=True),
+            data_schema=build_create_flow(user_input, new_entry=True).extend(
+                {vol.Required("consent", default=False): selector.BooleanSelector()}
+            ),
             errors=errors,
             description_placeholders={
                 "consent_notice": (

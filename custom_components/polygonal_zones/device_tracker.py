@@ -68,6 +68,27 @@ async def async_setup_entry(
     # flips the toggle in config/options. See issue #28.
     allow_private_urls: bool = bool(entry.data.get(CONF_ALLOW_PRIVATE_URLS, False))
 
+    # Legacy entries created before the privacy option existed have no stored
+    # CONF_EXPOSE_COORDINATES and default to True — they are silently exposing
+    # and recording GPS coordinates. Raise a repair issue so the user can review
+    # and opt out. New entries (key present) and opted-out entries do not.
+    legacy_privacy_issue = f"legacy_expose_coordinates_{entry.entry_id}"
+    if CONF_EXPOSE_COORDINATES not in entry.data and expose_coordinates:
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            legacy_privacy_issue,
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="legacy_expose_coordinates",
+            translation_placeholders={"title": entry.title},
+        )
+    else:
+        # The key is now present (or coordinates are off) — the user has opted
+        # out (or this is a modern entry). Clear any previously-raised issue so
+        # the warning doesn't persist after opt-out. No-op if none exists.
+        ir.async_delete_issue(hass, DOMAIN, legacy_privacy_issue)
+
     editable_file = False
 
     if entry.data.get(CONF_DOWNLOAD_ZONES):
