@@ -1,0 +1,24 @@
+title: "Polygonal Zones for Home Assistant"
+description: "Community-maintained integration and add-on for polygon-based location tracking in Home Assistant."
+
+theme: minima
+
+url: "https://matthewhobbs.github.io"
+baseurl: "/Homeassistant-polygonal-zones"
+
+header_pages:
+  - index.md
+  - install.md
+  - ZONES_FORMAT.md
+  - troubleshooting.md
+  - privacy.md
+
+minima:
+  date_format: "%Y-%m-%d"
+
+markdown: kramdown
+kramdown:
+  input: GFM
+
+plugins:
+  - jekyll-seo-tag

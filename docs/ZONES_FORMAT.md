@@ -1,3 +1,10 @@
+---
+layout: page
+title: Zone File Format
+nav_order: 3
+permalink: /zones-format/
+---
+
 # Polygonal Zones file format
 
 This document is the canonical specification for the GeoJSON file consumed by the `polygonal_zones` Home Assistant integration. Producers of zone files (the companion [editor add-on](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon), third-party tools, or hand-written files) MUST follow this spec; the integration parses against it.
