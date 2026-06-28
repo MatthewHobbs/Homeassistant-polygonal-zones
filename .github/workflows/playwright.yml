@@ -52,6 +52,15 @@ jobs:
           FRONTEND_REQ=$(python -c "import json, pathlib, homeassistant.components.frontend as f; print(json.loads((pathlib.Path(f.__path__[0]) / 'manifest.json').read_text())['requirements'][0])")
           echo "Resolved frontend requirement: $FRONTEND_REQ"
           pip install "$FRONTEND_REQ"
+          # HA auto-loads the assist stack; `conversation` registers a service
+          # whose description the frontend's get_services WS call loads, importing
+          # the conversation module — which needs hassil/home-assistant-intents.
+          # Without them get_services errors and the frontend hangs forever on
+          # "Loading data". These are pure-Python (no system libs). Read the pin
+          # from the manifest WITHOUT importing the component (it imports hassil).
+          CONV_REQS=$(python -c "import json, pathlib, homeassistant; p = pathlib.Path(homeassistant.__path__[0]) / 'components/conversation/manifest.json'; print(' '.join(json.loads(p.read_text()).get('requirements', [])))")
+          echo "Resolved conversation requirements: $CONV_REQS"
+          pip install $CONV_REQS
 
       - name: Stage HA config dir with the integration installed
         run: |
