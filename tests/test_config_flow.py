@@ -30,14 +30,33 @@ def test_build_create_flow_has_all_required_keys() -> None:
 
 def test_build_create_flow_download_zones_defaults_true_for_new_entries() -> None:
     """New installs default download_zones to True so mutation services work out of the box."""
-    schema = build_create_flow()
+    schema = build_create_flow(new_entry=True)
     download_key = next(k for k in schema.schema if str(k) == "download_zones")
     assert download_key.default() is True
+
+
+def test_build_create_flow_download_zones_defaults_false_on_reconfigure_legacy_entry() -> None:
+    """Reconfiguring a legacy entry that never stored download_zones must NOT silently
+    flip it to True — the fallback is False so submitting the form unchanged keeps the
+    entry read-only."""
+    schema = build_create_flow(new_entry=False)
+    download_key = next(k for k in schema.schema if str(k) == "download_zones")
+    assert download_key.default() is False
 
 
 def test_build_create_flow_preserves_existing_download_zones_false() -> None:
     """A reconfigure flow on an entry with download_zones=False preserves that choice."""
     schema = build_create_flow({"download_zones": False})
+    download_key = next(k for k in schema.schema if str(k) == "download_zones")
+    assert download_key.default() is False
+
+
+def test_build_options_flow_exposes_download_zones() -> None:
+    """The options flow now exposes download_zones as a post-setup escape hatch,
+    defaulting False for a legacy entry that never stored it."""
+    from custom_components.polygonal_zones.config_flow import build_options_flow
+
+    schema = build_options_flow()
     download_key = next(k for k in schema.schema if str(k) == "download_zones")
     assert download_key.default() is False
 
