@@ -4,10 +4,19 @@ name: Multi-arch smoke
 # there is no Docker image to build (HACS/HA Supervisor never pulls an image
 # for an integration). The only architecture-sensitive surface is the native
 # runtime dependency `shapely` (a C extension over GEOS). This workflow proves
-# shapely resolves an installable wheel and its geometry ops work on every
-# architecture Home Assistant supports, using QEMU emulation. It is
+# shapely resolves an installable wheel and its geometry ops work on the
+# architectures we can validate from PyPI, using QEMU emulation. It is
 # intentionally NOT a multi-arch image build — there is nothing here to
 # containerise.
+#
+# Scope note — why no 32-bit armv7 leg: shapely publishes no armv7 (linux_armv7l)
+# wheel on PyPI, and neither does its build dep numpy for current CPython, so a
+# PyPI install on armv7 would force a full numpy+shapely source compile under
+# emulation — minutes-to-tens-of-minutes and fragile. More importantly it would
+# not represent production: Home Assistant installs armv7 wheels from its own
+# index (wheels.home-assistant.io), never PyPI, so a PyPI-based smoke can't
+# validate armv7 either way. amd64 + arm64 (which DO ship PyPI wheels) cover the
+# wheel-availability signal that actually matters here.
 
 on:
   pull_request:
@@ -27,13 +36,6 @@ jobs:
         include:
           - platform: linux/amd64
           - platform: linux/arm64
-          - platform: linux/arm/v7
-            # 32-bit armv7: shapely may not publish a manylinux wheel, which
-            # forces a slow GEOS source build under emulation. Treat as
-            # informational so a missing wheel surfaces in the logs without
-            # failing the workflow (and so this never becomes a merge-blocker).
-            experimental: true
-    continue-on-error: ${{ matrix.experimental || false }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
