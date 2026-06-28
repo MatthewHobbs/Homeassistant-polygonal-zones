@@ -39,28 +39,48 @@ jobs:
         with:
           python-version: "3.14"
 
+      - name: Install system libs for HA's auto-loaded integrations
+        # The frontend's get_services WS call (which the SPA must complete before
+        # it leaves "Loading data") builds service descriptions by importing
+        # every services.yaml-bearing integration HA auto-loads — including
+        # camera (needs libturbojpeg) and the ffmpeg/tts stack (needs the ffmpeg
+        # binary). Missing either makes get_services raise and the UI hangs.
+        run: |
+          set -eux
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ffmpeg libturbojpeg0
+
       - name: Install Home Assistant + runtime deps
         run: |
           set -eux
           pip install "homeassistant>=2026.6.4,<2027" "shapely>=2.0,<3"
-          # `pip install homeassistant` does NOT pull the frontend package
-          # (hass_frontend). Without it the `frontend` component fails to set up
-          # ("No module named 'hass_frontend'") and every UI route 404s — so the
-          # SPA never loads and this smoke can't drive it. Install the exact
-          # version HA pins in its frontend component manifest so the served SPA
-          # matches this HA build.
-          FRONTEND_REQ=$(python -c "import json, pathlib, homeassistant.components.frontend as f; print(json.loads((pathlib.Path(f.__path__[0]) / 'manifest.json').read_text())['requirements'][0])")
-          echo "Resolved frontend requirement: $FRONTEND_REQ"
-          pip install "$FRONTEND_REQ"
-          # HA auto-loads the assist stack; `conversation` registers a service
-          # whose description the frontend's get_services WS call loads, importing
-          # the conversation module — which needs hassil/home-assistant-intents.
-          # Without them get_services errors and the frontend hangs forever on
-          # "Loading data". These are pure-Python (no system libs). Read the pin
-          # from the manifest WITHOUT importing the component (it imports hassil).
-          CONV_REQS=$(python -c "import json, pathlib, homeassistant; p = pathlib.Path(homeassistant.__path__[0]) / 'components/conversation/manifest.json'; print(' '.join(json.loads(p.read_text()).get('requirements', [])))")
-          echo "Resolved conversation requirements: $CONV_REQS"
-          pip install $CONV_REQS
+          # `pip install homeassistant` does NOT pull integration requirements
+          # (HA installs them at runtime, which is not effective in this CI), so
+          # the frontend package (hass_frontend) and the auto-loaded assist/media
+          # stack are all absent. The SPA's initial load calls get_services,
+          # which imports every services.yaml-bearing integration to describe its
+          # services; any that can't import make get_services error and the UI
+          # hangs forever on "Loading data". Pre-install the pinned requirements
+          # of the frontend + that stack, read straight from each component's
+          # manifest (so versions match this HA build) and resolved in one pip
+          # pass. Components absent in this HA version are skipped.
+          python - <<'PY' > /tmp/ha-reqs.txt
+          import json, pathlib, homeassistant
+          base = pathlib.Path(homeassistant.__path__[0]) / "components"
+          comps = (
+              "frontend recorder conversation assist_pipeline tts ffmpeg camera "
+              "analytics ai_task image_processing met radio_browser google_translate"
+          ).split()
+          reqs = []
+          for c in comps:
+              m = base / c / "manifest.json"
+              if m.exists():
+                  reqs += json.loads(m.read_text()).get("requirements", [])
+          print("\n".join(sorted(set(reqs))))
+          PY
+          echo "Pre-installing integration requirements:"
+          cat /tmp/ha-reqs.txt
+          pip install -r /tmp/ha-reqs.txt
 
       - name: Stage HA config dir with the integration installed
         run: |
