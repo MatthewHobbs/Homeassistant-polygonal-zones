@@ -73,6 +73,29 @@ async def test_async_unload_entry_releases_lock(tmp_path) -> None:
     assert result is True
 
 
+async def test_async_unload_entry_shuts_down_source(tmp_path) -> None:
+    """Unload cancels the shared source's pending start/retry callbacks."""
+    from unittest.mock import MagicMock
+
+    from custom_components.polygonal_zones import PolygonalZonesData
+
+    source = SimpleNamespace(async_shutdown=MagicMock())
+    unload_mock = AsyncMock(return_value=True)
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        runtime_data=PolygonalZonesData(source=source),
+    )
+    hass = SimpleNamespace(
+        config=SimpleNamespace(config_dir=str(tmp_path)),
+        config_entries=SimpleNamespace(async_unload_platforms=unload_mock),
+    )
+
+    result = await async_unload_entry(hass, entry)
+
+    assert result is True
+    source.async_shutdown.assert_called_once()
+
+
 async def test_async_unload_entry_partial_failure_leaves_state(tmp_path) -> None:
     """If platform unload fails the runtime_data is left in place by HA."""
     unload_mock = AsyncMock(return_value=False)

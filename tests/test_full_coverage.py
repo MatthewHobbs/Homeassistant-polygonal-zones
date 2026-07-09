@@ -10,7 +10,6 @@ from custom_components.polygonal_zones.config_flow import (
     ConfigFlow,
     OptionsFlowHandler,
 )
-from custom_components.polygonal_zones.device_tracker import PolygonalZoneEntity
 from custom_components.polygonal_zones.services.add_new_zone import (
     action_builder as add_builder,
 )
@@ -23,6 +22,7 @@ from custom_components.polygonal_zones.utils.general import (
     event_should_trigger,
     load_data,
 )
+from tests.helpers import make_entity as _make_entity
 
 # 1. add_new_zone.py:30 — non-editable entity raises ZoneFileNotEditable
 
@@ -159,14 +159,7 @@ def test_event_should_trigger_old_state_none() -> None:
 
 
 async def test_handle_state_change_builder_invokes_update_on_match() -> None:
-    entity = PolygonalZoneEntity(
-        tracked_entity_id="device_tracker.phone",
-        config_entry_id="entry-id",
-        zone_urls=["https://example.com/zones.json"],
-        own_id="device_tracker.polygonal_zones_phone",
-        prioritized_zone_files=False,
-        editable_file=False,
-    )
+    entity = _make_entity()
     update_mock = AsyncMock()
     entity._update_state = update_mock
 
@@ -183,14 +176,7 @@ async def test_handle_state_change_builder_invokes_update_on_match() -> None:
 
 
 async def test_handle_state_change_builder_skips_other_entity() -> None:
-    entity = PolygonalZoneEntity(
-        tracked_entity_id="device_tracker.phone",
-        config_entry_id="entry-id",
-        zone_urls=["https://example.com/zones.json"],
-        own_id="device_tracker.polygonal_zones_phone",
-        prioritized_zone_files=False,
-        editable_file=False,
-    )
+    entity = _make_entity()
     update_mock = AsyncMock()
     entity._update_state = update_mock
 
