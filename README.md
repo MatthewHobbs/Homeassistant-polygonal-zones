@@ -142,7 +142,7 @@ Full format specification (schema, size limits, versioning, examples): [matthewh
 
 `reload_zones` re-fetches the zone files and updates the entity's in-memory cache. The four mutating actions write to the on-disk file managed when `download_zones` is enabled — they are refused with `ZoneFileNotEditable` if the integration is reading directly from a remote URL.
 
-Each mutating action automatically refreshes every tracked entity under the same config entry after a successful write — you do **not** need to call `reload_zones` afterwards. Use `reload_zones` only to re-fetch from the *source* files/URLs: e.g. after editing `zones.json` outside of these services, or after a remote host recovers from an outage (a startup load that exhausted its retries doesn't self-heal until you reload).
+Each mutating action automatically refreshes every tracked entity under the same config entry after a successful write — you do **not** need to call `reload_zones` afterwards. Use `reload_zones` only to re-fetch from the _source_ files/URLs: e.g. after editing `zones.json` outside of these services, or after a remote host recovers from an outage (a startup load that exhausted its retries doesn't self-heal until you reload).
 
 ## Action examples
 
