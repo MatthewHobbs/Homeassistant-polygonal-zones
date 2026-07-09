@@ -11,3 +11,7 @@ htmlcov/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
+# Claude Code session artifacts (never commit to a public repo)
+.eod-*
+.claude/worktrees/
