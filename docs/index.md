@@ -29,7 +29,7 @@ A HACS custom integration (pure Python) that watches `device_tracker` entities a
 
 The typical setup is: install the add-on to draw your zones, then point the integration at the add-on's `zones.json` URL.
 
-**Requirements:** Home Assistant 2026.6.4 or later (the integration runs on Python 3.14, which ships with HA OS/Supervised — nothing extra to install).
+**Requirements:** Home Assistant 2026.7.1 or later (the integration runs on Python 3.14, which ships with HA OS/Supervised — nothing extra to install).
 
 ---
 
