@@ -253,7 +253,11 @@ class OptionsFlowHandler(OptionsFlow):
             if not errors:
                 merged = {**self.config_entry.data, **user_input}
                 self.hass.config_entries.async_update_entry(self.config_entry, data=merged)
-                return self.async_create_entry(title="", data=user_input)
+                # Persist everything into entry.data above (which fires the reload
+                # listener). Return empty options data — the integration reads
+                # only entry.data, so writing user_input into entry.options too
+                # would be dead split-brain state.
+                return self.async_create_entry(title="", data={})
 
         return self.async_show_form(
             step_id="init",

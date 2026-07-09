@@ -43,6 +43,15 @@ def redact_uri(uri: str) -> str:
     return f"{parsed.scheme}://{netloc}{parsed.path}"
 
 
+def download_zone_relative_path(entry_id: str) -> str:
+    """The managed local zone-snapshot path for an entry, relative to ``/config``.
+
+    Single source of truth for the on-disk layout: the download materialiser, the
+    entry unload (lock cleanup), and the mutation services all derive from this.
+    """
+    return f"polygonal_zones/{entry_id}.json"
+
+
 def safe_config_path(config_dir: str, user_path: str) -> Path:
     """Resolve ``user_path`` inside ``config_dir``.
 

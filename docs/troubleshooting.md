@@ -35,11 +35,11 @@ Add-on source: [MatthewHobbs/Homeassistant-polygonal-zones-addon](https://github
 
 ## "Refusing to connect to non-public address"
 
-The integration won't fetch from `127.0.0.1`, `192.168.x.x`, `10.x.x.x`, `169.254.x.x`, or any other private, loopback, link-local, or metadata IP by default. This prevents SSRF.
+The integration won't fetch from `127.0.0.1`, `192.168.x.x`, `10.x.x.x`, `169.254.x.x`, or any other private, loopback, link-local, or metadata IP by default. This prevents SSRF (server-side request forgery — tricking the server into fetching an internal address it shouldn't).
 
 If your zones file is served from a LAN address (including the companion add-on on the same host), you have two options:
 
-- **Enable `allow_private_urls`.** Re-open the integration's Configure dialog, expand Advanced options, and tick **Allow private-network URLs (LAN)**. This unlocks RFC-1918 space; loopback, link-local, and metadata ranges stay blocked.
+- **Enable `allow_private_urls`.** Re-open the integration's Configure dialog, expand Advanced options, and tick **Allow private-network URLs (LAN)**. This unlocks RFC-1918 space (the private home-network address ranges like `192.168.x.x` / `10.x.x.x`); loopback, link-local, and metadata ranges stay blocked.
 - **Use a `/config` path instead.** Place the `zones.json` file under your HA config directory and reference it as a path (e.g. `polygonal_zones/zones.json`). No network request is made.
 
 ---
