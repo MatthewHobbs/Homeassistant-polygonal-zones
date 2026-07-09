@@ -23,8 +23,18 @@ permissions:
   contents: read
 
 jobs:
+  # On schedule/dispatch, skip this heavyweight (full HA + Chromium) smoke unless
+  # upstream moved. push/PR always run.
+  gate:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/_upstream-gate.yml
+    with:
+      cache_prefix: playwright
+
   config-flow:
     name: Config flow (Playwright)
+    needs: [gate]
+    if: ${{ !cancelled() && (github.event_name == 'push' || github.event_name == 'pull_request' || needs.gate.outputs.changed == 'true') }}
     runs-on: ubuntu-latest
     # Non-blocking on PRs only: this heavyweight smoke must never fail a PR (it
     # is not a required check). Scheduled/manual runs keep failing visibly so
@@ -129,3 +139,17 @@ jobs:
           path: tests/e2e/playwright-report
           if-no-files-found: ignore
           retention-days: 7
+
+  # Record the tested fingerprint only when the smoke passed (see _upstream-gate.yml).
+  # On schedule, continue-on-error is false, so a failed smoke leaves the fingerprint
+  # unrecorded and it re-runs next night until fixed.
+  record:
+    needs: [gate, config-flow]
+    if: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && needs.gate.outputs.changed == 'true' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ needs.gate.outputs.cache_key }}" > .upstream-fingerprint
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .upstream-fingerprint
+          key: ${{ needs.gate.outputs.cache_key }}
