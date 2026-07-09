@@ -178,6 +178,40 @@ async def test_async_reload_zones_accepts_no_call() -> None:
     assert entity._source.zones == [_HOME]
 
 
+async def test_async_reload_zones_service_is_rate_limited() -> None:
+    """A second reload_zones *service* call within the window is refused; the
+    internal (call=None) mutation-sync path is never rate-limited."""
+    entity = _make_entity()
+    entity.hass = _make_hass()
+
+    load, del_issue = _patch_reload(zones=[_HOME])
+    with load, del_issue:
+        await entity.async_reload_zones(SimpleNamespace(return_response=False))  # first: ok
+        with pytest.raises(HomeAssistantError):
+            await entity.async_reload_zones(SimpleNamespace(return_response=False))  # too fast
+        # Internal sync path is exempt from the rate limit.
+        assert await entity.async_reload_zones() is None
+
+
+async def test_async_reload_zones_multi_entity_same_call_not_rate_limited() -> None:
+    """One service call fans out to every targeted entity (same context id); those
+    must all proceed — only *distinct* calls are rate-limited."""
+    entity_a = _make_entity(own_id="device_tracker.polygonal_zones_a")
+    entity_b = _make_entity(source=entity_a._source, own_id="device_tracker.polygonal_zones_b")
+    entity_a.hass = entity_b.hass = _make_hass()
+
+    call = SimpleNamespace(return_response=False, context=SimpleNamespace(id="one-call"))
+    load, del_issue = _patch_reload(zones=[_HOME])
+    with load, del_issue:
+        await entity_a.async_reload_zones(call)  # first entity in the call
+        await entity_b.async_reload_zones(call)  # same call, same entry — must not trip
+        # A *different* call to the same entry within the window is refused.
+        with pytest.raises(HomeAssistantError):
+            await entity_a.async_reload_zones(
+                SimpleNamespace(return_response=False, context=SimpleNamespace(id="other-call"))
+            )
+
+
 async def test_async_reload_zones_sets_last_load_observability_on_success() -> None:
     """A successful reload updates last_zones_loaded_at + sets last_load_result='ok'."""
     entity = _make_entity(loaded_ok=False)

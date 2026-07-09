@@ -14,7 +14,7 @@ from homeassistant.helpers import config_validation as cv
 
 from .const import DOMAIN
 from .services import register_services
-from .utils.general import safe_config_path
+from .utils.general import download_zone_relative_path, safe_config_path
 from .utils.local_zones import release_file_lock
 
 if TYPE_CHECKING:
@@ -74,14 +74,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: PolygonalZonesConfigEnt
             data.source.async_shutdown()
         # Drop the per-file lock so it doesn't accumulate across reloads.
         # If download_zones was never enabled, this is a harmless no-op.
+        relative = download_zone_relative_path(entry.entry_id)
         try:
-            download_path = safe_config_path(
-                hass.config.config_dir, f"polygonal_zones/{entry.entry_id}.json"
-            )
+            download_path = safe_config_path(hass.config.config_dir, relative)
         except ValueError:
-            download_path = (
-                Path(hass.config.config_dir) / "polygonal_zones" / f"{entry.entry_id}.json"
-            )
+            download_path = Path(hass.config.config_dir) / relative
         release_file_lock(download_path)
     return unload_ok
 

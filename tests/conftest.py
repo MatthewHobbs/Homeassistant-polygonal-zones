@@ -35,10 +35,13 @@ def _reset_mutation_rate_limit():
     would fail the rate-limit gate introduced for mutation services. The gate
     is a real runtime defence; in tests we want every case to start fresh.
     """
+    from custom_components.polygonal_zones.device_tracker import _reset_reload_rate_limit
     from custom_components.polygonal_zones.services.helpers import (
         reset_mutation_rate_limit,
     )
 
     reset_mutation_rate_limit()
+    _reset_reload_rate_limit()
     yield
     reset_mutation_rate_limit()
+    _reset_reload_rate_limit()

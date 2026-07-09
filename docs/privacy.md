@@ -83,7 +83,7 @@ Your `zones.json` file contains the precise polygon coordinates of every place y
 
 - **HA backups and snapshots include it.** The zones file lives in `/data` inside the add-on container, which is captured in every HA backup. Deleting a zone from the editor does not remove it from snapshots taken before the deletion. If you need to fully remove a zone for privacy reasons, also delete the old backups that contain it (**Settings → System → Backups → ⋮ → Remove**).
 - **Do not host zones.json on a public URL.** See the [DOCS.md](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon/blob/main/polygonal_zones_editor/DOCS.md) section "Last resort — public-CDN mirror" for the full explanation of why this is a privacy risk.
-- **Cloud backups.** If you use Nabu Casa cloud backup and the recorder database is included (the default), the location history of every tracked person is transferred to Nabu Casa's US-hosted infrastructure. Under GDPR Art. 46, this is a cross-border transfer of personal data. Either apply the `recorder` exclude block above before enabling cloud backup, or review Nabu Casa's data-processing terms.
+- **Cloud backups.** If you use Nabu Casa cloud backup and the recorder database is included (the default), the location history of every tracked person is transferred to Nabu Casa's US-hosted infrastructure. Under GDPR Art. 46 (the rules for sending personal data outside the UK/EU), this is a cross-border transfer of personal data. Either apply the `recorder` exclude block above before enabling cloud backup, or review Nabu Casa's data-processing terms.
 
 ---
 

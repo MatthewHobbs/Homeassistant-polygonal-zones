@@ -219,6 +219,8 @@ async def test_options_flow_valid_input_merges_data(tmp_path) -> None:
     assert merged["prioritize_zone_files"] is True
     assert merged["entities"] == ["device_tracker.alice"]
     assert merged["download_zones"] is True
+    # Options data is left empty — everything lives in entry.data (no split-brain).
+    assert flow.async_create_entry.call_args.kwargs["data"] == {}
 
 
 async def test_reconfigure_flow_first_render_uses_entry_defaults(tmp_path) -> None:

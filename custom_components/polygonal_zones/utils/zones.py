@@ -147,7 +147,10 @@ def _parse_zone_document(raw: str, idx: int, prioritize: bool, uri: str) -> list
     """
     try:
         data = json.loads(raw)
-    except ValueError as err:
+    except (ValueError, RecursionError) as err:
+        # RecursionError: a deeply-nested adversarial JSON payload. Catch it for
+        # parity with the mutation-service parsers (services/helpers.py) so it
+        # surfaces as a typed ZoneFileCorrupt, not a raw traceback.
         raise ZoneFileCorrupt(f"not valid JSON: {err}") from err
     if not isinstance(data, dict):
         raise ZoneFileCorrupt("top-level payload is not an object")

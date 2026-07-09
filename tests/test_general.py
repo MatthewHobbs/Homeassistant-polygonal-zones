@@ -34,6 +34,12 @@ def test_redact_uri_malformed_port_does_not_raise() -> None:
     assert redact_uri("http://example.com:bad/zones.json") == "http://example.com:bad/zones.json"
 
 
+def test_download_zone_relative_path() -> None:
+    from custom_components.polygonal_zones.utils.general import download_zone_relative_path
+
+    assert download_zone_relative_path("abc123") == "polygonal_zones/abc123.json"
+
+
 def test_safe_config_path_inside_config_dir(tmp_path) -> None:
     """A simple relative path resolves to the expected location inside config_dir."""
     target = tmp_path / "polygonal_zones" / "entry.json"

@@ -236,12 +236,13 @@ data:
 - **Geometry types**: only `Polygon` and `MultiPolygon` are accepted. `Point`, `LineString`, `MultiPoint`, `GeometryCollection`, and a `null` geometry are rejected at the service boundary.
 - **Coordinate system**: only WGS-84 lat/lon (the GeoJSON default, `[longitude, latitude]` order). No projected coordinate systems.
 - **Zone-file size**: HTTP zone files are capped at **5 MiB**. Service payloads (`add_new_zone`, `edit_zone`, `replace_all_zones`) at **1 MiB**.
+- **Zone counts**: max **500 features** per `FeatureCollection`, and **10,000 vertices** total across all features combined (not per-feature). Enforced on both the file/URL read path and the service write path. See the [full size-limit table](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/zones-format/).
 - **Zone names**: max **200 characters**.
 - **Network targets**: outbound zone-file fetches **refuse private, loopback, link-local, multicast, reserved, and metadata IPs** to prevent SSRF. If your zones live on a LAN or `169.254.x` host, place the file under `/config` and reference the path instead of a URL.
 - **No 3xx redirects**: HTTP responses with status 300–399 are rejected (the redirect target hasn't been validated by our DNS resolver).
 - **Service mutations require a downloaded local file**: `add_new_zone`, `edit_zone`, `delete_zone`, and `replace_all_zones` are refused with `ZoneFileNotEditable` when the integration is reading directly from a remote URL. Toggle **Download the GeoJSON files** in the integration options to enable mutations.
 - **Single point in time per device**: only the source device's most recent GPS fix is evaluated; history isn't replayed.
-- **Async constraints**: `shapely` is a sync compute library — geometry math runs on the event loop. For typical home setups (≤20 tracked devices, ≤100 zones) this is imperceptible. Very large zone sets may stall the loop.
+- **Async constraints** _(advanced — safe to skip)_: `shapely` (the geometry library) does its maths synchronously, on Home Assistant's **event loop** — the single thread HA uses for everything else. For typical home setups (≤20 tracked devices, ≤100 zones) this is imperceptible. Very large zone sets could momentarily block that thread; the size caps above keep it bounded.
 
 ## Troubleshooting
 
