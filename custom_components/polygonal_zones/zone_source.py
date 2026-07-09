@@ -16,7 +16,7 @@ from datetime import datetime
 import logging
 import random
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.start import async_at_started
@@ -68,19 +68,19 @@ class ZoneSource:
         """Repair-issue id for a fully-failed load on this entry."""
         return f"zone_load_failed_{self.entry_id}"
 
-    def add_listener(self, callback: Callable[[], None]) -> Callable[[], None]:
+    def add_listener(self, listener: Callable[[], None]) -> Callable[[], None]:
         """Register a callback fired after every (re)load; returns an unsubscribe."""
-        self._listeners.append(callback)
+        self._listeners.append(listener)
 
         def _remove() -> None:
-            if callback in self._listeners:
-                self._listeners.remove(callback)
+            if listener in self._listeners:
+                self._listeners.remove(listener)
 
         return _remove
 
     def _notify(self) -> None:
-        for callback in list(self._listeners):
-            callback()
+        for listener in list(self._listeners):
+            listener()
 
     def async_schedule_initial_load(self, hass: HomeAssistant) -> None:
         """Load once HA has started (or immediately if already running).
@@ -111,7 +111,12 @@ class ZoneSource:
                     exc_info=True,
                 )
 
+                @callback
                 def _retry(_now, _next_attempt=attempt + 1) -> None:
+                    # Without @callback, HA's job-type inference schedules this
+                    # plain function on the executor thread pool (it can't tell
+                    # it won't block) — hass.async_create_task then raises since
+                    # it's called off the event loop. See issue #39.
                     self._unsub_retry = None
                     hass.async_create_task(self._async_initial_load(hass, _next_attempt))
 
