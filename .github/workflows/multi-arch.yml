@@ -27,8 +27,18 @@ on:
   workflow_dispatch:
 
 jobs:
+  # On schedule/dispatch, skip the (slow, QEMU-emulated) smoke unless upstream
+  # moved. push/PR always run.
+  gate:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/_upstream-gate.yml
+    with:
+      cache_prefix: multiarch
+
   shapely-import:
     name: shapely import (${{ matrix.platform }})
+    needs: [gate]
+    if: ${{ !cancelled() && (github.event_name == 'push' || github.event_name == 'pull_request' || needs.gate.outputs.changed == 'true') }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -47,3 +57,15 @@ jobs:
           docker run --rm --platform=${{ matrix.platform }} \
             -v "$PWD:/src" -w /src python:3.14-slim \
             bash -euxc 'pip install --quiet "shapely>=2.1.2,<3" && python tests/smoke/shapely_smoke.py'
+
+  # Record the tested fingerprint only when the smoke passed (see _upstream-gate.yml).
+  record:
+    needs: [gate, shapely-import]
+    if: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && needs.gate.outputs.changed == 'true' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ needs.gate.outputs.cache_key }}" > .upstream-fingerprint
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .upstream-fingerprint
+          key: ${{ needs.gate.outputs.cache_key }}
