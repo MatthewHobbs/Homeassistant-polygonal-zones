@@ -3,7 +3,9 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util import dt as dt_util
+import pytest
 from shapely.geometry import Polygon
 
 from custom_components.polygonal_zones.device_tracker import PolygonalZoneEntity
@@ -107,8 +109,13 @@ async def test_update_location_expose_coordinates_false_omits_gps_attributes() -
     assert "latitude" not in attrs
     assert "longitude" not in attrs
     assert "gps_accuracy" not in attrs
+    # Non-location load diagnostics stay visible even with the toggle off.
     assert attrs["source_entity"] == "device_tracker.phone"
-    assert attrs["zone_uris"] == ["https://example.com/zones.json"]
+    assert "last_load_result" in attrs
+    # But location-revealing attributes are gated with coordinates: zone_uris can
+    # leak LAN hostnames and matched_zones reveals fine-grained location.
+    assert "zone_uris" not in attrs
+    assert "matched_zones" not in attrs
 
 
 async def test_update_location_expose_coordinates_default_is_true() -> None:
@@ -125,6 +132,9 @@ async def test_update_location_expose_coordinates_default_is_true() -> None:
     assert attrs["latitude"] == 0.5
     assert attrs["longitude"] == 0.5
     assert attrs["gps_accuracy"] == 10
+    # With coordinates on, the location-revealing attributes are published too.
+    assert attrs["zone_uris"] == ["https://example.com/zones.json"]
+    assert attrs["matched_zones"] == ["Home"]
 
 
 async def test_async_reload_zones_returns_payload_when_requested() -> None:
@@ -189,18 +199,22 @@ async def test_async_reload_zones_returns_none_when_response_not_requested() -> 
     assert result is None
 
 
-async def test_async_reload_zones_handles_failure() -> None:
+async def test_async_reload_zones_service_failure_raises() -> None:
+    """A reload_zones *service* call that fails surfaces a HomeAssistantError
+    rather than a silent no-op — so return_response callers see the failure."""
     entity = _make_entity()
     entity.hass = _make_hass()
 
     call = SimpleNamespace(return_response=False)
-    with patch(
-        "custom_components.polygonal_zones.device_tracker.load_zones",
-        new=AsyncMock(side_effect=RuntimeError("boom")),
+    with (
+        patch(
+            "custom_components.polygonal_zones.device_tracker.load_zones",
+            new=AsyncMock(side_effect=RuntimeError("boom")),
+        ),
+        pytest.raises(HomeAssistantError),
     ):
-        result = await entity.async_reload_zones(call)
-
-    assert result is None
+        await entity.async_reload_zones(call)
+    assert entity._last_load_result == "failed"
 
 
 async def test_async_reload_zones_accepts_no_call() -> None:
@@ -291,12 +305,15 @@ async def test_async_reload_zones_warning_does_not_leak_entity_id(caplog) -> Non
     )
     entity.hass = _make_hass()
 
+    # Invoked as a service (call is not None) → surfaces a real error rather than
+    # a silent no-op. The WARNING log is still emitted first.
     with (
         patch(
             "custom_components.polygonal_zones.device_tracker.load_zones",
             new=AsyncMock(side_effect=RuntimeError("boom")),
         ),
         caplog.at_level("WARNING", logger="custom_components.polygonal_zones.device_tracker"),
+        pytest.raises(HomeAssistantError),
     ):
         await entity.async_reload_zones(SimpleNamespace(return_response=False))
 

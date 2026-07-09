@@ -6,8 +6,32 @@ import pytest
 
 from custom_components.polygonal_zones.utils.general import (
     event_should_trigger,
+    redact_uri,
     safe_config_path,
 )
+
+
+def test_redact_uri_strips_credentials_and_query() -> None:
+    assert (
+        redact_uri("http://user:pass@10.0.0.9:8000/zones.json?token=secret")
+        == "http://10.0.0.9:8000/zones.json"
+    )
+
+
+def test_redact_uri_keeps_plain_http_url_intact() -> None:
+    assert redact_uri("https://example.com/zones.json") == "https://example.com/zones.json"
+
+
+def test_redact_uri_passes_through_non_http() -> None:
+    # File paths and non-http schemes carry no credential component; unchanged.
+    assert redact_uri("/config/zones.json") == "/config/zones.json"
+    assert redact_uri("ftp://host/x") == "ftp://host/x"
+
+
+def test_redact_uri_malformed_port_does_not_raise() -> None:
+    """A non-numeric port makes urlparse.port raise ValueError; redact must degrade
+    to the raw string rather than crash a diagnostics dump."""
+    assert redact_uri("http://example.com:bad/zones.json") == "http://example.com:bad/zones.json"
 
 
 def test_safe_config_path_inside_config_dir(tmp_path) -> None:

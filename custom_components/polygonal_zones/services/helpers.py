@@ -14,6 +14,7 @@ from ..device_tracker import PolygonalZoneEntity
 from ..utils.limits import (
     MAX_FEATURES_PER_COLLECTION,
     MAX_TOTAL_VERTICES_PER_COLLECTION,
+    SUPPORTED_GEOMETRY_TYPES,
 )
 from ..utils.limits import (
     count_geometry_vertices as _count_geometry_vertices,
@@ -24,7 +25,6 @@ _LOGGER = logging.getLogger(__name__)
 
 MAX_ZONE_JSON_BYTES = 1_048_576
 MAX_ZONE_NAME_LEN = 200
-SUPPORTED_GEOMETRY_TYPES = {"Polygon", "MultiPolygon"}
 # Declared top-level feature property keys. Anything else is preserved through
 # round-trip but logged at WARNING so drift is visible. New producer-specific
 # fields belong under ``properties.polygonal_zones_ext``. See docs/ZONES_FORMAT.md.

@@ -42,12 +42,23 @@ def get_file_lock(path: Path) -> asyncio.Lock:
 
 
 def release_file_lock(path: Path) -> None:
-    """Drop the cached ``asyncio.Lock`` for ``path`` if one exists.
+    """Drop the cached ``asyncio.Lock`` for ``path`` if one exists and is idle.
 
-    Called from ``async_unload_entry`` so locks don't accumulate forever
-    across config-entry reloads in long-running HA instances.
+    Called from ``async_unload_entry`` so locks don't accumulate forever across
+    config-entry reloads in long-running HA instances.
+
+    Refuses to drop a lock that is currently held: a config-entry reload can race
+    a mutation mid-write, and dropping the lock then would hand the next caller a
+    brand-new ``Lock`` object for the same path — defeating mutual exclusion and
+    allowing two concurrent writers. A held lock is left in place; a later unload
+    with no in-flight holder reclaims it. Worst case is one stale idle Lock per
+    path until the next clean unload, which is harmless.
     """
-    _FILE_LOCKS.pop(str(path), None)
+    key = str(path)
+    lock = _FILE_LOCKS.get(key)
+    if lock is None or lock.locked():
+        return
+    _FILE_LOCKS.pop(key, None)
 
 
 def dump_feature_collection(

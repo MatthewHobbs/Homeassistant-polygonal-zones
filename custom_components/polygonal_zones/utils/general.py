@@ -20,6 +20,29 @@ MAX_RESPONSE_BYTES = 5 * 1024 * 1024
 FETCH_TIMEOUT = aiohttp.ClientTimeout(total=10, connect=5, sock_read=8)
 
 
+def redact_uri(uri: str) -> str:
+    """Return a log/diagnostics-safe form of an HTTP(S) URI.
+
+    Strips ``user:pass@`` credentials and the query string / fragment (which can
+    carry access tokens), keeping ``scheme://host[:port]/path``. Non-HTTP URIs
+    (e.g. ``/config`` file paths) and URIs with no hostname are returned
+    unchanged — they carry no credential component to leak. Used to keep zone
+    URLs out of logs and out of the diagnostics dump (whose ``uri`` field is
+    already redacted; this closes the second channel via error messages).
+    """
+    try:
+        parsed = urlparse(uri)
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+            return uri
+        # ``.port`` raises ValueError on a malformed port (e.g. ``host:bad``),
+        # which the config validator doesn't reject — keep it inside the guard so
+        # a diagnostics dump degrades to the raw string instead of crashing.
+        netloc = parsed.hostname if parsed.port is None else f"{parsed.hostname}:{parsed.port}"
+    except ValueError:
+        return uri
+    return f"{parsed.scheme}://{netloc}{parsed.path}"
+
+
 def safe_config_path(config_dir: str, user_path: str) -> Path:
     """Resolve ``user_path`` inside ``config_dir``.
 
@@ -93,7 +116,7 @@ async def load_data(uri: str, hass: HomeAssistant, *, allow_private_urls: bool =
 
     if parsed.scheme in ("http", "https"):
         if not parsed.hostname:
-            raise ValueError(f"URL '{uri}' has no hostname")
+            raise ValueError("URL has no hostname")
 
         connector = aiohttp.TCPConnector(
             resolver=_PublicOnlyResolver(allow_private=allow_private_urls)
@@ -107,18 +130,20 @@ async def load_data(uri: str, hass: HomeAssistant, *, allow_private_urls: bool =
             session.get(uri, timeout=FETCH_TIMEOUT, allow_redirects=False) as response,
         ):
             if 300 <= response.status < 400:
-                raise ValueError(f"Refusing redirect from '{uri}' (status {response.status})")
+                raise ValueError(
+                    f"Refusing redirect from '{redact_uri(uri)}' (status {response.status})"
+                )
             response.raise_for_status()
             if response.content_length is not None and response.content_length > MAX_RESPONSE_BYTES:
                 raise ValueError(
-                    f"Response from '{uri}' too large: {response.content_length} bytes"
+                    f"Response from '{redact_uri(uri)}' too large: {response.content_length} bytes"
                 )
             chunks: list[bytes] = []
             total = 0
             async for chunk in response.content.iter_chunked(65536):
                 total += len(chunk)
                 if total > MAX_RESPONSE_BYTES:
-                    raise ValueError(f"Response from '{uri}' exceeded max size")
+                    raise ValueError(f"Response from '{redact_uri(uri)}' exceeded max size")
                 chunks.append(chunk)
             return b"".join(chunks).decode(response.charset or "utf-8")
 

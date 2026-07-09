@@ -87,3 +87,48 @@ async def test_diagnostics_redacts_non_list_values() -> None:
 
     assert _redact("secret") == "<redacted>"
     assert _redact(["a", "b"]) == ["<redacted-0>", "<redacted-1>"]
+
+
+async def test_diagnostics_scrubs_uri_from_error_string() -> None:
+    """A load-error string that embeds the failing URI (host/credentials) must not
+    leak it through the ``error`` field — the second channel past the redacted uri."""
+    fake_entity = SimpleNamespace(
+        _attr_available=False,
+        _editable_file=False,
+        _zones=[],
+        _zones_urls=["http://user:pass@10.0.0.9:8000/z.json"],
+        _prioritize_zone_files=False,
+        _last_load_failures=[
+            (
+                "http://user:pass@10.0.0.9:8000/z.json",
+                "Response from 'http://10.0.0.9:8000/z.json' too large: 9999999 bytes",
+            )
+        ],
+    )
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        title="Polygonal Zones",
+        version=1,
+        runtime_data=PolygonalZonesData(entities=[fake_entity]),
+        data={"zone_urls": ["http://user:pass@10.0.0.9:8000/z.json"], "entities": []},
+    )
+
+    result = await async_get_config_entry_diagnostics(SimpleNamespace(), entry)
+
+    failures = result["entities"][0]["last_load_failures"]
+    assert failures[0]["uri"] == "<redacted-0>"
+    dumped = repr(result)
+    # Neither the credentials nor the internal host survive anywhere in the dump.
+    assert "user:pass" not in dumped
+    assert "10.0.0.9" not in dumped
+    assert "<redacted-0>" in failures[0]["error"]
+
+
+def test_scrub_uri_from_error_helper() -> None:
+    from custom_components.polygonal_zones.diagnostics import _scrub_uri_from_error
+
+    uri = "http://user:pass@10.0.0.9:8000/z.json"
+    err = f"Refusing redirect from '{uri}' (status 302)"
+    cleaned = _scrub_uri_from_error(err, uri, "<X>")
+    assert uri not in cleaned
+    assert cleaned == "Refusing redirect from '<X>' (status 302)"

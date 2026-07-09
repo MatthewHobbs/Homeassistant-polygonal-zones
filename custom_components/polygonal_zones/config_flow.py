@@ -147,7 +147,11 @@ class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
         """Perform the initial step of the configuration flow, handling user input."""
         errors: dict[str, str] = {}
         if user_input is not None:
-            errors = await validate_zone_urls(user_input["zone_urls"], self.hass)
+            errors = await validate_zone_urls(
+                user_input["zone_urls"],
+                self.hass,
+                allow_private_urls=user_input.get("allow_private_urls", False),
+            )
             # Affirmative tracking consent: a required checkbox the installer must
             # tick. The integration continuously records the GPS position of the
             # selected device_tracker entities — possibly belonging to other
@@ -190,7 +194,11 @@ class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         adding_entities = False
         if user_input is not None:
-            errors = await validate_zone_urls(user_input["zone_urls"], self.hass)
+            errors = await validate_zone_urls(
+                user_input["zone_urls"],
+                self.hass,
+                allow_private_urls=user_input.get("allow_private_urls", False),
+            )
             adding_entities = bool(set(user_input.get(CONF_ENTITIES, [])) - stored_entities)
             if adding_entities and not user_input.get("consent"):
                 errors["consent"] = "consent_required"
@@ -237,7 +245,11 @@ class OptionsFlowHandler(OptionsFlow):
         """Perform the initial step of the options flow, handling user input."""
         errors: dict[str, str] = {}
         if user_input is not None:
-            errors = await validate_zone_urls(user_input["zone_urls"], self.hass)
+            errors = await validate_zone_urls(
+                user_input["zone_urls"],
+                self.hass,
+                allow_private_urls=user_input.get("allow_private_urls", False),
+            )
             if not errors:
                 merged = {**self.config_entry.data, **user_input}
                 self.hass.config_entries.async_update_entry(self.config_entry, data=merged)
