@@ -5,7 +5,26 @@ Pure-pytest tests only at the moment — the ``hass`` fixture from
 disabled via ``-p no:homeassistant`` in ``pyproject.toml``.
 """
 
+from unittest.mock import patch
+
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def _stub_state_change_tracker():
+    """Stub ``async_track_state_change_event`` for the pure-pytest tests.
+
+    The helper does real Home Assistant wiring (``hass.data``, bus filters); the
+    unit tests build ``SimpleNamespace`` hass stubs and never deliver real
+    events (they invoke the entity's ``_update_state`` / captured callbacks
+    directly), so a no-op unsub keeps ``async_added_to_hass`` working without a
+    full hass. Real event routing is covered by the Playwright/e2e smoke.
+    """
+    with patch(
+        "custom_components.polygonal_zones.device_tracker.async_track_state_change_event",
+        return_value=lambda: None,
+    ):
+        yield
 
 
 @pytest.fixture(autouse=True)

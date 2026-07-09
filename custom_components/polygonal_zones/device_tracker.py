@@ -21,7 +21,7 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity import generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.event import async_call_later
+from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.start import async_at_started
 from homeassistant.util import dt as dt_util
@@ -298,8 +298,14 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
 
         self._unsub_at_started = async_at_started(self.hass, _initialize_zones)
 
-        self._unsub = self.hass.bus.async_listen(
-            "state_changed", self._handle_state_change_builder()
+        # Subscribe to the source tracker specifically. HA indexes this by
+        # entity_id, so the callback fires only for our tracked device — not for
+        # every state change on the bus (which, with a global ``state_changed``
+        # listener, woke one coroutine per mirror entity on every unrelated
+        # tick). This is the primitive the entity-event-setup quality rule points
+        # to. The change-of-location filter still lives in event_should_trigger.
+        self._unsub = async_track_state_change_event(
+            self.hass, [self._entity_id], self._handle_state_change_builder()
         )
 
     def _set_available(self, available: bool) -> None:
