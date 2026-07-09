@@ -1,0 +1,95 @@
+name: Upstream gate (reusable)
+
+# Answers one question for the scheduled/dispatched workflows: has the integration's
+# *operating exposure* — the latest in-range `homeassistant` + `shapely` on PyPI —
+# changed since the last time a nightly passed against it? Callers use the `changed`
+# output to skip their heavy jobs when nothing upstream moved (re-running against the
+# same versions + same code can only reproduce the last result). Not run on its own.
+#
+# The "already tested" marker is an actions/cache entry keyed by the fingerprint. The
+# caller records it *only when its heavy jobs pass* — so a real upstream break keeps
+# re-alerting every night until it's fixed, instead of caching the broken fingerprint
+# and going silently green.
+
+on:
+  workflow_call:
+    inputs:
+      cache_prefix:
+        description: "Per-caller cache namespace so one workflow's pass doesn't silence another"
+        required: true
+        type: string
+    outputs:
+      changed:
+        description: "true when this upstream fingerprint has not yet been recorded as passing"
+        value: ${{ jobs.gate.outputs.changed }}
+      cache_key:
+        description: "the cache key the caller must save (on success) to mark this fingerprint tested"
+        value: ${{ jobs.gate.outputs.cache_key }}
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.decide.outputs.changed }}
+      cache_key: ${{ steps.fp.outputs.cache_key }}
+    steps:
+      - name: Resolve upstream fingerprint (latest in-range homeassistant + shapely)
+        id: fp
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet --disable-pip-version-check packaging
+          fp=$(python3 - <<'PY'
+          import json, urllib.request
+          from packaging.specifiers import SpecifierSet
+          from packaging.version import Version
+
+
+          def latest(pkg, spec):
+              url = f"https://pypi.org/pypi/{pkg}/json"
+              data = json.load(urllib.request.urlopen(url, timeout=30))
+              spec_set = SpecifierSet(spec)
+              best = None
+              for ver, files in data["releases"].items():
+                  if not files:  # yanked / no artifacts
+                      continue
+                  try:
+                      parsed = Version(ver)
+                  except Exception:
+                      continue
+                  if parsed.is_prerelease:
+                      continue
+                  if str(parsed) in spec_set and (best is None or parsed > best):
+                      best = parsed
+              return str(best)
+
+
+          ha = latest("homeassistant", ">=2026.7.1,<2027")
+          sh = latest("shapely", ">=2.1.2,<3")
+          print(f"ha{ha}-sh{sh}")
+          PY
+          )
+          key="upstream-tested-${{ inputs.cache_prefix }}-$fp"
+          echo "cache_key=$key" >> "$GITHUB_OUTPUT"
+          echo "Upstream fingerprint: $fp  (cache key: $key)"
+
+      - name: Has this fingerprint already passed a nightly?
+        id: cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .upstream-fingerprint
+          key: ${{ steps.fp.outputs.cache_key }}
+          lookup-only: true
+
+      - name: Decide
+        id: decide
+        run: |
+          if [ "${{ steps.cache.outputs.cache-hit }}" = "true" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Upstream unchanged (${{ steps.fp.outputs.cache_key }}) since the last passing nightly — heavy jobs will be skipped."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::New/untested upstream (${{ steps.fp.outputs.cache_key }}) — heavy jobs will run."
+          fi
