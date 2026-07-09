@@ -98,6 +98,33 @@ async def test_retry_closure_reschedules_the_load() -> None:
     created[0].close()
 
 
+async def test_retry_closure_is_hass_callback() -> None:
+    """The retry closure must be a HA ``@callback`` so it runs on the event loop (#39)."""
+    from homeassistant.core import is_callback
+
+    src = _source()
+    captured: list = []
+
+    def fake_call_later(_hass, _delay, callback):
+        captured.append(callback)
+        return lambda: None
+
+    with (
+        patch(
+            "custom_components.polygonal_zones.zone_source.load_zones",
+            new=AsyncMock(side_effect=RuntimeError("boom")),
+        ),
+        patch(
+            "custom_components.polygonal_zones.zone_source.async_call_later",
+            side_effect=fake_call_later,
+        ),
+    ):
+        await src._async_initial_load(_hass(), attempt=1)
+
+    assert len(captured) == 1
+    assert is_callback(captured[0]) is True
+
+
 async def test_initial_load_exhausted_raises_issue_and_notifies() -> None:
     src = _source()
     listener = MagicMock()
