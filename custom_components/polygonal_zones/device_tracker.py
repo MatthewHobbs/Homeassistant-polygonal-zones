@@ -1,10 +1,8 @@
 """Sensor for the polygonal_zones integration."""
 
 from collections.abc import Callable, Coroutine
-from datetime import datetime
 import logging
 from pathlib import Path
-import random
 from typing import Any
 
 from homeassistant.components.device_tracker import SourceType, TrackerEntity
@@ -21,10 +19,8 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity import generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.event import async_call_later, async_track_state_change_event
+from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
-from homeassistant.helpers.start import async_at_started
-from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_ALLOW_PRIVATE_URLS,
@@ -37,12 +33,10 @@ from .const import (
 from .utils import event_should_trigger, get_locations_zone
 from .utils.geometry import exterior_coords
 from .utils.local_zones import download_zones
-from .utils.zones import UnsupportedSchemaVersion, Zone, ZoneFileCorrupt, load_zones
+from .utils.zones import UnsupportedSchemaVersion, Zone
+from .zone_source import ZoneSource
 
 _LOGGER = logging.getLogger(__name__)
-
-_MAX_LOAD_ATTEMPTS = 5
-_BASE_RETRY_DELAY = 30  # seconds; doubles on each attempt, capped at 10 min
 
 # Push-based: zone resolution runs in response to source-tracker state_changed
 # events, not on a polled schedule. Unlimited concurrency is safe.
@@ -54,14 +48,9 @@ async def async_setup_entry(
 ) -> None:
     """Set up the entities from a config entry.
 
-    Args:
-        hass: The Home Assistant instance.
-        entry: The config entry.
-        async_add_entities: A callable to add the entities.
-
-    Returns:
-        None
-
+    Builds one entry-scoped :class:`ZoneSource` (a single fetch/parse + load
+    lifecycle shared by every mirror), then a thin mirror entity per tracked
+    ``device_tracker`` that reads from it.
     """
     zone_uris: list[str] = entry.data.get(CONF_ZONES_URL) or []
     zone_uris = [zone_uri for zone_uri in zone_uris if zone_uri]
@@ -126,8 +115,7 @@ async def async_setup_entry(
                 # all-URIs-down outage is indistinguishable from a corrupt file
                 # at this boundary (get_zones raises ZoneFileCorrupt for both).
                 # Don't hard-fail the entry — that would leave no entities and
-                # no retry. Signal HA to retry setup with its own backoff,
-                # matching the resilience of the per-entity load path.
+                # no retry. Signal HA to retry setup with its own backoff.
                 raise ConfigEntryNotReady(
                     f"Could not download zone files for entry {entry.entry_id}: {err}"
                 ) from err
@@ -135,22 +123,26 @@ async def async_setup_entry(
         zone_uris = [f"/polygonal_zones/{entry.entry_id}.json"]
         editable_file = True
 
-    entities = []
-    for entity_id in entry.data.get(CONF_ENTITIES, []):
-        entitiy_name = entity_id.split(".")[-1]
-        base_id = generate_entity_id("device_tracker.polygonal_zones_{}", entitiy_name, hass=hass)
+    source = ZoneSource(
+        entry.entry_id,
+        zone_uris,
+        prioritize,
+        editable_file,
+        allow_private_urls=allow_private_urls,
+    )
+    entry.runtime_data.source = source
 
-        entity = PolygonalZoneEntity(
+    entities = [
+        PolygonalZoneEntity(
+            source,
             entity_id,
-            entry.entry_id,
-            zone_uris,
-            base_id,
-            prioritize,
-            editable_file,
+            generate_entity_id(
+                "device_tracker.polygonal_zones_{}", entity_id.split(".")[-1], hass=hass
+            ),
             expose_coordinates,
-            allow_private_urls,
         )
-        entities.append(entity)
+        for entity_id in entry.data.get(CONF_ENTITIES, [])
+    ]
 
     platform = entity_platform.async_get_current_platform()
     platform.async_register_entity_service(
@@ -160,12 +152,28 @@ async def async_setup_entry(
         supports_response=SupportsResponse.OPTIONAL,
     )
 
+    # Migration: pre-refactor releases raised the zone-load repair issue per
+    # entity (``zone_load_failed_<mirror entity_id>``); the shared source now
+    # uses a single per-entry id. Clear any stale per-entity issue so an upgraded
+    # user whose issue was open doesn't keep a warning that can never clear.
+    for entity in entities:
+        ir.async_delete_issue(hass, DOMAIN, f"zone_load_failed_{entity.entity_id}")
+
     async_add_entities(entities, True)
     entry.runtime_data.entities = entities
+    # Kick off the single shared load once entities exist to receive the result.
+    source.async_schedule_initial_load(hass)
 
 
 class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
-    """Representation of a polygonal zone entity."""
+    """A mirror ``device_tracker`` that resolves its source into a polygonal zone.
+
+    Zone data + load lifecycle live on the shared entry-scoped :class:`ZoneSource`;
+    this entity holds only its own tracked source id, display prefs, and resolved
+    state. The historical private attributes (``_zones``, ``_zones_urls``,
+    ``_last_load_*`` …) are preserved as read-only properties that delegate to the
+    source, so services/diagnostics keep a stable read interface.
+    """
 
     _attr_location_name: str | None = None
     _attr_latitude: float | None = None
@@ -174,139 +182,87 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
 
     def __init__(
         self,
+        source: ZoneSource,
         tracked_entity_id: str,
-        config_entry_id: str,
-        zone_urls: list[str],
         own_id: str,
-        prioritized_zone_files: bool,
-        editable_file: bool,
         expose_coordinates: bool = True,
-        allow_private_urls: bool = False,
     ) -> None:
         """Initialize the entity."""
-        self._config_entry_id = config_entry_id
+        self._source = source
         self._entity_id = tracked_entity_id
-        self._zones_urls = zone_urls
-        self._prioritize_zone_files = prioritized_zone_files
         self._expose_coordinates = expose_coordinates
-        self._allow_private_urls = allow_private_urls
 
-        self._zones: list[Zone] = []
-        self._last_load_failures: list[tuple[str, str]] = []
-        # Observability: when did the last successful load complete, and what
-        # was the outcome of the most recent attempt. Surfaced in diagnostics
-        # and in the mirror entity's attributes so a user debugging stale zones
-        # can see "never" / "ok" / "failed" + timestamp without scraping logs.
-        self._last_zones_loaded_at: datetime | None = None
-        self._last_load_result: str = "never"
         self._unsub: Callable[[], None] | None = None
-        self._unsub_at_started: Callable[[], None] | None = None
-        self._unsub_retry: Callable[[], None] | None = None
+        self._unsub_source: Callable[[], None] | None = None
 
         self.entity_id = own_id
         self._attr_unique_id = own_id
-
         self._attr_source_type = SourceType.GPS
-        self._editable_file = editable_file
+
+    # --- read interface delegating to the shared source ------------------------
+    # Kept so services (which read _config_entry_id / editable_file / zone_urls)
+    # and diagnostics (which getattr _zones / _last_load_* …) need no changes.
+
+    @property
+    def _config_entry_id(self) -> str:
+        return self._source.entry_id
+
+    @property
+    def _zones(self) -> list[Zone]:
+        return self._source.zones
+
+    @property
+    def _zones_urls(self) -> list[str]:
+        return self._source.zone_urls
+
+    @property
+    def _editable_file(self) -> bool:
+        return self._source.editable_file
+
+    @property
+    def _prioritize_zone_files(self) -> bool:
+        return self._source.prioritize
+
+    @property
+    def _allow_private_urls(self) -> bool:
+        return self._source.allow_private_urls
+
+    @property
+    def _last_load_result(self) -> str:
+        return self._source.last_load_result
+
+    @property
+    def _last_zones_loaded_at(self):
+        return self._source.last_zones_loaded_at
+
+    @property
+    def _last_load_failures(self) -> list[tuple[str, str]]:
+        return self._source.last_load_failures
+
+    # --------------------------------------------------------------------------
 
     async def async_added_to_hass(self) -> None:
-        """Run when the entity is added to homeassistant.
+        """Restore prior state, subscribe to the source tracker, and to reloads.
 
-        Registers the state listener and schedules zone initialization via
-        ``async_at_started``, which fires immediately if Home Assistant is
-        already running and otherwise waits for the start event. This avoids
-        the race where ``hass.is_running`` flips between check and
-        subscription.
+        The shared source drives the actual zone load; this entity re-resolves
+        whenever the source (re)loads (``add_listener``) and whenever its tracked
+        device reports a new location (``async_track_state_change_event``, which
+        HA indexes by entity_id so we're woken only for our own source).
         """
         last_state = await self.async_get_last_state()
-
         if last_state is not None:
             _LOGGER.debug("Restoring previous state for '%s'", self._entity_id)
             self._attr_location_name = last_state.state
             self._attr_extra_state_attributes = last_state.attributes
 
-        async def _initialize_zones(_hass: HomeAssistant, attempt: int = 1) -> None:
-            _LOGGER.debug(
-                "Initializing zones for entity: %s (attempt %d)",
-                self._entity_id,
-                attempt,
-            )
-            try:
-                result = await load_zones(
-                    self._zones_urls,
-                    self.hass,
-                    self._prioritize_zone_files,
-                    allow_private_urls=self._allow_private_urls,
-                )
-                if self._zones_urls and not result.zones and result.failures:
-                    first_uri, first_msg = result.failures[0]
-                    raise ZoneFileCorrupt(
-                        f"All {len(result.failures)} zone URIs failed; "
-                        f"first: {first_uri}: {first_msg}"
-                    )
-                self._zones = result.zones
-                self._last_load_failures = result.failures
-            except Exception:
-                self._last_load_result = "failed"
-                if attempt < _MAX_LOAD_ATTEMPTS:
-                    capped = min(600, _BASE_RETRY_DELAY * (2 ** (attempt - 1)))
-                    # Equal jitter: spread the retry across [capped/2, capped].
-                    # Every entity under one config entry shares the same zone
-                    # source and the same schedule, so without jitter N entities
-                    # would stampede the host in lockstep on each attempt. The
-                    # lower half preserves a minimum backoff; the random upper
-                    # half de-synchronises them.
-                    delay = capped / 2 + random.uniform(0, capped / 2)
-                    _LOGGER.warning(
-                        "Failed to load zones for entry=%s (attempt %d/%d); retrying in %.0fs",
-                        self._config_entry_id,
-                        attempt,
-                        _MAX_LOAD_ATTEMPTS,
-                        delay,
-                        exc_info=True,
-                    )
-
-                    def _retry(_now, _next_attempt=attempt + 1):
-                        self._unsub_retry = None
-                        self.hass.async_create_task(_initialize_zones(self.hass, _next_attempt))
-
-                    self._unsub_retry = async_call_later(self.hass, delay, _retry)
-                else:
-                    _LOGGER.exception(
-                        "Giving up loading zones for entry=%s after %d attempts; "
-                        "call the reload_zones service or reload the integration to retry",
-                        self._config_entry_id,
-                        _MAX_LOAD_ATTEMPTS,
-                    )
-                    self._set_available(False)
-                    ir.async_create_issue(
-                        self.hass,
-                        DOMAIN,
-                        f"zone_load_failed_{self._attr_unique_id}",
-                        is_fixable=False,
-                        severity=ir.IssueSeverity.WARNING,
-                        translation_key="zone_load_failed",
-                        translation_placeholders={"entity_id": str(self._attr_unique_id)},
-                    )
-                return
-            # Successful load — clear any open repair issue from a prior failure.
-            self._last_zones_loaded_at = dt_util.utcnow()
-            self._last_load_result = "ok"
-            ir.async_delete_issue(self.hass, DOMAIN, f"zone_load_failed_{self._attr_unique_id}")
-            self._set_available(True)
-            await self._update_state()
-
-        self._unsub_at_started = async_at_started(self.hass, _initialize_zones)
-
-        # Subscribe to the source tracker specifically. HA indexes this by
-        # entity_id, so the callback fires only for our tracked device — not for
-        # every state change on the bus (which, with a global ``state_changed``
-        # listener, woke one coroutine per mirror entity on every unrelated
-        # tick). This is the primitive the entity-event-setup quality rule points
-        # to. The change-of-location filter still lives in event_should_trigger.
+        self._unsub_source = self._source.add_listener(self._handle_source_reloaded)
         self._unsub = async_track_state_change_event(
             self.hass, [self._entity_id], self._handle_state_change_builder()
         )
+
+    def _handle_source_reloaded(self) -> None:
+        """Source (re)loaded — re-resolve this mirror's state off the event loop."""
+        self.hass.async_create_task(self._update_state())
 
     def _set_available(self, available: bool) -> None:
         """Toggle entity availability and log transitions at INFO."""
@@ -314,27 +270,18 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
             return
         self._attr_available = available
         if available:
-            _LOGGER.info(
-                "Entity %s is available again (zones loaded)",
-                self._attr_unique_id,
-            )
+            _LOGGER.info("Entity %s is available again (zones loaded)", self._attr_unique_id)
         else:
-            _LOGGER.info(
-                "Entity %s is unavailable (zone loading exhausted retries)",
-                self._attr_unique_id,
-            )
+            _LOGGER.info("Entity %s is unavailable", self._attr_unique_id)
 
     async def async_will_remove_from_hass(self) -> None:
         """Handle cleanup when the entity is removed."""
         if self._unsub:
             self._unsub()
             self._unsub = None
-        if self._unsub_at_started:
-            self._unsub_at_started()
-            self._unsub_at_started = None
-        if self._unsub_retry:
-            self._unsub_retry()
-            self._unsub_retry = None
+        if self._unsub_source:
+            self._unsub_source()
+            self._unsub_source = None
 
     async def update_location(self, latitude, longitude, gps_accuracy) -> None:
         """Update the location of the entity.
@@ -344,20 +291,17 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         be called when latitude, longitude, or gps_accuracy actually changes.
         """
         zone = await self.hass.async_add_executor_job(
-            get_locations_zone, latitude, longitude, gps_accuracy, self._zones
+            get_locations_zone, latitude, longitude, gps_accuracy, self._source.zones
         )
         _LOGGER.debug("State of entity '%s' changed. new zone: %s", self._attr_unique_id, zone)
         self._attr_location_name = zone["name"] if zone is not None else "away"
         # Base attributes are non-location diagnostics — safe to publish even when
         # coordinates are off (they reveal load health, not where the device is).
+        loaded_at = self._source.last_zones_loaded_at
         attributes: dict[str, Any] = {
             "source_entity": self._entity_id,
-            "last_load_result": self._last_load_result,
-            "last_zones_loaded_at": (
-                self._last_zones_loaded_at.isoformat()
-                if self._last_zones_loaded_at is not None
-                else None
-            ),
+            "last_load_result": self._source.last_load_result,
+            "last_zones_loaded_at": loaded_at.isoformat() if loaded_at is not None else None,
         }
         if self._expose_coordinates:
             attributes["latitude"] = latitude
@@ -367,7 +311,7 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
             # and `zone_uris` can leak LAN hostnames/paths on a shared dashboard.
             # Both are gated with coordinates so "expose off" means only the zone
             # name (plus load diagnostics) leaves the entity. See docs/privacy.md.
-            attributes["zone_uris"] = self._zones_urls
+            attributes["zone_uris"] = self._source.zone_urls
             # Every zone the buffered GPS point currently intersects, not just the
             # winning one — overlap-priority debugging in Developer Tools.
             attributes["matched_zones"] = zone["matched_zones"] if zone is not None else []
@@ -389,6 +333,13 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         return func
 
     async def _update_state(self) -> None:
+        # Zones not (yet) loaded, or the shared load exhausted its retries. The
+        # mirror can't resolve a zone, so reflect unavailable rather than acting
+        # on an empty/stale zone set.
+        if not self._source.loaded_ok:
+            self._set_available(False)
+            return
+
         entity_state = self.hass.states.get(self._entity_id)
 
         # Source tracker has been removed or is reporting unavailable /
@@ -416,35 +367,24 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         self.async_write_ha_state()
 
     async def async_reload_zones(self, call=None) -> dict | list | None:
-        """Reload the zones.
+        """Reload the shared zone source and re-resolve.
 
         Called from two paths:
-        - The ``polygonal_zones.reload_zones`` entity service, which passes
-          a ``ServiceCall`` carrying ``return_response``.
-        - Mutation service handlers (``add_new_zone`` / ``edit_zone`` /
-          ``delete_zone`` / ``replace_all_zones``) which invoke it with no
-          ``call`` to sync in-memory state after writing to disk.
+        - The ``polygonal_zones.reload_zones`` entity service, which passes a
+          ``ServiceCall`` carrying ``return_response``.
+        - Mutation service handlers, which invoke it with no ``call`` to sync
+          in-memory state after writing to disk.
+
+        The reload runs once against the entry-scoped source; the source notifies
+        every mirror to re-resolve.
         """
         invoked_as_service = call is not None
         try:
-            result = await load_zones(
-                self._zones_urls,
-                self.hass,
-                self._prioritize_zone_files,
-                allow_private_urls=self._allow_private_urls,
-            )
-            if self._zones_urls and not result.zones and result.failures:
-                first_uri, first_msg = result.failures[0]
-                raise ZoneFileCorrupt(
-                    f"All {len(result.failures)} zone URIs failed; first: {first_uri}: {first_msg}"
-                )
-            self._zones = result.zones
-            self._last_load_failures = result.failures
+            await self._source.async_reload(self.hass)
         except Exception as err:
-            self._last_load_result = "failed"
             _LOGGER.warning(
                 "Failed to reload zones for entry=%s",
-                self._config_entry_id,
+                self._source.entry_id,
                 exc_info=True,
             )
             # When the user invoked the reload_zones service (especially with
@@ -458,12 +398,6 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
                 ) from err
             return None
         _LOGGER.debug("Reloaded zones of entity: %s", self._attr_unique_id)
-        # Successful reload clears any repair issue from a prior failure —
-        # same policy as the startup path so a user who invokes reload_zones
-        # after fixing a URL sees the issue disappear without a HA restart.
-        self._last_zones_loaded_at = dt_util.utcnow()
-        self._last_load_result = "ok"
-        ir.async_delete_issue(self.hass, DOMAIN, f"zone_load_failed_{self._attr_unique_id}")
 
         await self._update_state()
         if call is not None and call.return_response:
@@ -473,24 +407,24 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
                     "priority": z.priority,
                     "geometry": list(exterior_coords(z.geometry)),
                 }
-                for z in self._zones
+                for z in self._source.zones
             ]
         return None
 
     @property
     def zones(self) -> list[Zone]:
         """The loaded zones."""
-        return self._zones
+        return self._source.zones
 
     @property
     def editable_file(self) -> bool:
         """Is the zone file editable."""
-        return self._editable_file
+        return self._source.editable_file
 
     @property
     def zone_urls(self) -> list[str]:
         """List of the urls where the zones are stored."""
-        return self._zones_urls
+        return self._source.zone_urls
 
     @property
     def source_type(self) -> SourceType:
@@ -506,7 +440,7 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
     def device_info(self) -> DeviceInfo | None:
         """Information about the polygonal_zones device."""
         return {
-            "identifiers": {("polygonal_zones", self._config_entry_id)},
+            "identifiers": {("polygonal_zones", self._source.entry_id)},
             "name": "Polygonal Zones",
             "manufacturer": "Polygonal Zones Community",
             "entry_type": DeviceEntryType.SERVICE,
@@ -520,4 +454,4 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
     @property
     def unique_id(self) -> str:
         """Return a unique id for the entity."""
-        return f"{self._config_entry_id}_{self._entity_id}"
+        return f"{self._source.entry_id}_{self._entity_id}"

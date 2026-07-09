@@ -2,11 +2,10 @@
 
 import json
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from custom_components.polygonal_zones.device_tracker import PolygonalZoneEntity
 from custom_components.polygonal_zones.services.add_new_zone import (
     action_builder as add_builder,
 )
@@ -139,64 +138,6 @@ async def test_replace_all_timeout_wrapped(tmp_path) -> None:
 
 
 # ---- _retry inner function in device_tracker ----
-
-
-def _make_entity_for_retry() -> PolygonalZoneEntity:
-    return PolygonalZoneEntity(
-        tracked_entity_id="device_tracker.phone",
-        config_entry_id="entry-id",
-        zone_urls=["https://example.com/zones.json"],
-        own_id="device_tracker.polygonal_zones_phone",
-        prioritized_zone_files=False,
-        editable_file=False,
-    )
-
-
-async def test_retry_callback_fires_initialize_again() -> None:
-    """async_call_later is invoked with the _retry closure; calling it triggers another attempt."""
-    entity = _make_entity_for_retry()
-    bus = SimpleNamespace(async_listen=MagicMock(return_value=lambda: None))
-    create_task_calls = []
-    entity.hass = SimpleNamespace(
-        bus=bus,
-        async_create_task=MagicMock(side_effect=lambda coro: create_task_calls.append(coro)),
-    )
-    entity.async_get_last_state = AsyncMock(return_value=None)
-
-    captured = {}
-
-    def fake_at_started(hass, cb):
-        captured["cb"] = cb
-        return lambda: None
-
-    def fake_call_later(_hass, _delay, callback):
-        # Synchronously invoke the retry closure to cover its body
-        callback(None)
-        return lambda: None
-
-    with (
-        patch(
-            "custom_components.polygonal_zones.device_tracker.async_at_started",
-            side_effect=fake_at_started,
-        ),
-        patch(
-            "custom_components.polygonal_zones.device_tracker.load_zones",
-            new=AsyncMock(side_effect=RuntimeError("boom")),
-        ),
-        patch(
-            "custom_components.polygonal_zones.device_tracker.async_call_later",
-            side_effect=fake_call_later,
-        ),
-        patch("custom_components.polygonal_zones.device_tracker.ir.async_create_issue"),
-        patch("custom_components.polygonal_zones.device_tracker.ir.async_delete_issue"),
-    ):
-        await entity.async_added_to_hass()
-        await captured["cb"](entity.hass)
-
-    # Cleanup any coroutine objects we created (the retry called create_task with one)
-    for coro in create_task_calls:
-        coro.close()
-    assert len(create_task_calls) == 1
 
 
 # ---- general._PublicOnlyResolver mixed-IP filtering ----

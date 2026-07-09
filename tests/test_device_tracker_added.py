@@ -1,4 +1,8 @@
-"""Coverage for async_added_to_hass / _update_state / reload escalation paths."""
+"""Entity-level behaviour: source subscription, reload delegation, _update_state.
+
+The zone load/retry/repair lifecycle now lives on ``ZoneSource`` and is tested in
+``test_zone_source.py``; here we cover the thin mirror entity that reads from it.
+"""
 
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -9,204 +13,19 @@ from shapely.geometry import Polygon
 
 from custom_components.polygonal_zones.device_tracker import PolygonalZoneEntity
 from custom_components.polygonal_zones.utils.zones import Zone, ZoneLoadResult
-
-
-def _make_entity() -> PolygonalZoneEntity:
-    return PolygonalZoneEntity(
-        tracked_entity_id="device_tracker.phone",
-        config_entry_id="entry-id",
-        zone_urls=["https://example.com/zones.json"],
-        own_id="device_tracker.polygonal_zones_phone",
-        prioritized_zone_files=False,
-        editable_file=False,
-    )
+from tests.helpers import make_entity as _make_entity
+from tests.helpers import make_source
 
 
 def _make_hass() -> SimpleNamespace:
-    bus = SimpleNamespace(async_listen=MagicMock(return_value=lambda: None))
-
     async def aaej(func, *args):
         return func(*args)
 
     return SimpleNamespace(
-        bus=bus,
         states=SimpleNamespace(get=MagicMock(return_value=None)),
         async_create_task=MagicMock(),
         async_add_executor_job=aaej,
     )
-
-
-async def test_added_to_hass_initializes_zones_immediately() -> None:
-    """async_at_started callback runs the initialiser; zones load + state updates."""
-    entity = _make_entity()
-    entity.hass = _make_hass()
-    # Provide a valid source-tracker state so _update_state doesn't flip
-    # availability to False on the unavailable-source path.
-    entity.hass.states.get = MagicMock(
-        return_value=SimpleNamespace(
-            state="home",
-            attributes={"latitude": 0.5, "longitude": 0.5, "gps_accuracy": 5},
-        )
-    )
-    entity.async_get_last_state = AsyncMock(return_value=None)
-
-    polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
-    zones = [Zone(name="Home", geometry=polygon, priority=0)]
-
-    captured = {}
-
-    def _capture(hass, cb):
-        captured["cb"] = cb
-        return lambda: None
-
-    with (
-        patch(
-            "custom_components.polygonal_zones.device_tracker.async_at_started",
-            side_effect=_capture,
-        ),
-        patch(
-            "custom_components.polygonal_zones.device_tracker.load_zones",
-            new=AsyncMock(return_value=ZoneLoadResult(zones=zones)),
-        ),
-        patch.object(PolygonalZoneEntity, "async_write_ha_state", lambda self: None),
-        patch("custom_components.polygonal_zones.device_tracker.ir.async_create_issue"),
-        patch("custom_components.polygonal_zones.device_tracker.ir.async_delete_issue"),
-    ):
-        await entity.async_added_to_hass()
-        await captured["cb"](entity.hass)
-
-    assert entity._zones
-    assert entity._attr_available is True
-
-
-async def test_added_to_hass_failure_schedules_retry() -> None:
-    """When get_zones raises and attempts < MAX, async_call_later is armed."""
-    entity = _make_entity()
-    entity.hass = _make_hass()
-    entity.async_get_last_state = AsyncMock(return_value=None)
-
-    call_later_mock = MagicMock(return_value=lambda: None)
-    captured = {}
-
-    def _capture(hass, cb):
-        captured["cb"] = cb
-        return lambda: None
-
-    with (
-        patch(
-            "custom_components.polygonal_zones.device_tracker.async_at_started",
-            side_effect=_capture,
-        ),
-        patch(
-            "custom_components.polygonal_zones.device_tracker.load_zones",
-            new=AsyncMock(side_effect=RuntimeError("boom")),
-        ),
-        patch(
-            "custom_components.polygonal_zones.device_tracker.async_call_later",
-            new=call_later_mock,
-        ),
-    ):
-        await entity.async_added_to_hass()
-        await captured["cb"](entity.hass)
-
-    call_later_mock.assert_called_once()
-    delay = call_later_mock.call_args.args[1]
-    # Equal jitter spreads the first-attempt retry across [15, 30]s so
-    # entities sharing a zone source don't retry in lockstep.
-    assert 15 <= delay <= 30
-
-
-async def test_added_to_hass_exhausted_retries_marks_unavailable() -> None:
-    """After MAX_LOAD_ATTEMPTS, the entity goes unavailable and no further retry is armed."""
-    entity = _make_entity()
-    entity.hass = _make_hass()
-    entity.async_get_last_state = AsyncMock(return_value=None)
-
-    call_later_mock = MagicMock(return_value=lambda: None)
-    # Force the closure to think it's the final attempt: stub async_at_started to invoke
-    # the inner function with attempt=5
-    captured = {}
-
-    def fake_at_started(hass, cb):
-        captured["cb"] = cb
-        return lambda: None
-
-    create_issue_mock = MagicMock()
-    with (
-        patch(
-            "custom_components.polygonal_zones.device_tracker.async_at_started",
-            side_effect=fake_at_started,
-        ),
-        patch(
-            "custom_components.polygonal_zones.device_tracker.load_zones",
-            new=AsyncMock(side_effect=RuntimeError("boom")),
-        ),
-        patch(
-            "custom_components.polygonal_zones.device_tracker.async_call_later",
-            new=call_later_mock,
-        ),
-        patch(
-            "custom_components.polygonal_zones.device_tracker.ir.async_create_issue",
-            new=create_issue_mock,
-        ),
-    ):
-        await entity.async_added_to_hass()
-        await captured["cb"](entity.hass, attempt=5)
-
-    call_later_mock.assert_not_called()
-    create_issue_mock.assert_called_once()
-    assert entity._attr_available is False
-
-
-async def test_added_to_hass_all_uris_failed_escalates_and_retries() -> None:
-    """The real failure shape — load_zones returns empty zones + failure records
-    (not a raised exception) — must still escalate to ZoneFileCorrupt and arm a
-    retry. Guards the duplicated escalation branch from drifting from get_zones."""
-    entity = _make_entity()
-    entity.hass = _make_hass()
-    entity.async_get_last_state = AsyncMock(return_value=None)
-
-    call_later_mock = MagicMock(return_value=lambda: None)
-    captured = {}
-
-    def _capture(hass, cb):
-        captured["cb"] = cb
-        return lambda: None
-
-    with (
-        patch(
-            "custom_components.polygonal_zones.device_tracker.async_at_started",
-            side_effect=_capture,
-        ),
-        patch(
-            "custom_components.polygonal_zones.device_tracker.load_zones",
-            new=AsyncMock(return_value=ZoneLoadResult(zones=[], failures=[("http://x", "boom")])),
-        ),
-        patch(
-            "custom_components.polygonal_zones.device_tracker.async_call_later",
-            new=call_later_mock,
-        ),
-    ):
-        await entity.async_added_to_hass()
-        await captured["cb"](entity.hass)
-
-    call_later_mock.assert_called_once()
-    assert entity._last_load_result == "failed"
-
-
-async def test_reload_zones_all_uris_failed_raises_for_service() -> None:
-    """Same failure shape through the reload_zones service path → HomeAssistantError."""
-    entity = _make_entity()
-    entity.hass = _make_hass()
-
-    with (
-        patch(
-            "custom_components.polygonal_zones.device_tracker.load_zones",
-            new=AsyncMock(return_value=ZoneLoadResult(zones=[], failures=[("http://x", "boom")])),
-        ),
-        pytest.raises(HomeAssistantError),
-    ):
-        await entity.async_reload_zones(SimpleNamespace(return_response=True))
 
 
 async def test_added_to_hass_tracks_only_its_source_entity() -> None:
@@ -217,15 +36,9 @@ async def test_added_to_hass_tracks_only_its_source_entity() -> None:
     entity.async_get_last_state = AsyncMock(return_value=None)
 
     tracker = MagicMock(return_value=lambda: None)
-    with (
-        patch(
-            "custom_components.polygonal_zones.device_tracker.async_at_started",
-            return_value=lambda: None,
-        ),
-        patch(
-            "custom_components.polygonal_zones.device_tracker.async_track_state_change_event",
-            new=tracker,
-        ),
+    with patch(
+        "custom_components.polygonal_zones.device_tracker.async_track_state_change_event",
+        new=tracker,
     ):
         await entity.async_added_to_hass()
 
@@ -234,10 +47,61 @@ async def test_added_to_hass_tracks_only_its_source_entity() -> None:
     assert tracker.call_args.args[1] == ["device_tracker.phone"]
 
 
-async def test_update_state_invokes_update_location_when_attrs_present() -> None:
+async def test_added_to_hass_registers_source_listener() -> None:
+    """The mirror registers a reload listener so it re-resolves when zones reload."""
+    source = make_source()
+    entity = _make_entity(source=source)
+    entity.hass = _make_hass()
+    entity.async_get_last_state = AsyncMock(return_value=None)
+
+    await entity.async_added_to_hass()
+
+    assert len(source._listeners) == 1
+
+
+async def test_source_reload_notifies_entity_to_update() -> None:
+    """When the source notifies, the entity schedules a state re-resolve."""
+    created = []
+    hass = _make_hass()
+    hass.async_create_task = created.append
     entity = _make_entity()
+    entity.hass = hass
+    entity._handle_source_reloaded()
+    assert len(created) == 1
+    created[0].close()  # close the scheduled coroutine (never awaited in the test)
+
+
+async def test_reload_zones_service_all_uris_failed_raises() -> None:
+    """reload_zones service delegating to the source that fails every URI →
+    HomeAssistantError (not a silent no-op)."""
+    entity = _make_entity()
+    entity.hass = _make_hass()
+
+    with (
+        patch(
+            "custom_components.polygonal_zones.zone_source.load_zones",
+            new=AsyncMock(return_value=ZoneLoadResult(zones=[], failures=[("http://x", "boom")])),
+        ),
+        patch("custom_components.polygonal_zones.zone_source.ir.async_delete_issue"),
+        pytest.raises(HomeAssistantError),
+    ):
+        await entity.async_reload_zones(SimpleNamespace(return_response=True))
+
+
+async def test_update_state_unavailable_when_source_not_loaded() -> None:
+    """Zones not yet loaded (or load exhausted) → the mirror is unavailable."""
+    entity = _make_entity(loaded_ok=False)
+    entity._attr_available = True
+    entity.hass = SimpleNamespace(states=SimpleNamespace(get=MagicMock(return_value=None)))
+
+    with patch.object(PolygonalZoneEntity, "async_write_ha_state", lambda self: None):
+        await entity._update_state()
+    assert entity._attr_available is False
+
+
+async def test_update_state_invokes_update_location_when_attrs_present() -> None:
     polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
-    entity._zones = [Zone(name="Home", geometry=polygon, priority=0)]
+    entity = _make_entity(zones=[Zone(name="Home", geometry=polygon, priority=0)])
 
     async def aaej(func, *args):
         return func(*args)
@@ -320,9 +184,8 @@ async def test_update_state_stays_available_when_source_has_state_but_no_gps() -
 
 async def test_update_state_recovers_available_when_source_returns() -> None:
     """Mirror flipped to unavailable; next valid GPS update restores availability."""
-    entity = _make_entity()
     polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
-    entity._zones = [Zone(name="Home", geometry=polygon, priority=0)]
+    entity = _make_entity(zones=[Zone(name="Home", geometry=polygon, priority=0)])
     entity._attr_available = False  # previously flipped off
 
     async def aaej(func, *args):
