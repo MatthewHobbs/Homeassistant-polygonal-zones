@@ -46,4 +46,4 @@ jobs:
         run: |
           docker run --rm --platform=${{ matrix.platform }} \
             -v "$PWD:/src" -w /src python:3.14-slim \
-            bash -euxc 'pip install --quiet "shapely>=2.0,<3" && python tests/smoke/shapely_smoke.py'
+            bash -euxc 'pip install --quiet "shapely>=2.1.2,<3" && python tests/smoke/shapely_smoke.py'
