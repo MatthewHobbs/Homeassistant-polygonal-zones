@@ -209,6 +209,31 @@ async def test_reload_zones_all_uris_failed_raises_for_service() -> None:
         await entity.async_reload_zones(SimpleNamespace(return_response=True))
 
 
+async def test_added_to_hass_tracks_only_its_source_entity() -> None:
+    """The mirror subscribes to its specific source tracker via
+    async_track_state_change_event — not a global state_changed bus listener."""
+    entity = _make_entity()
+    entity.hass = _make_hass()
+    entity.async_get_last_state = AsyncMock(return_value=None)
+
+    tracker = MagicMock(return_value=lambda: None)
+    with (
+        patch(
+            "custom_components.polygonal_zones.device_tracker.async_at_started",
+            return_value=lambda: None,
+        ),
+        patch(
+            "custom_components.polygonal_zones.device_tracker.async_track_state_change_event",
+            new=tracker,
+        ),
+    ):
+        await entity.async_added_to_hass()
+
+    tracker.assert_called_once()
+    # Second positional arg is the list of entity_ids to watch.
+    assert tracker.call_args.args[1] == ["device_tracker.phone"]
+
+
 async def test_update_state_invokes_update_location_when_attrs_present() -> None:
     entity = _make_entity()
     polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
