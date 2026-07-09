@@ -11,7 +11,11 @@ from homeassistant.components.device_tracker import SourceType, TrackerEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ENTITIES, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, SupportsResponse
-from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
+from homeassistant.exceptions import (
+    ConfigEntryError,
+    ConfigEntryNotReady,
+    HomeAssistantError,
+)
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
@@ -298,40 +302,6 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
             "state_changed", self._handle_state_change_builder()
         )
 
-    async def async_update_config(self, config_entry: ConfigEntry) -> None:
-        """Update the configuration of the entity."""
-        self._zones_urls = config_entry.data.get(CONF_ZONES_URL) or []
-        self._prioritize_zone_files = bool(config_entry.data.get(CONF_PRIORITIZE_ZONE_FILES))
-        self._allow_private_urls = bool(config_entry.data.get(CONF_ALLOW_PRIVATE_URLS, False))
-
-        try:
-            result = await load_zones(
-                self._zones_urls,
-                self.hass,
-                self._prioritize_zone_files,
-                allow_private_urls=self._allow_private_urls,
-            )
-            if self._zones_urls and not result.zones and result.failures:
-                first_uri, first_msg = result.failures[0]
-                raise ZoneFileCorrupt(
-                    f"All {len(result.failures)} zone URIs failed; first: {first_uri}: {first_msg}"
-                )
-            self._zones = result.zones
-            self._last_load_failures = result.failures
-        except Exception:
-            self._last_load_result = "failed"
-            _LOGGER.warning(
-                "Failed to reload zones for entry=%s; keeping previous zones",
-                self._config_entry_id,
-                exc_info=True,
-            )
-            return
-
-        self._last_zones_loaded_at = dt_util.utcnow()
-        self._last_load_result = "ok"
-        self._set_available(True)
-        await self._update_state()
-
     def _set_available(self, available: bool) -> None:
         """Toggle entity availability and log transitions at INFO."""
         if self._attr_available == available:
@@ -372,24 +342,29 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         )
         _LOGGER.debug("State of entity '%s' changed. new zone: %s", self._attr_unique_id, zone)
         self._attr_location_name = zone["name"] if zone is not None else "away"
+        # Base attributes are non-location diagnostics — safe to publish even when
+        # coordinates are off (they reveal load health, not where the device is).
         attributes: dict[str, Any] = {
             "source_entity": self._entity_id,
-            "zone_uris": self._zones_urls,
             "last_load_result": self._last_load_result,
             "last_zones_loaded_at": (
                 self._last_zones_loaded_at.isoformat()
                 if self._last_zones_loaded_at is not None
                 else None
             ),
-            # Every zone the buffered GPS point currently intersects, not just
-            # the winning one. Makes overlap-priority debugging a five-second
-            # check in Developer Tools instead of a JSON scrape.
-            "matched_zones": zone["matched_zones"] if zone is not None else [],
         }
         if self._expose_coordinates:
             attributes["latitude"] = latitude
             attributes["longitude"] = longitude
             attributes["gps_accuracy"] = gps_accuracy
+            # `matched_zones` reveals fine-grained (overlapping) semantic location
+            # and `zone_uris` can leak LAN hostnames/paths on a shared dashboard.
+            # Both are gated with coordinates so "expose off" means only the zone
+            # name (plus load diagnostics) leaves the entity. See docs/privacy.md.
+            attributes["zone_uris"] = self._zones_urls
+            # Every zone the buffered GPS point currently intersects, not just the
+            # winning one — overlap-priority debugging in Developer Tools.
+            attributes["matched_zones"] = zone["matched_zones"] if zone is not None else []
         self._attr_extra_state_attributes = attributes
 
     def _handle_state_change_builder(
@@ -444,6 +419,7 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
           ``delete_zone`` / ``replace_all_zones``) which invoke it with no
           ``call`` to sync in-memory state after writing to disk.
         """
+        invoked_as_service = call is not None
         try:
             result = await load_zones(
                 self._zones_urls,
@@ -458,13 +434,22 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
                 )
             self._zones = result.zones
             self._last_load_failures = result.failures
-        except Exception:
+        except Exception as err:
             self._last_load_result = "failed"
             _LOGGER.warning(
                 "Failed to reload zones for entry=%s",
                 self._config_entry_id,
                 exc_info=True,
             )
+            # When the user invoked the reload_zones service (especially with
+            # return_response), surface a real failure instead of a "successful"
+            # call that quietly returned nothing. The internal post-write sync
+            # path (call is None) keeps the previous zones and stays quiet so a
+            # reload hiccup can't mask an already-committed mutation.
+            if invoked_as_service:
+                raise HomeAssistantError(
+                    f"Could not reload zones for {self._attr_unique_id}: {err}"
+                ) from err
             return None
         _LOGGER.debug("Reloaded zones of entity: %s", self._attr_unique_id)
         # Successful reload clears any repair issue from a prior failure —

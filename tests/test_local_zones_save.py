@@ -202,6 +202,25 @@ def test_get_file_lock_returns_same_instance() -> None:
     asyncio.run(_go())
 
 
+def test_release_file_lock_refuses_to_drop_held_lock() -> None:
+    """A lock held by an in-flight writer must NOT be dropped on unload — otherwise
+    the next caller gets a fresh Lock for the same path and mutual exclusion breaks.
+    Once released, the same path hands back the identical Lock object."""
+
+    async def _go():
+        path = Path("/tmp/test-held-lock.json")
+        lock = get_file_lock(path)
+        async with lock:  # simulate a mutation mid-write during a reload
+            release_file_lock(path)
+            # Still cached and identical while held.
+            assert get_file_lock(path) is lock
+        # Now idle → a subsequent release actually drops it.
+        release_file_lock(path)
+        assert get_file_lock(path) is not lock
+
+    asyncio.run(_go())
+
+
 async def test_concurrent_writes_to_same_path_serialize(tmp_path) -> None:
     """Two concurrent save_zones calls against the same file run strictly in order.
 

@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import HomeAssistant
 
+from .utils.general import redact_uri
+
 if TYPE_CHECKING:
     from . import PolygonalZonesConfigEntry
 
@@ -21,6 +23,22 @@ def _redact(value: Any) -> Any:
     if isinstance(value, list):
         return [f"<redacted-{i}>" for i, _ in enumerate(value)]
     return "<redacted>"
+
+
+def _scrub_uri_from_error(error: str, uri: str, placeholder: str) -> str:
+    """Remove a failing zone URI from its error message.
+
+    The ``uri`` field of each failure record is already redacted, but load-error
+    strings embed the URI verbatim (``Refusing redirect from '<uri>'`` etc.), so
+    the host — and any credentials/tokens in it — would leak through the ``error``
+    field into a shared diagnostics dump. Replace both the raw URI and its
+    credential-stripped form with the same placeholder used for the ``uri`` field.
+    """
+    cleaned = error.replace(uri, placeholder)
+    redacted = redact_uri(uri)
+    if redacted != uri:
+        cleaned = cleaned.replace(redacted, placeholder)
+    return cleaned
 
 
 async def async_get_config_entry_diagnostics(
@@ -55,8 +73,11 @@ async def async_get_config_entry_diagnostics(
             # surface the count + failure message so the user can see "which
             # source broke and why" without a fresh log scrape.
             "last_load_failures": [
-                {"uri": f"<redacted-{i}>", "error": err}
-                for i, (_uri, err) in enumerate(getattr(entity, "_last_load_failures", []))
+                {
+                    "uri": f"<redacted-{i}>",
+                    "error": _scrub_uri_from_error(err, uri, f"<redacted-{i}>"),
+                }
+                for i, (uri, err) in enumerate(getattr(entity, "_last_load_failures", []))
             ],
         }
         for entity in entities
