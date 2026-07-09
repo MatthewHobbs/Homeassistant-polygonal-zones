@@ -57,7 +57,7 @@ If you're setting up for the first time, install the add-on first: it gives you 
 
 ## Installation
 
-**Requirements:** Home Assistant 2026.6.4 or later (it runs on Python 3.14, which is bundled with HA OS/Supervised — so there's nothing extra to install there).
+**Requirements:** Home Assistant 2026.7.1 or later (it runs on Python 3.14, which is bundled with HA OS/Supervised — so there's nothing extra to install there).
 
 [![Add to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=MatthewHobbs&repository=Homeassistant-polygonal-zones&category=integration)
 
