@@ -10,6 +10,14 @@ on:
     #   - "src/**/*.js"
     #   - "src/**/*.jsx"
 
+# Cancel a superseded review when new commits are pushed to the same PR. Without
+# this, every push (`synchronize`) starts a fresh Claude review while the prior
+# one keeps running — each consuming Anthropic API credits (the one metered cost
+# on this public repo, where Actions minutes are free).
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   claude-review:
     # Optional: Filter by PR author
