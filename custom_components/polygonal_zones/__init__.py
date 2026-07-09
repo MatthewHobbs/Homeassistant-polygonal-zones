@@ -19,6 +19,7 @@ from .utils.local_zones import release_file_lock
 
 if TYPE_CHECKING:
     from .device_tracker import PolygonalZoneEntity
+    from .zone_source import ZoneSource
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 PLATFORMS: list[Platform] = [Platform.DEVICE_TRACKER]
@@ -27,9 +28,15 @@ _LOGGER = logging.getLogger(__name__)
 
 @dataclass
 class PolygonalZonesData:
-    """Runtime data for a polygonal_zones config entry."""
+    """Runtime data for a polygonal_zones config entry.
+
+    ``source`` is the single entry-scoped :class:`ZoneSource` that owns the
+    loaded zones + load lifecycle; every mirror entity reads from it. It is
+    populated by the device_tracker platform's ``async_setup_entry``.
+    """
 
     entities: list[PolygonalZoneEntity] = field(default_factory=list)
+    source: ZoneSource | None = None
 
 
 type PolygonalZonesConfigEntry = ConfigEntry[PolygonalZonesData]
@@ -61,6 +68,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: PolygonalZonesConfigEnt
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
+        # Cancel any pending start/retry callbacks on the shared zone source.
+        data = getattr(entry, "runtime_data", None)
+        if data is not None and data.source is not None:
+            data.source.async_shutdown()
         # Drop the per-file lock so it doesn't accumulate across reloads.
         # If download_zones was never enabled, this is a harmless no-op.
         try:

@@ -107,15 +107,25 @@ def test_get_entities_from_device_id_happy_path() -> None:
         assert entities == [fake_entity]
 
 
-async def test_sync_entities_after_write_calls_reload_on_each() -> None:
-    """Every entity under a single entry must be re-synced after a mutation write."""
-    a = SimpleNamespace(async_reload_zones=AsyncMock())
-    b = SimpleNamespace(async_reload_zones=AsyncMock())
+async def test_sync_entities_after_write_reloads_shared_source_once() -> None:
+    """All entities read one shared source, so a mutation reloads it exactly once."""
+    shared = SimpleNamespace(async_reload=AsyncMock(), entry_id="entry-id")
+    a = SimpleNamespace(_source=shared, hass=None)
+    b = SimpleNamespace(_source=shared, hass=None)
 
     await sync_entities_after_write([a, b])
 
-    a.async_reload_zones.assert_awaited_once_with()
-    b.async_reload_zones.assert_awaited_once_with()
+    shared.async_reload.assert_awaited_once()
+
+
+async def test_sync_entities_after_write_swallows_reload_failure() -> None:
+    """A post-write reload failure is logged, not raised — the write already committed."""
+    shared = SimpleNamespace(async_reload=AsyncMock(side_effect=RuntimeError("boom")))
+    shared.entry_id = "entry-id"
+    a = SimpleNamespace(_source=shared, hass=None)
+
+    await sync_entities_after_write([a])  # must not raise
+    shared.async_reload.assert_awaited_once()
 
 
 async def test_sync_entities_after_write_empty_list_is_noop() -> None:

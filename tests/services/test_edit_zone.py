@@ -41,8 +41,9 @@ async def test_edit_existing_zone_replaces_geometry(tmp_path) -> None:
     fake_entity = SimpleNamespace(
         editable_file=True,
         zone_urls=["zones.json"],
-        async_reload_zones=AsyncMock(),
+        _source=SimpleNamespace(async_reload=AsyncMock(), entry_id="entry-id"),
         _config_entry_id="entry-id",
+        hass=None,
     )
     action = action_builder(_make_hass(tmp_path))
 
@@ -64,7 +65,7 @@ async def test_edit_existing_zone_replaces_geometry(tmp_path) -> None:
     parsed = json.loads((tmp_path / "zones.json").read_text())
     assert len(parsed["features"]) == 1
     assert parsed["features"][0]["geometry"]["coordinates"][0][0] == [0, 10]
-    fake_entity.async_reload_zones.assert_awaited_once_with()
+    fake_entity._source.async_reload.assert_awaited_once()
 
 
 async def test_edit_preserves_feature_order(tmp_path) -> None:
@@ -84,8 +85,9 @@ async def test_edit_preserves_feature_order(tmp_path) -> None:
     fake_entity = SimpleNamespace(
         editable_file=True,
         zone_urls=["zones.json"],
-        async_reload_zones=AsyncMock(),
+        _source=SimpleNamespace(async_reload=AsyncMock(), entry_id="entry-id"),
         _config_entry_id="entry-id",
+        hass=None,
     )
     action = action_builder(_make_hass(tmp_path))
 
@@ -117,8 +119,9 @@ async def test_edit_missing_zone_raises(tmp_path) -> None:
     fake_entity = SimpleNamespace(
         editable_file=True,
         zone_urls=["zones.json"],
-        async_reload_zones=AsyncMock(),
+        _source=SimpleNamespace(async_reload=AsyncMock(), entry_id="entry-id"),
         _config_entry_id="entry-id",
+        hass=None,
     )
     action = action_builder(_make_hass(tmp_path))
 
@@ -144,8 +147,9 @@ async def test_edit_missing_zone_name_raises(tmp_path) -> None:
     fake_entity = SimpleNamespace(
         editable_file=True,
         zone_urls=["zones.json"],
-        async_reload_zones=AsyncMock(),
+        _source=SimpleNamespace(async_reload=AsyncMock(), entry_id="entry-id"),
         _config_entry_id="entry-id",
+        hass=None,
     )
     action = action_builder(_make_hass(tmp_path))
 

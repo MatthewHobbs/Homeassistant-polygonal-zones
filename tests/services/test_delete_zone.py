@@ -46,8 +46,9 @@ async def test_delete_existing_zone(tmp_path) -> None:
     fake_entity = SimpleNamespace(
         editable_file=True,
         zone_urls=["zones.json"],
-        async_reload_zones=AsyncMock(),
+        _source=SimpleNamespace(async_reload=AsyncMock(), entry_id="entry-id"),
         _config_entry_id="entry-id",
+        hass=None,
     )
     action = action_builder(_make_hass(tmp_path))
 
@@ -62,7 +63,7 @@ async def test_delete_existing_zone(tmp_path) -> None:
     parsed = json.loads((tmp_path / "zones.json").read_text())
     names = [f["properties"]["name"] for f in parsed["features"]]
     assert names == ["Work"]
-    fake_entity.async_reload_zones.assert_awaited_once_with()
+    fake_entity._source.async_reload.assert_awaited_once()
 
 
 async def test_delete_missing_zone_raises(tmp_path) -> None:
@@ -70,8 +71,9 @@ async def test_delete_missing_zone_raises(tmp_path) -> None:
     fake_entity = SimpleNamespace(
         editable_file=True,
         zone_urls=["zones.json"],
-        async_reload_zones=AsyncMock(),
+        _source=SimpleNamespace(async_reload=AsyncMock(), entry_id="entry-id"),
         _config_entry_id="entry-id",
+        hass=None,
     )
     action = action_builder(_make_hass(tmp_path))
 
@@ -91,8 +93,9 @@ async def test_delete_missing_zone_name_raises(tmp_path) -> None:
     fake_entity = SimpleNamespace(
         editable_file=True,
         zone_urls=["zones.json"],
-        async_reload_zones=AsyncMock(),
+        _source=SimpleNamespace(async_reload=AsyncMock(), entry_id="entry-id"),
         _config_entry_id="entry-id",
+        hass=None,
     )
     action = action_builder(_make_hass(tmp_path))
 

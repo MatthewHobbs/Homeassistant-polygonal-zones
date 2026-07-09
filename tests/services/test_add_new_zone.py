@@ -48,8 +48,9 @@ async def test_add_zone_duplicate_name_raises(tmp_path) -> None:
     fake_entity = SimpleNamespace(
         editable_file=True,
         zone_urls=["zones.json"],
-        async_reload_zones=AsyncMock(),
+        _source=SimpleNamespace(async_reload=AsyncMock(), entry_id="entry-id"),
         _config_entry_id="entry-id",
+        hass=None,
     )
     hass = _make_hass(tmp_path)
     action = action_builder(hass)
@@ -91,8 +92,9 @@ async def test_add_zone_new_name_appends_to_file(tmp_path) -> None:
     fake_entity = SimpleNamespace(
         editable_file=True,
         zone_urls=["zones.json"],
-        async_reload_zones=AsyncMock(),
+        _source=SimpleNamespace(async_reload=AsyncMock(), entry_id="entry-id"),
         _config_entry_id="entry-id",
+        hass=None,
     )
     hass = _make_hass(tmp_path)
     action = action_builder(hass)
@@ -113,27 +115,30 @@ async def test_add_zone_new_name_appends_to_file(tmp_path) -> None:
     parsed = json.loads(zones_file.read_text())
     names = sorted(f["properties"]["name"] for f in parsed["features"])
     assert names == ["Home", "Work"]
-    fake_entity.async_reload_zones.assert_awaited_once_with()
+    fake_entity._source.async_reload.assert_awaited_once()
 
 
-async def test_add_zone_syncs_all_entities_under_entry(tmp_path) -> None:
-    """Every entity under the entry gets its in-memory zones refreshed after a successful write."""
+async def test_add_zone_syncs_shared_source_once(tmp_path) -> None:
+    """All entities under an entry read one shared source, so a write reloads it once."""
     zones_file = tmp_path / "zones.json"
     zones_file.write_text(
         json.dumps({"type": "FeatureCollection", "features": [_polygon_feature("Home")]})
     )
 
+    shared_source = SimpleNamespace(async_reload=AsyncMock(), entry_id="entry-id")
     entity_a = SimpleNamespace(
         editable_file=True,
         zone_urls=["zones.json"],
-        async_reload_zones=AsyncMock(),
+        _source=shared_source,
         _config_entry_id="entry-id",
+        hass=None,
     )
     entity_b = SimpleNamespace(
         editable_file=True,
         zone_urls=["zones.json"],
-        async_reload_zones=AsyncMock(),
+        _source=shared_source,
         _config_entry_id="entry-id",
+        hass=None,
     )
     hass = _make_hass(tmp_path)
     action = action_builder(hass)
@@ -146,8 +151,7 @@ async def test_add_zone_syncs_all_entities_under_entry(tmp_path) -> None:
     ):
         await action(call)
 
-    entity_a.async_reload_zones.assert_awaited_once_with()
-    entity_b.async_reload_zones.assert_awaited_once_with()
+    shared_source.async_reload.assert_awaited_once()
 
 
 async def test_add_zone_does_not_sync_when_write_fails(tmp_path) -> None:
@@ -160,8 +164,9 @@ async def test_add_zone_does_not_sync_when_write_fails(tmp_path) -> None:
     fake_entity = SimpleNamespace(
         editable_file=True,
         zone_urls=["zones.json"],
-        async_reload_zones=AsyncMock(),
+        _source=SimpleNamespace(async_reload=AsyncMock(), entry_id="entry-id"),
         _config_entry_id="entry-id",
+        hass=None,
     )
     hass = _make_hass(tmp_path)
     action = action_builder(hass)
@@ -177,4 +182,4 @@ async def test_add_zone_does_not_sync_when_write_fails(tmp_path) -> None:
     ):
         await action(call)
 
-    fake_entity.async_reload_zones.assert_not_awaited()
+    fake_entity._source.async_reload.assert_not_awaited()
