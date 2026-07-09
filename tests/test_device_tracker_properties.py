@@ -239,3 +239,45 @@ async def test_async_setup_entry_download_failure_raises_config_entry_not_ready(
 
     # No entities were registered on the failed attempt.
     add_entities.assert_not_called()
+
+
+async def test_async_setup_entry_download_unsupported_schema_raises_config_entry_error(
+    hass_with_setup, tmp_path
+) -> None:
+    """An unsupported schema version is permanent — surface ConfigEntryError so HA
+    stops retrying, rather than ConfigEntryNotReady which would spin forever."""
+    from homeassistant.exceptions import ConfigEntryError
+
+    from custom_components.polygonal_zones import PolygonalZonesData
+    from custom_components.polygonal_zones.utils.zones import UnsupportedSchemaVersion
+
+    hass, platform = hass_with_setup
+    hass.async_add_executor_job = AsyncMock(return_value=False)  # file doesn't exist yet
+
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        runtime_data=PolygonalZonesData(),
+        data={
+            "zone_urls": ["https://example.com/zones.json"],
+            "entities": ["device_tracker.alice"],
+            "download_zones": True,
+            "expose_coordinates": True,
+        },
+    )
+    add_entities = MagicMock()
+
+    with (
+        patch(
+            "custom_components.polygonal_zones.device_tracker.entity_platform.async_get_current_platform",
+            return_value=platform,
+        ),
+        patch(
+            "custom_components.polygonal_zones.device_tracker.download_zones",
+            new=AsyncMock(side_effect=UnsupportedSchemaVersion("schema 2 > max 1")),
+        ),
+        patch("custom_components.polygonal_zones.device_tracker.ir.async_delete_issue"),
+        pytest.raises(ConfigEntryError),
+    ):
+        await async_setup_entry(hass, entry, add_entities)
+
+    add_entities.assert_not_called()

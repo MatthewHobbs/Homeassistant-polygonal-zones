@@ -11,7 +11,7 @@ from homeassistant.components.device_tracker import SourceType, TrackerEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ENTITIES, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, SupportsResponse
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
@@ -33,7 +33,7 @@ from .const import (
 from .utils import event_should_trigger, get_locations_zone
 from .utils.geometry import exterior_coords
 from .utils.local_zones import download_zones
-from .utils.zones import Zone, ZoneFileCorrupt, load_zones
+from .utils.zones import UnsupportedSchemaVersion, Zone, ZoneFileCorrupt, load_zones
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -106,12 +106,24 @@ async def async_setup_entry(
                     hass,
                     allow_private_urls=allow_private_urls,
                 )
+            except UnsupportedSchemaVersion as err:
+                # The source file's format is newer than this integration
+                # understands. Retrying can't fix that — the user must upgrade
+                # the integration or downgrade the file. Surface it as a
+                # permanent setup error (HA stops retrying and shows it) rather
+                # than spinning forever.
+                raise ConfigEntryError(
+                    f"Zone file for entry {entry.entry_id} uses an unsupported "
+                    f"schema version: {err}"
+                ) from err
             except Exception as err:
-                # Materialising the local snapshot failed (unreachable source,
-                # SSRF block, corrupt payload, disk error). Don't hard-fail the
-                # entry — that would leave no entities and no retry. Signal HA
-                # to retry setup with its own backoff, matching the resilience
-                # of the per-entity load path.
+                # Any other failure (unreachable source, SSRF block, corrupt
+                # payload, disk error) may be transient — and crucially, an
+                # all-URIs-down outage is indistinguishable from a corrupt file
+                # at this boundary (get_zones raises ZoneFileCorrupt for both).
+                # Don't hard-fail the entry — that would leave no entities and
+                # no retry. Signal HA to retry setup with its own backoff,
+                # matching the resilience of the per-entity load path.
                 raise ConfigEntryNotReady(
                     f"Could not download zone files for entry {entry.entry_id}: {err}"
                 ) from err
