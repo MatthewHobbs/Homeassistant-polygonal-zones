@@ -101,7 +101,7 @@ automation:
           message: "Alice has arrived at school"
 ```
 
-The mirror entity always exposes `zone_uris`, `source_entity`, `last_load_result`, `last_zones_loaded_at`, and `matched_zones` in its attributes. When **Expose GPS coordinates** is enabled, `latitude`, `longitude`, and `gps_accuracy` are also written on each update, so templates can read them without referencing the underlying tracker.
+The mirror entity always exposes `source_entity`, `last_load_result`, and `last_zones_loaded_at` (non-location load diagnostics). When **Expose GPS coordinates** is enabled, `latitude`, `longitude`, and `gps_accuracy` are also written on each update — along with `zone_uris` and `matched_zones` (every zone the point currently intersects). Those last two are gated with coordinates because they reveal fine-grained location (`matched_zones`) or can surface LAN hostnames (`zone_uris`); with **Expose GPS coordinates** off, only the zone name plus the load-diagnostic attributes leave the entity.
 
 ## Use cases
 
@@ -142,7 +142,7 @@ Full format specification (schema, size limits, versioning, examples): [matthewh
 
 `reload_zones` re-fetches the zone files and updates the entity's in-memory cache. The four mutating actions write to the on-disk file managed when `download_zones` is enabled — they are refused with `ZoneFileNotEditable` if the integration is reading directly from a remote URL.
 
-After a mutating action, call `reload_zones` to apply the change to the entity.
+Each mutating action automatically refreshes every tracked entity under the same config entry after a successful write — you do **not** need to call `reload_zones` afterwards. Use `reload_zones` only to re-fetch from the _source_ files/URLs: e.g. after editing `zones.json` outside of these services, or after a remote host recovers from an outage (a startup load that exhausted its retries doesn't self-heal until you reload).
 
 ## Action examples
 

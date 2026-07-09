@@ -1,8 +1,10 @@
-"""Coverage for async_added_to_hass / async_update_config / _update_state paths."""
+"""Coverage for async_added_to_hass / _update_state / reload escalation paths."""
 
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from homeassistant.exceptions import HomeAssistantError
+import pytest
 from shapely.geometry import Polygon
 
 from custom_components.polygonal_zones.device_tracker import PolygonalZoneEntity
@@ -156,48 +158,55 @@ async def test_added_to_hass_exhausted_retries_marks_unavailable() -> None:
     assert entity._attr_available is False
 
 
-async def test_update_config_reads_new_data_and_reloads() -> None:
+async def test_added_to_hass_all_uris_failed_escalates_and_retries() -> None:
+    """The real failure shape — load_zones returns empty zones + failure records
+    (not a raised exception) — must still escalate to ZoneFileCorrupt and arm a
+    retry. Guards the duplicated escalation branch from drifting from get_zones."""
     entity = _make_entity()
     entity.hass = _make_hass()
-    entity._async_write_ha_state = MagicMock()
+    entity.async_get_last_state = AsyncMock(return_value=None)
 
-    polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
-    zones = [Zone(name="Home", geometry=polygon, priority=0)]
+    call_later_mock = MagicMock(return_value=lambda: None)
+    captured = {}
 
-    new_entry = SimpleNamespace(
-        data={"zone_urls": ["https://new.example/zones.json"], "prioritize_zone_files": True}
-    )
+    def _capture(hass, cb):
+        captured["cb"] = cb
+        return lambda: None
 
-    with patch(
-        "custom_components.polygonal_zones.device_tracker.load_zones",
-        new=AsyncMock(return_value=ZoneLoadResult(zones=zones)),
+    with (
+        patch(
+            "custom_components.polygonal_zones.device_tracker.async_at_started",
+            side_effect=_capture,
+        ),
+        patch(
+            "custom_components.polygonal_zones.device_tracker.load_zones",
+            new=AsyncMock(return_value=ZoneLoadResult(zones=[], failures=[("http://x", "boom")])),
+        ),
+        patch(
+            "custom_components.polygonal_zones.device_tracker.async_call_later",
+            new=call_later_mock,
+        ),
     ):
-        await entity.async_update_config(new_entry)
+        await entity.async_added_to_hass()
+        await captured["cb"](entity.hass)
 
-    assert entity._zones_urls == ["https://new.example/zones.json"]
-    assert entity._prioritize_zone_files is True
+    call_later_mock.assert_called_once()
+    assert entity._last_load_result == "failed"
 
 
-async def test_update_config_keeps_previous_zones_on_failure() -> None:
+async def test_reload_zones_all_uris_failed_raises_for_service() -> None:
+    """Same failure shape through the reload_zones service path → HomeAssistantError."""
     entity = _make_entity()
     entity.hass = _make_hass()
-    entity._async_write_ha_state = MagicMock()
 
-    polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
-    entity._zones = [Zone(name="Home", geometry=polygon, priority=0)]
-
-    new_entry = SimpleNamespace(
-        data={"zone_urls": ["https://nope"], "prioritize_zone_files": False}
-    )
-
-    with patch(
-        "custom_components.polygonal_zones.device_tracker.load_zones",
-        new=AsyncMock(side_effect=RuntimeError("nope")),
+    with (
+        patch(
+            "custom_components.polygonal_zones.device_tracker.load_zones",
+            new=AsyncMock(return_value=ZoneLoadResult(zones=[], failures=[("http://x", "boom")])),
+        ),
+        pytest.raises(HomeAssistantError),
     ):
-        await entity.async_update_config(new_entry)
-
-    # Previous zones preserved
-    assert entity._zones
+        await entity.async_reload_zones(SimpleNamespace(return_response=True))
 
 
 async def test_update_state_invokes_update_location_when_attrs_present() -> None:

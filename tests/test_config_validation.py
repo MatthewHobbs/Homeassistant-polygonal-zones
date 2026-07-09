@@ -79,3 +79,33 @@ def test_mixed_valid_and_invalid_rejected(tmp_path) -> None:
         )
     )
     assert errors == {"zone_urls": "invalid_url"}
+
+
+def test_literal_private_ip_blocked_with_actionable_error(tmp_path) -> None:
+    """A LAN IP URL with allow_private off gets the specific toggle-naming error,
+    not a generic invalid_url — this is the primary add-on onboarding case."""
+    hass = _hass(tmp_path)
+    errors = _run(validate_zone_urls(["http://192.168.1.5:8000/zones.json"], hass))
+    assert errors == {"zone_urls": "private_url_blocked"}
+
+
+def test_literal_loopback_ip_blocked(tmp_path) -> None:
+    hass = _hass(tmp_path)
+    errors = _run(validate_zone_urls(["http://127.0.0.1:8000/zones.json"], hass))
+    assert errors == {"zone_urls": "private_url_blocked"}
+
+
+def test_private_ip_accepted_when_allow_private_urls(tmp_path) -> None:
+    """With the toggle on, the same LAN URL passes validation."""
+    hass = _hass(tmp_path)
+    errors = _run(
+        validate_zone_urls(["http://192.168.1.5:8000/zones.json"], hass, allow_private_urls=True)
+    )
+    assert errors == {}
+
+
+def test_public_hostname_not_flagged_as_private(tmp_path) -> None:
+    """A non-literal-IP hostname is left to the fetch-time resolver, not blocked here."""
+    hass = _hass(tmp_path)
+    errors = _run(validate_zone_urls(["https://example.com/zones.json"], hass))
+    assert errors == {}

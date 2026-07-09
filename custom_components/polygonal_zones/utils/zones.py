@@ -22,6 +22,7 @@ from .geometry import (
 from .limits import (
     MAX_FEATURES_PER_COLLECTION,
     MAX_TOTAL_VERTICES_PER_COLLECTION,
+    SUPPORTED_GEOMETRY_TYPES,
     count_geometry_vertices,
 )
 
@@ -97,6 +98,16 @@ def _parse_feature(feature: Any, default_priority: int) -> Zone:
     geometry_data = feature.get("geometry")
     if not isinstance(geometry_data, dict):
         raise ZoneFileCorrupt(f"feature {name!r} has no 'geometry' object")
+    # Restrict to Polygon/MultiPolygon at the boundary, matching the mutation
+    # validator. Without this a non-Polygon geometry (a) counts as 0 vertices,
+    # slipping past MAX_TOTAL_VERTICES_PER_COLLECTION, and (b) later crashes the
+    # tie-break which assumes ``.exterior``. Reject the type before shape().
+    geom_type = geometry_data.get("type")
+    if geom_type not in SUPPORTED_GEOMETRY_TYPES:
+        raise ZoneFileCorrupt(
+            f"feature {name!r} has unsupported geometry type {geom_type!r}; "
+            f"expected one of {sorted(SUPPORTED_GEOMETRY_TYPES)}"
+        )
 
     if "priority" in properties:
         raw_priority = properties["priority"]
