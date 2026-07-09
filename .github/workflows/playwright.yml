@@ -59,9 +59,15 @@ jobs:
           python - <<'PY' > /tmp/ha-reqs.txt
           import json, pathlib, homeassistant
           base = pathlib.Path(homeassistant.__path__[0]) / "components"
+          # `hassio` is here for its requirement (aiohasupervisor), not to run it:
+          # on recent HA cores `analytics` imports `homeassistant.components.hassio`
+          # at module load, so when get_services imports analytics to read its
+          # service descriptions, a missing aiohasupervisor raises ModuleNotFound,
+          # get_services errors, and the SPA hangs forever on "Loading data" →
+          # the smoke times out. Pre-installing hassio's pinned requirement fixes it.
           comps = (
               "frontend recorder conversation assist_pipeline tts ffmpeg camera "
-              "analytics ai_task image_processing met radio_browser google_translate"
+              "analytics hassio ai_task image_processing met radio_browser google_translate"
           ).split()
           reqs = []
           for c in comps:
