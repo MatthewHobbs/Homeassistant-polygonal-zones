@@ -160,6 +160,23 @@ async def test_loader_rejects_unparseable_geometry() -> None:
     )
 
 
+async def test_loader_wraps_recursion_error() -> None:
+    """A RecursionError from json.loads (adversarial deep nesting) surfaces as a typed
+    ZoneFileCorrupt, for parity with the mutation-service parsers."""
+    with (
+        patch(
+            "custom_components.polygonal_zones.utils.zones.load_data",
+            new=AsyncMock(return_value="[]"),
+        ),
+        patch(
+            "custom_components.polygonal_zones.utils.zones.json.loads",
+            side_effect=RecursionError,
+        ),
+        pytest.raises(ZoneFileCorrupt),
+    ):
+        await get_zones(["http://example.com/zones.json"], _make_hass(), False)
+
+
 def test_fetch_timeout_has_sub_timeouts() -> None:
     assert FETCH_TIMEOUT.total == 10
     assert FETCH_TIMEOUT.connect == 5

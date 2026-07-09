@@ -2,13 +2,13 @@
 
 from collections.abc import Callable, Coroutine
 import logging
-from pathlib import Path
+import time
 from typing import Any
 
 from homeassistant.components.device_tracker import SourceType, TrackerEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ENTITIES, STATE_UNAVAILABLE, STATE_UNKNOWN
-from homeassistant.core import HomeAssistant, SupportsResponse
+from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.exceptions import (
     ConfigEntryError,
     ConfigEntryNotReady,
@@ -31,6 +31,7 @@ from .const import (
     DOMAIN,
 )
 from .utils import event_should_trigger, get_locations_zone
+from .utils.general import download_zone_relative_path, safe_config_path
 from .utils.geometry import exterior_coords
 from .utils.local_zones import download_zones
 from .utils.zones import UnsupportedSchemaVersion, Zone
@@ -41,6 +42,16 @@ _LOGGER = logging.getLogger(__name__)
 # Push-based: zone resolution runs in response to source-tracker state_changed
 # events, not on a polled schedule. Unlimited concurrency is safe.
 PARALLEL_UPDATES = 0
+
+# Minimum seconds between distinct reload_zones *service* calls for one entry.
+_RELOAD_MIN_INTERVAL_S = 2.0
+# entry_id -> (monotonic timestamp, service-call context id) of the last reload.
+_LAST_RELOAD: dict[str, tuple[float, str | None]] = {}
+
+
+def _reset_reload_rate_limit() -> None:
+    """Clear reload_zones rate-limit state. Intended for tests."""
+    _LAST_RELOAD.clear()
 
 
 async def async_setup_entry(
@@ -87,7 +98,10 @@ async def async_setup_entry(
     editable_file = False
 
     if entry.data.get(CONF_DOWNLOAD_ZONES):
-        download_path = Path(f"{hass.config.config_dir}/polygonal_zones/{entry.entry_id}.json")
+        relative = download_zone_relative_path(entry.entry_id)
+        # Resolve through safe_config_path (not a raw f-string) so the managed
+        # snapshot path is confined to /config like every other path in the code.
+        download_path = safe_config_path(hass.config.config_dir, relative)
 
         exists = await hass.async_add_executor_job(download_path.exists)
         if not exists:
@@ -120,7 +134,7 @@ async def async_setup_entry(
                     f"Could not download zone files for entry {entry.entry_id}: {err}"
                 ) from err
 
-        zone_uris = [f"/polygonal_zones/{entry.entry_id}.json"]
+        zone_uris = [f"/{relative}"]
         editable_file = True
 
     source = ZoneSource(
@@ -253,7 +267,20 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         if last_state is not None:
             _LOGGER.debug("Restoring previous state for '%s'", self._entity_id)
             self._attr_location_name = last_state.state
-            self._attr_extra_state_attributes = last_state.attributes
+            restored = dict(last_state.attributes)
+            if not self._expose_coordinates:
+                # A user who turned coordinates off between restarts must not have
+                # the previously-recorded lat/lon (and the other gated attrs)
+                # re-published from restore state until the next live update.
+                for gated in (
+                    "latitude",
+                    "longitude",
+                    "gps_accuracy",
+                    "zone_uris",
+                    "matched_zones",
+                ):
+                    restored.pop(gated, None)
+            self._attr_extra_state_attributes = restored
 
         self._unsub_source = self._source.add_listener(self._handle_source_reloaded)
         self._unsub = async_track_state_change_event(
@@ -283,7 +310,7 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
             self._unsub_source()
             self._unsub_source = None
 
-    async def update_location(self, latitude, longitude, gps_accuracy) -> None:
+    async def update_location(self, latitude: float, longitude: float, gps_accuracy: float) -> None:
         """Update the location of the entity.
 
         Resolves the location to a zone via the executor so the (sync, CPU-bound)
@@ -366,7 +393,7 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
 
         self.async_write_ha_state()
 
-    async def async_reload_zones(self, call=None) -> dict | list | None:
+    async def async_reload_zones(self, call: ServiceCall | None = None) -> dict | list | None:
         """Reload the shared zone source and re-resolve.
 
         Called from two paths:
@@ -379,6 +406,23 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         every mirror to re-resolve.
         """
         invoked_as_service = call is not None
+        if invoked_as_service:
+            # reload_zones is a plain (non-admin) entity service that triggers an
+            # outbound fetch; rate-limit *distinct* calls per entry so a
+            # low-privilege user can't spam the source. HA fans one service call
+            # out to each targeted entity, so entities sharing a call's context id
+            # (e.g. `entity_id: all`) are exempt — otherwise a legit multi-entity
+            # reload would trip on its second entity.
+            entry_id = self._source.entry_id
+            context_id = getattr(getattr(call, "context", None), "id", None)
+            now = time.monotonic()
+            last = _LAST_RELOAD.get(entry_id)
+            same_call = last is not None and context_id is not None and context_id == last[1]
+            if not same_call and last is not None and now - last[0] < _RELOAD_MIN_INTERVAL_S:
+                raise HomeAssistantError(
+                    "reload_zones is being called too fast; wait a moment and try again."
+                )
+            _LAST_RELOAD[entry_id] = (now, context_id)
         try:
             await self._source.async_reload(self.hass)
         except Exception as err:
