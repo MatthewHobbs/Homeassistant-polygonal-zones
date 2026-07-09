@@ -113,10 +113,7 @@ class ZoneSource:
 
                 @callback
                 def _retry(_now, _next_attempt=attempt + 1) -> None:
-                    # Without @callback, HA's job-type inference schedules this
-                    # plain function on the executor thread pool (it can't tell
-                    # it won't block) — hass.async_create_task then raises since
-                    # it's called off the event loop. See issue #39.
+                    # Undecorated, HA runs this on the executor thread; async_create_task then raises (#39).
                     self._unsub_retry = None
                     hass.async_create_task(self._async_initial_load(hass, _next_attempt))
 

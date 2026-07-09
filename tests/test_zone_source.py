@@ -99,14 +99,7 @@ async def test_retry_closure_reschedules_the_load() -> None:
 
 
 async def test_retry_closure_is_hass_callback() -> None:
-    """The retry closure must be a HA ``@callback`` so it runs on the event loop.
-
-    Without ``@callback``, HA's job-type inference schedules a plain function
-    passed to ``async_call_later`` on the executor thread pool; calling
-    ``hass.async_create_task`` from there raises ``RuntimeError`` and the
-    retry silently never happens (issue #39 — zones never load, every
-    tracked entity gets stuck reporting ``away``).
-    """
+    """The retry closure must be a HA ``@callback`` so it runs on the event loop (#39)."""
     from homeassistant.core import is_callback
 
     src = _source()
