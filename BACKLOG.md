@@ -292,9 +292,9 @@ failures=[...])` and is covered by `tests/test_zone_source.py:44-54` and
 - lead-frontend / product-designer (no UI surface beyond the config flow), data-engineer,
   cto/head-of-dev (no delivery/commercial question this cycle) — not engaged.
 
-## Dependency housekeeping (separate from the panel)
+## Dependency housekeeping (separate from the panel) — ✅ RESOLVED, PR #44
 
-- **6 open Dependabot PRs** since 2026-07-04: #38 HA floor bump (`>=2026.7.1,<2027`) + #33-37
-  (5 GitHub Actions SHA bumps: setup-node, upload-artifact, hassfest, attest-build-provenance,
-  ruff-action). Review + harness-test + merge per the Dependabot workflow. #38 is the one to
-  check against the current HA release cadence.
+The 6 Dependabot PRs open since 2026-07-04 (#38 HA test-floor bump `>=2026.7.1,<2027` + #33-37,
+5 GitHub Actions SHA bumps: setup-node, upload-artifact, hassfest, attest-build-provenance,
+ruff-action) were consolidated into PR #44, which also raised the `manifest.json` shapely floor
+to match. Zero Dependabot PRs open as of this writing (re-verified via `gh pr list`).

@@ -32,7 +32,7 @@ HA_CONFIG="$(mktemp -d)"
 mkdir -p "$HA_CONFIG/custom_components"
 cp -r custom_components/polygonal_zones "$HA_CONFIG/custom_components/"
 printf 'default_config:\n' > "$HA_CONFIG/configuration.yaml"
-pip install "homeassistant>=2026.1,<2027" "shapely>=2.0,<3"
+pip install "homeassistant>=2026.7.1,<2027" "shapely>=2.1.2,<3"
 hass --config "$HA_CONFIG"
 
 # In a second terminal:
