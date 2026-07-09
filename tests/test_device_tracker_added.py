@@ -109,7 +109,9 @@ async def test_added_to_hass_failure_schedules_retry() -> None:
 
     call_later_mock.assert_called_once()
     delay = call_later_mock.call_args.args[1]
-    assert delay == 30  # base delay on first failure
+    # Equal jitter spreads the first-attempt retry across [15, 30]s so
+    # entities sharing a zone source don't retry in lockstep.
+    assert 15 <= delay <= 30
 
 
 async def test_added_to_hass_exhausted_retries_marks_unavailable() -> None:
