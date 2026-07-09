@@ -16,12 +16,21 @@ from homeassistant.const import CONF_ENTITIES
 from homeassistant.data_entry_flow import callback
 from homeassistant.helpers import selector
 from homeassistant.helpers.selector import TextSelectorType
+from homeassistant.util import dt as dt_util
 import voluptuous as vol
 
-from .const import DOMAIN
+from .const import CONF_CONSENT_CONFIRMED_AT, DOMAIN
 from .utils.config_validation import validate_zone_urls
 
 _LOGGER = logging.getLogger(__name__)
+
+# Shown next to the tracking-consent checkbox on both the initial setup form
+# and the reconfigure form (when a new tracker is being added).
+_CONSENT_NOTICE = (
+    "This integration continuously monitors the GPS position of the "
+    "device_tracker entities you select. Please ensure everyone whose "
+    "device is being tracked is aware of this."
+)
 
 
 def build_create_flow(
@@ -148,6 +157,10 @@ class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
                 errors["consent"] = "consent_required"
             if not errors:
                 user_input.pop("consent", None)
+                # Persist evidence that consent was attested (GDPR Art. 7(1)
+                # accountability). The tick itself is a gate, not a setting, but
+                # a timestamp lets the operator demonstrate when it happened.
+                user_input[CONF_CONSENT_CONFIRMED_AT] = dt_util.utcnow().isoformat()
                 return self.async_create_entry(title="Polygonal Zones", data=user_input)
 
         user_input = user_input or {}
@@ -158,31 +171,53 @@ class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
                 {vol.Required("consent", default=False): selector.BooleanSelector()}
             ),
             errors=errors,
-            description_placeholders={
-                "consent_notice": (
-                    "This integration continuously monitors the GPS position of the "
-                    "device_tracker entities you select. Please ensure everyone whose "
-                    "device is being tracked is aware of this."
-                )
-            },
+            description_placeholders={"consent_notice": _CONSENT_NOTICE},
         )
 
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Reconfigure flow — edit URLs, tracked entities, and flags in place."""
+        """Reconfigure flow — edit URLs, tracked entities, and flags in place.
+
+        Adding a device_tracker that wasn't already covered introduces a new
+        data subject, so the tracking-consent gate is re-applied whenever the
+        submitted entity set grows. Editing URLs/flags on the existing set does
+        not re-prompt (no new subject). See the consent notice in
+        ``async_step_user`` for the lawful-basis rationale.
+        """
         entry = self._get_reconfigure_entry()
+        stored_entities = set(entry.data.get(CONF_ENTITIES, []))
         errors: dict[str, str] = {}
+        adding_entities = False
         if user_input is not None:
             errors = await validate_zone_urls(user_input["zone_urls"], self.hass)
+            adding_entities = bool(set(user_input.get(CONF_ENTITIES, [])) - stored_entities)
+            if adding_entities and not user_input.get("consent"):
+                errors["consent"] = "consent_required"
             if not errors:
-                return self.async_update_reload_and_abort(entry, data=user_input)
+                data = {k: v for k, v in user_input.items() if k != "consent"}
+                if adding_entities:
+                    # New subject introduced — record a fresh attestation.
+                    data[CONF_CONSENT_CONFIRMED_AT] = dt_util.utcnow().isoformat()
+                elif entry.data.get(CONF_CONSENT_CONFIRMED_AT):
+                    # No new subject; carry the prior attestation forward so it
+                    # isn't dropped by the full data replacement below.
+                    data[CONF_CONSENT_CONFIRMED_AT] = entry.data[CONF_CONSENT_CONFIRMED_AT]
+                return self.async_update_reload_and_abort(entry, data=data)
 
         defaults = user_input if user_input is not None else dict(entry.data)
+        schema = build_create_flow(defaults)
+        description_placeholders: dict[str, str] | None = None
+        if adding_entities:
+            schema = schema.extend(
+                {vol.Required("consent", default=False): selector.BooleanSelector()}
+            )
+            description_placeholders = {"consent_notice": _CONSENT_NOTICE}
         return self.async_show_form(
             step_id="reconfigure",
-            data_schema=build_create_flow(defaults),
+            data_schema=schema,
             errors=errors,
+            description_placeholders=description_placeholders,
         )
 
     @staticmethod

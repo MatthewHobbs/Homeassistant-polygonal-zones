@@ -174,8 +174,10 @@ async def test_config_flow_valid_input_creates_entry(tmp_path) -> None:
 
     assert result == {"type": "create_entry"}
     flow.async_create_entry.assert_called_once()
-    # consent is a gate, not a stored setting
-    assert "consent" not in flow.async_create_entry.call_args.kwargs["data"]
+    data = flow.async_create_entry.call_args.kwargs["data"]
+    # consent is a gate, not a stored setting — but the attestation is timestamped
+    assert "consent" not in data
+    assert data["consent_confirmed_at"]
 
 
 async def test_options_flow_invalid_url_renders_form(tmp_path) -> None:
@@ -251,6 +253,7 @@ async def test_reconfigure_flow_invalid_url_renders_form_with_errors(tmp_path) -
 
 
 async def test_reconfigure_flow_valid_input_calls_update_reload_and_abort(tmp_path) -> None:
+    """Adding a new tracker requires consent; with it ticked the entry updates."""
     flow = ConfigFlow()
     flow.hass = _hass(tmp_path)
     fake_entry = SimpleNamespace(data={"zone_urls": [], "entities": []})
@@ -261,7 +264,62 @@ async def test_reconfigure_flow_valid_input_calls_update_reload_and_abort(tmp_pa
         {
             "zone_urls": ["https://example.com/x.json"],
             "entities": ["device_tracker.bob"],
+            "consent": True,
         }
     )
     assert result == {"type": "reload"}
     flow.async_update_reload_and_abort.assert_called_once()
+    data = flow.async_update_reload_and_abort.call_args.kwargs["data"]
+    # consent is a gate, not stored; but a timestamp of the attestation is.
+    assert "consent" not in data
+    assert data["consent_confirmed_at"]
+
+
+async def test_reconfigure_flow_adding_entity_without_consent_is_refused(tmp_path) -> None:
+    """Growing the tracked-entity set re-applies the consent gate."""
+    flow = ConfigFlow()
+    flow.hass = _hass(tmp_path)
+    fake_entry = SimpleNamespace(
+        data={"zone_urls": ["https://x"], "entities": ["device_tracker.alice"]}
+    )
+    flow._get_reconfigure_entry = MagicMock(return_value=fake_entry)
+    flow.async_show_form = MagicMock(return_value={"type": "form"})
+    flow.async_update_reload_and_abort = MagicMock(return_value={"type": "reload"})
+
+    result = await flow.async_step_reconfigure(
+        {
+            "zone_urls": ["https://x"],
+            "entities": ["device_tracker.alice", "device_tracker.bob"],
+        }
+    )
+    assert result == {"type": "form"}
+    assert flow.async_show_form.call_args.kwargs["errors"]["consent"] == "consent_required"
+    # The consent field is added to the re-shown schema.
+    schema = flow.async_show_form.call_args.kwargs["data_schema"]
+    assert "consent" in {str(k) for k in schema.schema}
+    flow.async_update_reload_and_abort.assert_not_called()
+
+
+async def test_reconfigure_flow_editing_urls_needs_no_consent_and_keeps_timestamp(
+    tmp_path,
+) -> None:
+    """Editing URLs without adding a tracker doesn't re-prompt; prior consent is kept."""
+    flow = ConfigFlow()
+    flow.hass = _hass(tmp_path)
+    fake_entry = SimpleNamespace(
+        data={
+            "zone_urls": ["https://old"],
+            "entities": ["device_tracker.alice"],
+            "consent_confirmed_at": "2026-01-01T00:00:00+00:00",
+        }
+    )
+    flow._get_reconfigure_entry = MagicMock(return_value=fake_entry)
+    flow.async_update_reload_and_abort = MagicMock(return_value={"type": "reload"})
+
+    result = await flow.async_step_reconfigure(
+        {"zone_urls": ["https://new"], "entities": ["device_tracker.alice"]}
+    )
+    assert result == {"type": "reload"}
+    data = flow.async_update_reload_and_abort.call_args.kwargs["data"]
+    # No new subject → the original attestation timestamp is carried forward.
+    assert data["consent_confirmed_at"] == "2026-01-01T00:00:00+00:00"

@@ -197,3 +197,45 @@ async def test_async_setup_entry_download_creates_local_path(hass_with_setup, tm
     entities = add_entities.call_args.args[0]
     assert entities[0].editable_file is True
     assert entities[0].zone_urls == ["/polygonal_zones/entry-1.json"]
+
+
+async def test_async_setup_entry_download_failure_raises_config_entry_not_ready(
+    hass_with_setup, tmp_path
+) -> None:
+    """A failed initial download must raise ConfigEntryNotReady (HA retries setup)
+    rather than propagating a raw error that hard-fails the entry with no entities."""
+    from homeassistant.exceptions import ConfigEntryNotReady
+
+    from custom_components.polygonal_zones import PolygonalZonesData
+
+    hass, platform = hass_with_setup
+    hass.async_add_executor_job = AsyncMock(return_value=False)  # file doesn't exist yet
+
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        runtime_data=PolygonalZonesData(),
+        data={
+            "zone_urls": ["https://example.com/zones.json"],
+            "entities": ["device_tracker.alice"],
+            "download_zones": True,
+            "expose_coordinates": True,
+        },
+    )
+    add_entities = MagicMock()
+
+    with (
+        patch(
+            "custom_components.polygonal_zones.device_tracker.entity_platform.async_get_current_platform",
+            return_value=platform,
+        ),
+        patch(
+            "custom_components.polygonal_zones.device_tracker.download_zones",
+            new=AsyncMock(side_effect=OSError("host unreachable")),
+        ),
+        patch("custom_components.polygonal_zones.device_tracker.ir.async_delete_issue"),
+        pytest.raises(ConfigEntryNotReady),
+    ):
+        await async_setup_entry(hass, entry, add_entities)
+
+    # No entities were registered on the failed attempt.
+    add_entities.assert_not_called()
