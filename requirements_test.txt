@@ -2,7 +2,7 @@
 # floor doesn't silently green-on-break when HA core ships an API change.
 # Upper bound allows patch bumps within the same minor. Dependabot (see
 # .github/dependabot.yml) bumps weekly.
-homeassistant>=2026.7.1,<2027
+homeassistant>=2026.7.4,<2027
 mypy
 pytest
 pytest-asyncio
