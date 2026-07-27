@@ -26,6 +26,12 @@ on:
     - cron: "0 0 * * *"
   workflow_dispatch:
 
+# See validate.yml for why the key includes github.workflow and why
+# cancel-in-progress is PR-only.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # On schedule/dispatch, skip the (slow, QEMU-emulated) smoke unless upstream
   # moved. push/PR always run.
@@ -35,9 +41,44 @@ jobs:
     with:
       cache_prefix: multiarch
 
+  # Cheap file check so PR/push runs only pay the QEMU-emulated arm64 tax when
+  # a change could plausibly move the shapely wheel/version resolved (amd64
+  # runs natively and stays unconditional — see shapely-import's `if:` below).
+  # Fails safe: if the diff can't be computed, treat it as relevant rather
+  # than silently skipping arm64 coverage.
+  changed_files:
+    name: Detect shapely-relevant changes
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      shapely_relevant: ${{ steps.check.outputs.relevant }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 2
+
+      - id: check
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+            head="${{ github.event.pull_request.head.sha }}"
+          else
+            base="${{ github.event.before }}"
+            head="${{ github.sha }}"
+          fi
+          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "::notice::Cannot resolve base commit $base — defaulting to relevant=true"
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "$base" "$head" | grep -qE '(^|/)(manifest\.json|requirements_test\.txt)$|^\.github/workflows/multi-arch\.yml$'; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+          fi
+
   shapely-import:
     name: shapely import (${{ matrix.platform }})
-    needs: [gate]
+    needs: [gate, changed_files]
     if: ${{ !cancelled() && (github.event_name == 'push' || github.event_name == 'pull_request' || needs.gate.outputs.changed == 'true') }}
     runs-on: ubuntu-latest
     strategy:
@@ -49,10 +90,25 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
+      # matrix isn't available in a job-level `if:`, so the arm64/PR-push skip
+      # is decided here and applied to the actual (expensive) steps below.
+      - name: Determine whether this leg runs
+        id: leg
+        run: |
+          if [ "${{ matrix.platform }}" = "linux/arm64" ] \
+              && { [ "${{ github.event_name }}" = "pull_request" ] || [ "${{ github.event_name }}" = "push" ]; } \
+              && [ "${{ needs.changed_files.outputs.shapely_relevant }}" != "true" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Enable QEMU for cross-architecture emulation
+        if: steps.leg.outputs.run == 'true'
         run: docker run --privileged --rm tonistiigi/binfmt --install all
 
       - name: Import shapely on ${{ matrix.platform }}
+        if: steps.leg.outputs.run == 'true'
         run: |
           docker run --rm --platform=${{ matrix.platform }} \
             -v "$PWD:/src" -w /src python:3.14-slim \
@@ -65,7 +121,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: echo "${{ needs.gate.outputs.cache_key }}" > .upstream-fingerprint
-      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .upstream-fingerprint
           key: ${{ needs.gate.outputs.cache_key }}
