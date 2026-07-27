@@ -8,6 +8,15 @@ on:
     - cron: "0 0 * * *"
   workflow_dispatch:
 
+# Concurrency groups are repo-global, not workflow-scoped, so the key includes
+# github.workflow to avoid colliding with other workflows' groups. Only PR runs
+# cancel in place: cancelling a push-to-main run would leave that squash-merge
+# SHA without a passing Validate run, and release.yml refuses to release a SHA
+# with zero successful Validate runs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
