@@ -22,6 +22,12 @@ on:
 permissions:
   contents: read
 
+# See validate.yml for why the key includes github.workflow and why
+# cancel-in-progress is PR-only.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # On schedule/dispatch, skip this heavyweight (full HA + Chromium) smoke unless
   # upstream moved. push/PR always run.
