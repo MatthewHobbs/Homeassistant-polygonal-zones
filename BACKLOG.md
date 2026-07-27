@@ -1,5 +1,35 @@
 # Backlog
 
+## Playwright config-flow smoke fails on HA 2026.7.4 (2026-07-27) — OPEN, P1
+
+Surfaced merging Dependabot PR #60 (`homeassistant` floor `>=2026.7.1` → `>=2026.7.4`, now merged).
+`Config flow (Playwright)` failed twice (initial + 1 retry): `Polygonal Zones` never became visible
+in the Add Integration dialog within 30s. Not a required check — did not block the merge — but it's
+a new, reproducible failure specific to this HA bump: the same check passed cleanly on the 5 other
+PRs merged in this session (#54, #55, #56, #58, #59), all against HA 2026.7.1.
+
+**What I found, and why I didn't guess a fix:** `ha.log` shows `homeassistant.setup` errors —
+`Setup failed for 'radio_frequency': No module named 'rf_protocols'` and same for `'infrared'` /
+`infrared_protocols` — two integrations new to HA core since 2026.7.1 (confirmed via
+`home-assistant/core` manifests: `rf-protocols==4.3.0`, `infrared-protocols==8.2.0`). This matches
+the _class_ of problem `playwright.yml`'s own comments document for `hassio`/`aiohasupervisor` (a
+transitive dependency missing from the harness's pre-install allowlist) — but neither
+`radio_frequency` nor `infrared` has a `services.yaml`, so they aren't part of the `get_services`
+import sweep that comment describes, meaning that's not confirmed as the actual mechanism connecting
+these setup errors to the dialog timeout. The `[setup] boot HA, onboard, and persist auth` sub-test
+passed in 364ms on the same instance, so HA's frontend/auth are functioning — the failure is
+specific to the integration-search step. Root cause is plausible but not confirmed; guessing a fix
+(e.g. adding `radio_frequency`/`infrared` to the pre-install `comps` list) risks masking a real
+config-flow regression instead of fixing it.
+
+Owner: matt. Next step: re-run `Config flow (Playwright)` against current `main` (now on HA
+2026.7.4) via `workflow_dispatch` and inspect the Playwright trace/screenshot artifact (uploaded on
+every run, 7-day retention) to see what the Add Integration dialog actually rendered — that will
+disambiguate "new components pollute discovery" from "unrelated regression" before touching the
+harness or the integration code.
+
+---
+
 ## CI cost / GitHub Actions minutes (2026-07-27) — RESOLVED 2026-07-27
 
 From an account-wide GitHub Actions cost review. Original claim: this repo is the personal
