@@ -1,38 +1,56 @@
 # Backlog
 
-## CI cost / GitHub Actions minutes (2026-07-27) — OPEN
+## CI cost / GitHub Actions minutes (2026-07-27) — RESOLVED 2026-07-27
 
-From an account-wide GitHub Actions cost review. **This repo is the personal account's #1 Actions
-cost driver** — the only repo with a net charge in 2026: **July = $36.59 net** ($70.01 gross,
-**11,668 `Actions Linux` minutes**), and climbing hard — **1,061 → 4,071 → 11,668** minutes over
-May → Jun → Jul. All jobs run on standard `ubuntu-latest`.
+From an account-wide GitHub Actions cost review. Original claim: this repo is the personal
+account's #1 Actions cost driver — July = $36.59 net ($70.01 gross, ~11.7k `Actions Linux`
+minutes), climbing May→Jun→Jul.
 
-> **Confirm visibility FIRST — this may already be solved.** Standard runners are **free on public
-> repos**. This repo currently reads `public`; a public repo billing standard minutes almost
-> certainly means it was **private during the billed months and has since been made public**, in
-> which case the bill self-corrects to ~$0 in August. Verify whether it was private in July before
-> investing effort. The items below are worth doing for **wall-clock speed regardless**, and are
-> the whole bill if it stays/returns private. Severities assume "still billed"; as pure hygiene → P2.
+**Visibility check — done, via real billing data, not a guess.** Pulled
+`gh api /users/.../settings/billing/usage`: May ($6.37 gross) and June ($24.43 gross) for this repo
+were **100% discounted** (net $0) — consistent with the repo being public those months. July was
+only **~48% discounted** ($33.52 of $70.31), netting **$36.79 charged**. The repo reads `public` now
+(confirmed via `gh repo view`). Best-evidence read: the repo was private for part of July and has
+since flipped public — real money was spent, this wasn't a false alarm, and going forward it should
+self-correct. Exact flip timestamp isn't recoverable (no audit-log API access for a personal
+account) — if a similar charge reappears next billing cycle, check visibility again before assuming
+the CI fixes below are insufficient.
 
-- **P1 — redundant `push` + `pull_request` double-runs.** `multi-arch.yml` and `validate.yml`
-  trigger on **both** `push` and `pull_request`, so every PR commit runs the whole suite **twice**
-  for the same SHA. Fix: drop `push:`, or scope it to `branches: [main]`. Halves the runs on the two
-  heaviest workflows (Validate = 8 jobs × 26 runs/30d; Multi-arch = matrix × 26 runs/30d).
-- **P1 — three daily `schedule` crons.** `multi-arch.yml` (`0 0 * * *`), `validate.yml`
-  (`0 0 * * *`), `playwright.yml` (`30 3 * * *`) each fire a full run every day → ~90 scheduled
-  runs/month of pure upstream-drift checking. Fix: weekly (`0 0 * * 1`) or `workflow_dispatch`-only.
-  Removes the recurring floor.
-- **P1 — no `concurrency: cancel-in-progress`.** Superseded pushes run to completion instead of
-  cancelling. Fix: add a `concurrency` group keyed on `github.ref` with `cancel-in-progress: true`.
-- **P2 — multi-arch (QEMU) on every PR/push.** Emulated multi-arch is 5–10× slower than native.
-  Fix: single native arch on PR, multi-arch only on release/tag; add buildx layer cache
-  (`cache-from/to: type=gha`). Biggest per-run time cut.
-- **Rejected alternative (record):** a self-hosted runner on `nuc-02` to dodge the bill was
-  considered and **rejected** — this is a **public** repo, and a self-hosted runner on a public repo
-  = fork-PR RCE from any contributor. Keep CI on GitHub-hosted; the levers above dominate on cost.
+**Panel review (sre-reliability, security-reviewer, test-lead) before implementing** — two of the
+four original items didn't survive scrutiny, one item's exact mechanism was corrected before
+shipping:
 
-Owner: matt. Raised by: account cost review (measure-first). Est: ~60–80% fewer billed minutes if
-still private; otherwise pure speed/hygiene. **Do the visibility check before implementing.**
+- **CORRECTED, not implemented — "redundant push + pull_request double-runs."** The premise was
+  stale: `validate.yml`/`multi-arch.yml` were **already** `push: branches: [main]`, not unscoped —
+  the "scope it" fix was already satisfied. The other suggested fix ("drop `push:`") would have been
+  **actively dangerous**: `release.yml` gates every release on a successful `validate.yml` run
+  against the exact post-squash-merge SHA on `main`; dropping `push:` would leave that SHA with zero
+  Validate runs and hard-fail every future release. `push` (main-only) and `pull_request` fire on
+  _different_ SHAs (PR head vs. squash commit) — not a same-SHA double-run, by design. No code
+  change; do not revisit without re-checking the release-gate dependency.
+- **DOWNGRADED to informational, not implemented — "three daily schedule crons."** All three crons
+  call the shared `_upstream-gate.yml`, which is one cheap PyPI-version-check job; the heavy jobs
+  only run if upstream actually moved (cache-gated). Real daily cost is ~3 lightweight jobs, not 3
+  full suites — this wasn't a meaningful driver of the July bill. Kept daily: detection-latency for
+  upstream HA/shapely breaks matters more than the near-zero savings from going weekly.
+- **IMPLEMENTED — `concurrency: cancel-in-progress`.** Added to `validate.yml`, `multi-arch.yml`,
+  `playwright.yml`: `group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}`,
+  `cancel-in-progress: ${{ github.event_name == 'pull_request' }}`. Group key includes the workflow
+  name (concurrency groups are repo-global, not workflow-scoped — a bare `ref` key would collide
+  across these three workflows) and cancellation is scoped to PR events only, so it can never cancel
+  the `push`-to-`main` run `release.yml` depends on, or a nightly cron run.
+- **PARTIALLY IMPLEMENTED — multi-arch QEMU on every PR/push.** Dropped the "buildx layer cache"
+  suggestion — `multi-arch.yml` has no `docker build`/buildx step to cache (confirmed: it's
+  `docker run --platform=X python:3.14-slim pip install shapely`, per the file's own header
+  comment). Implemented a narrower fix than "arch on PR, multi-arch only on release/tag": amd64
+  (native, cheap) still runs on every PR/push; the QEMU-emulated arm64 leg is skipped on PR/push
+  _unless_ the diff touches `manifest.json`, `requirements_test.txt`, or the workflow file itself —
+  full matrix always runs on `schedule`/`workflow_dispatch`. Chosen over a blanket skip because HA's
+  install base skews Raspberry Pi/ARM; a shapely-bump PR still gets pre-merge arm64 coverage.
+- **Rejected alternative (record, unchanged):** a self-hosted runner on `nuc-02` to dodge the bill
+  was considered and rejected — public repo + self-hosted runner = fork-PR RCE from any contributor.
+
+Owner: matt. Verified: `actionlint` + `prettier@3` clean on all touched workflow files.
 
 ---
 
