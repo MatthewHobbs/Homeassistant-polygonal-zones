@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import json
 import logging
+import math
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -274,13 +275,17 @@ async def get_zones(
     return result.zones
 
 
-def get_locations_zone(lat: float, lon: float, acc: float, zones: list[Zone]) -> dict | None:
+def get_locations_zone(lat: float, lon: float, acc: float | None, zones: list[Zone]) -> dict | None:
     """Resolve the GPS position to the highest-priority enclosing zone.
 
     Args:
         lat: latitude of the GPS fix in degrees.
         lon: longitude of the GPS fix in degrees.
-        acc: accuracy radius in metres (used to inflate the search point).
+        acc: accuracy radius in metres, used to inflate the search point. ``None``,
+            zero, negative, NaN and infinity all mean "no usable accuracy figure"
+            and search the exact point without inflation — none of them means
+            "match nothing". A point lying exactly on a zone boundary counts as
+            inside, matching the buffered behaviour.
         zones: list of ``Zone`` objects to search.
 
     Returns:
@@ -295,9 +300,23 @@ def get_locations_zone(lat: float, lon: float, acc: float, zones: list[Zone]) ->
         return None
 
     gps_point = Point(lon, lat)
-    buffer = gps_point.buffer(acc / 111320)
+    # Shapely returns an EMPTY polygon for Point.buffer(0), and an empty geometry
+    # intersects nothing — so inflating by a non-positive accuracy made every zone
+    # test fail regardless of where the fix actually was.
+    #
+    # None is reachable too: the caller gates on the gps_accuracy key being *present*,
+    # not on it being non-None, and TrackerEntity types it `float | None`. None, 0 and
+    # NaN all mean "no accuracy figure", not "outside everything".
+    #
+    # isfinite also screens out infinity, which would otherwise reach shapely and raise
+    # ValueError("buffer distance must be finite") from inside the executor job.
+    search_area = (
+        gps_point.buffer(acc / 111320)
+        if acc is not None and math.isfinite(acc) and acc > 0
+        else gps_point
+    )
 
-    possible = [z for z in zones if buffer.intersects(z.geometry)]
+    possible = [z for z in zones if search_area.intersects(z.geometry)]
     if not possible:
         return None
 
