@@ -1,5 +1,58 @@
 # Backlog
 
+## `claude-review` fails on every Dependabot PR (2026-09-05) — RESOLVED 2026-09-05
+
+Surfaced while draining a nine-PR Dependabot queue: `claude-review` failed on all six integration
+PRs. Not a required check (`Pytest`, `Pytest (HA floor)`, `Hassfest`, `HACS`, `Ruff`, `Prettier`,
+`Mypy` are), so nothing was ever blocked — which is precisely why it went unnoticed.
+
+Cause, from the run log:
+
+```
+##[group]GITHUB_TOKEN Permissions
+Secret source: Dependabot
+...
+  "claude_code_oauth_token": "",
+  ANTHROPIC_API_KEY:
+```
+
+Dependabot PRs execute against Dependabot's **own** secret store, not the repository's Actions
+secrets, so `secrets.CLAUDE_CODE_OAUTH_TOKEN` resolves to an empty string and the action cannot
+authenticate. GitHub behaviour, not a defect in the workflow — and unfixable by granting
+permissions, since the secret genuinely is not present in that context.
+
+**Why it was worth fixing anyway:** a check that is red on every dependency PR forever is worse
+than no check. It trains you to skim past red, which is exactly the habit that lets a real failure
+through.
+
+**Fixed:** `if: github.actor != 'dependabot[bot]'` on the job, so it skips rather than fails.
+Reviewing a dependency bump was never what this workflow was for.
+
+---
+
+## Release-only action bumps are unverified by any PR check (2026-09-05) — OPEN, P2
+
+`actions/attest-build-provenance` was bumped 4.1.1 → 4.2.2 (#67) and `softprops/action-gh-release`
+3.0.2 → 3.0.3 (#71). Both are used **only** in `release.yml`, which triggers on `v*` tags. No pull
+request check exercises either one, so those PRs going green said nothing whatsoever about whether
+the release path still works.
+
+The same pattern is worse in the companion add-on repo, where the equivalent bump was **v3 → v4.2.2
+— a major** — on the action that produces the Sigstore provenance that `config.yaml` documents as
+the image-integrity mechanism (`gh attestation verify`).
+
+**Nothing is known to be broken.** This is a visibility gap, not a defect: the first execution of
+this code path will be a real release, where a failure is most expensive and least convenient.
+
+**Mitigation available now:** `release.yml` accepts `workflow_dispatch`, so the path can be
+exercised deliberately before the next real tag rather than discovered during one.
+
+**Worth considering longer-term:** a scheduled or manual smoke job that runs the release workflow's
+attestation step against a throwaway artifact, so provenance tooling is covered by something other
+than production releases.
+
+---
+
 ## `gps_accuracy: 0` can never match any zone (2026-09-05) — OPEN, P0
 
 `utils/zones.py:301` inflates the fix by the accuracy radius before testing containment:
