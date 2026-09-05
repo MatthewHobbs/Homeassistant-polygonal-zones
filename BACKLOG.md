@@ -1,5 +1,139 @@
 # Backlog
 
+## `gps_accuracy: 0` can never match any zone (2026-09-05) — OPEN, P0
+
+`utils/zones.py:301` inflates the fix by the accuracy radius before testing containment:
+
+```python
+gps_point = Point(lon, lat)
+buffer = gps_point.buffer(acc / 111320)
+possible = [z for z in zones if buffer.intersects(z.geometry)]
+```
+
+Shapely returns an **empty polygon** for `Point.buffer(0)`, and an empty geometry intersects
+nothing. So a tracker reporting `gps_accuracy: 0` falls out at `if not possible: return None`
+and reads `away` regardless of where it actually is.
+
+**Reproduced against live data** (shapely 2.1.2, the real `The Poplars` polygon, the real fix):
+
+```
+polygon contains the A290 point : True
+  acc=0   buffer.is_empty=True   intersects(zone)=False
+  acc=1   buffer.is_empty=False  intersects(zone)=True
+  acc=5   buffer.is_empty=False  intersects(zone)=True
+```
+
+`contains()` says the point is inside; the buffered intersect says it is not. The point sits
+**7.3 m inside** the boundary, so this is not a near-edge tolerance question — no distance would
+help. Reported accuracy of `0` is common: the Renault/Kamereon feed behind
+`device_tracker.mm75dxb_location` publishes exactly that, and it is the natural encoding for
+"source does not report an accuracy figure". The failure is silent — `last_load_result` stays
+`ok`, the debug line just reads `new zone: None`.
+
+**Fix:** use the bare point when there is nothing to inflate by —
+`buffer = gps_point.buffer(acc / 111320) if acc > 0 else gps_point`. Guard `acc < 0` the same way.
+
+**Also worth deciding, separately:** `acc = 0` and `acc = None`/absent are currently
+indistinguishable, but they mean different things — "perfectly accurate" versus "unknown". Treating
+unknown as zero-inflation is defensible; treating it as _fail-closed_ (today's accidental behaviour)
+is not. Whichever is chosen should be explicit and tested.
+
+Owner: matt. Tests: a case per accuracy value `{0, None, negative, positive}`, asserting a point
+known to be inside resolves to its zone in every case.
+
+---
+
+## `download_zones` defaults to true, silently freezing add-on-authored zones (2026-09-05) — OPEN, P1
+
+`config_flow.py:49` documents the default as `True` for new installs ("CRUD works out of the box").
+`device_tracker.py:105` then does:
+
+```python
+exists = await hass.async_add_executor_job(download_path.exists)
+if not exists:
+    await download_zones(...)
+zone_uris = [f"/{relative}"]  # entities now read ONLY the local snapshot
+```
+
+The configured URL is therefore a **one-time seed**. It is re-fetched only if the snapshot file is
+missing — never on reload, never on a config-entry reload, never on restart.
+
+That is documented behaviour (`strings.json`: _"The entities will only use this single file to
+retrieve the zones from"_), and it is the right model when the integration owns the data and edits
+flow through `replace_all_zones`. It is the **wrong default when the source URL is the companion
+add-on**, which is the pairing this project exists to support: the user draws a zone, saves it,
+reloads, and nothing changes.
+
+**Observed:** with 13 zones snapshotted, the source file was edited down to 4 (`Garage`/`Workshop`
+merged to `Annex`, 8 indoor rooms deleted, boundary regrown 1,649 → 1,954 m²). After a config-entry
+reload the debug line still read
+`matched_zones: ['The Poplars', 'Home', 'Kitchen']` — two of those zones no longer existed — with a
+`distance_to_centroid` byte-identical to the previous run. Setting `download_zones: false` fixed it
+immediately: the same tracker went from `Home` (a deleted zone) to `The Poplars`.
+
+**The real defect is that staleness is invisible.** `last_load_result` reads `ok`, because loading
+the snapshot genuinely succeeded. Nothing anywhere says "this is a snapshot taken at _T_, not
+tracking source".
+
+**Fix, in preference order:** (1) default `download_zones` to `false` when a configured URI is a
+local add-on host; (2) expose `zones_source: snapshot|live` and `snapshot_taken_at` as entity
+attributes so the freeze is legible; (3) re-download on config-entry reload when the source is
+reachable, treating the snapshot as a cache rather than a fork.
+
+---
+
+## Config flow cannot authenticate to a token-protected companion add-on (2026-09-05) — OPEN, P1
+
+The add-on's `save_token` option gates **every** non-ingress request, `GET /zones.json` included
+(see the add-on repo's backlog — its description claims `POST /save_zones` only). The integration's
+config flow accepts `zone_urls` as bare URLs with no header field, and the add-on accepts the token
+**only** as the `X-Save-Token` header.
+
+Verified by hand against the running add-on:
+
+```
+header X-Save-Token:  200 (3805 bytes)
+?token=…              401
+?save_token=…         401
+?X-Save-Token=…       401
+?x_save_token=…       401
+```
+
+So the documented pairing is unreachable whenever the add-on is configured as its own docs
+recommend ("pair with save_token whenever the port is exposed"). The only working combinations today
+are _no token at all_, or _ingress-only_ — which the integration cannot use, since it runs in a
+different container.
+
+The user-visible symptom is a generic `ConfigEntryNotReady` with a 401, giving no hint that the
+config flow structurally cannot supply the credential.
+
+**Fix:** either an optional per-URL header/token field in the config and options flows, or — better,
+since it removes the secret from HA's config entirely — have the add-on scope `save_token` to
+mutating methods only, so reads work unauthenticated on an already IP-restricted port. These are
+alternatives, not both; the second is cheaper and is the add-on's stated intent.
+
+---
+
+## `location_name` override is deprecated — hard removal in HA 2027.7 (2026-09-05) — OPEN, P2
+
+Logged on every setup by HA itself:
+
+```
+WARNING [homeassistant.components.device_tracker.entity]
+custom_components.polygonal_zones.device_tracker::PolygonalZoneEntity is overriding the
+deprecated location_name property on an instance of TrackerEntity, this will be unsupported
+from Home Assistant 2027.7, please report it to the custom integration author
+```
+
+A dated, hard breakage with ~10 months of runway, and HA is asking the author to act. Worth taking
+while the surrounding code is being touched for the P0 above rather than as a separate scramble
+nearer the deadline.
+
+Owner: matt. Next step: confirm the supported replacement for a zone-name-bearing tracker on
+2026.9+ before changing anything — the migration path matters more than the warning.
+
+---
+
 ## Playwright config-flow smoke fails on HA 2026.7.4 (2026-07-27) — OPEN, P1
 
 Surfaced merging Dependabot PR #60 (`homeassistant` floor `>=2026.7.1` → `>=2026.7.4`, now merged).
