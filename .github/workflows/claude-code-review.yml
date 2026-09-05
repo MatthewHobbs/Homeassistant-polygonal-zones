@@ -20,11 +20,12 @@ concurrency:
 
 jobs:
   claude-review:
-    # Optional: Filter by PR author
-    # if: |
-    #   github.event.pull_request.user.login == 'external-contributor' ||
-    #   github.event.pull_request.user.login == 'new-developer' ||
-    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
+    # Dependabot PRs run against Dependabot's own secret store, which does not
+    # contain this repo's Actions secrets — CLAUDE_CODE_OAUTH_TOKEN resolves to
+    # an empty string and the job fails every time. It is not a required check,
+    # so nothing was ever blocked, but a permanently-red check on every
+    # dependency PR trains reviewers to ignore red. Skip rather than fail.
+    if: github.actor != 'dependabot[bot]'
 
     runs-on: ubuntu-latest
     permissions:
