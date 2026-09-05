@@ -44,6 +44,22 @@ the image-integrity mechanism (`gh attestation verify`).
 **Nothing is known to be broken.** This is a visibility gap, not a defect: the first execution of
 this code path will be a real release, where a failure is most expensive and least convenient.
 
+> **Update (2026-09-05): the integration half is now verified.** The v1.14.1 release exercised
+> `attest-build-provenance@4.2.2` for the first time and the result was checked rather than
+> assumed — `gh attestation verify` returned a SLSA provenance v1 statement whose subject digest
+> matches the published zip byte-for-byte, signed by `release.yml@refs/tags/v1.14.1` via
+> `token.actions.githubusercontent.com`. `action-gh-release@3.0.3` also ran successfully.
+>
+> **The add-on repo's equivalent bump remains unverified**, and it is the riskier of the two:
+> v3 → v4.2.2 is a major, against the action producing the image provenance that its `config.yaml`
+> documents for `gh attestation verify`. Tracked in that repo's backlog.
+>
+> Note for next time: the first v1.14.1 release attempt **failed** — `release.yml` refused to
+> publish because `validate.yml` had not yet completed on the release SHA. The guard worked as
+> designed; the release was published barely a minute after the merge. Wait for `main` to go green
+> before creating the release, or the tag lands with no artifact attached until the workflow is
+> re-run.
+
 **Mitigation available now:** `release.yml` accepts `workflow_dispatch`, so the path can be
 exercised deliberately before the next real tag rather than discovered during one.
 
@@ -53,7 +69,23 @@ than production releases.
 
 ---
 
-## `gps_accuracy: 0` can never match any zone (2026-09-05) — OPEN, P0
+## `gps_accuracy: 0` can never match any zone (2026-09-05) — RESOLVED 2026-09-05
+
+> **Fixed and shipped.** PR #73, released as
+> [v1.14.1](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/releases/tag/v1.14.1).
+> The guard became `acc is not None and math.isfinite(acc) and acc > 0`, which also closed three
+> neighbouring cases found during review: `None` (reachable because the caller gates on the
+> `gps_accuracy` key being _present_, not non-null) and `NaN` both raised or misbehaved, and `inf`
+> raised `ValueError: buffer distance must be finite` from inside an executor job — that one was
+> caught by the independent codex review lane, not by the first pass.
+>
+> Verified on a live instance: the affected tracker went from `away` to `The Poplars` after the
+> update. Regression cover is parametrised over `{0, 0.0, -1, -0.5, None, NaN, inf, -inf}`, plus a
+> point exactly on a zone boundary, plus an assertion that positive accuracy still inflates — the
+> last two guarding against the fix over-correcting into false matches. Confirmed red-green: the
+> new tests fail against the unfixed source.
+
+The original finding follows.
 
 `utils/zones.py:301` inflates the fix by the accuracy radius before testing containment:
 
@@ -214,6 +246,17 @@ Owner: matt. Next step: re-run `Config flow (Playwright)` against current `main`
 every run, 7-day retention) to see what the Add Integration dialog actually rendered — that will
 disambiguate "new components pollute discovery" from "unrelated regression" before touching the
 harness or the integration code.
+
+> **Update (2026-09-05): passed twice, unprompted.** The check went green on PR #73 and PR #63,
+> both against HA 2026.9.x (the floor moved to `>=2026.8.3` in #70). That is consistent with the
+> original hypothesis — the failure was tied to HA 2026.7.4 specifically, where `radio_frequency`
+> and `infrared` were failing to set up — but it does **not** confirm it: nobody re-ran the failing
+> configuration to prove the mechanism, and an intermittent failure that stops appearing looks
+> identical to a fixed one.
+>
+> Left open deliberately. Close it after it passes on the next few PRs without intervention, or
+> close it now with the reason recorded as "environmental, HA 2026.7.4 only, not reproduced since"
+> — but do not close it as _fixed_, because nothing was fixed.
 
 ---
 
