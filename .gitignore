@@ -12,6 +12,10 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 
+# macOS Finder metadata. Not covered by ~/.gitignore_global, so it shows up as
+# untracked in every working copy and eventually gets committed by accident.
+.DS_Store
+
 # Claude Code session artifacts (never commit to a public repo)
 .eod-*
 .claude/worktrees/
