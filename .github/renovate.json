@@ -1,0 +1,43 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": [
+    "Renovate replaces Dependabot in this repo rather than sitting alongside it: both would raise PRs for the same pip and GitHub Actions updates.",
+    "Nothing here is hash-locked - requirements_test.txt carries no --hash lines - so Renovate can manage Python safely. That is the difference from the add-on repo, where the hash-locked lockfile keeps Python with Dependabot.",
+    "Dependabot security alerts are unaffected by removing dependabot.yml; that file controls version-update PRs only."
+  ],
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommitTypeAll(build)"
+  ],
+  "timezone": "Europe/London",
+  "schedule": [
+    "before 6am on saturday"
+  ],
+  "semanticCommits": "enabled",
+  "semanticCommitScope": "deps",
+  "labels": [
+    "dependencies"
+  ],
+  "prConcurrentLimit": 5,
+  "packageRules": [
+    {
+      "description": "One PR for all GitHub Actions. Carries the security label Dependabot applied to this ecosystem, since a stale action is a supply-chain concern rather than a feature gap.",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "groupName": "actions",
+      "addLabels": [
+        "security"
+      ]
+    },
+    {
+      "description": "One PR for the Python test/tooling dependencies.",
+      "matchManagers": [
+        "pep621",
+        "pip_requirements"
+      ],
+      "groupName": "python"
+    }
+  ]
+}
