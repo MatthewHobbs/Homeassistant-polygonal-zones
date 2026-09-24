@@ -9,11 +9,7 @@ from homeassistant.components.device_tracker import SourceType, TrackerEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ENTITIES, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
-from homeassistant.exceptions import (
-    ConfigEntryError,
-    ConfigEntryNotReady,
-    HomeAssistantError,
-)
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
@@ -31,10 +27,9 @@ from .const import (
     DOMAIN,
 )
 from .utils import event_should_trigger, get_locations_zone
-from .utils.general import download_zone_relative_path, safe_config_path
+from .utils.general import download_zone_relative_path
 from .utils.geometry import exterior_coords
-from .utils.local_zones import download_zones
-from .utils.zones import UnsupportedSchemaVersion, Zone
+from .utils.zones import Zone
 from .zone_source import ZoneSource
 
 _LOGGER = logging.getLogger(__name__)
@@ -98,42 +93,11 @@ async def async_setup_entry(
     editable_file = False
 
     if entry.data.get(CONF_DOWNLOAD_ZONES):
+        # __init__.async_setup_entry bootstraps the initial snapshot (raising
+        # ConfigEntryNotReady/ConfigEntryError there, before this platform is
+        # forwarded — see #84) before this platform ever runs, so the file is
+        # already in place by the time we get here.
         relative = download_zone_relative_path(entry.entry_id)
-        # Resolve through safe_config_path (not a raw f-string) so the managed
-        # snapshot path is confined to /config like every other path in the code.
-        download_path = safe_config_path(hass.config.config_dir, relative)
-
-        exists = await hass.async_add_executor_job(download_path.exists)
-        if not exists:
-            try:
-                await download_zones(
-                    zone_uris,
-                    download_path,
-                    prioritize,
-                    hass,
-                    allow_private_urls=allow_private_urls,
-                )
-            except UnsupportedSchemaVersion as err:
-                # The source file's format is newer than this integration
-                # understands. Retrying can't fix that — the user must upgrade
-                # the integration or downgrade the file. Surface it as a
-                # permanent setup error (HA stops retrying and shows it) rather
-                # than spinning forever.
-                raise ConfigEntryError(
-                    f"Zone file for entry {entry.entry_id} uses an unsupported "
-                    f"schema version: {err}"
-                ) from err
-            except Exception as err:
-                # Any other failure (unreachable source, SSRF block, corrupt
-                # payload, disk error) may be transient — and crucially, an
-                # all-URIs-down outage is indistinguishable from a corrupt file
-                # at this boundary (get_zones raises ZoneFileCorrupt for both).
-                # Don't hard-fail the entry — that would leave no entities and
-                # no retry. Signal HA to retry setup with its own backoff.
-                raise ConfigEntryNotReady(
-                    f"Could not download zone files for entry {entry.entry_id}: {err}"
-                ) from err
-
         zone_uris = [f"/{relative}"]
         editable_file = True
 

@@ -225,13 +225,18 @@ async def test_async_setup_entry_legacy_entry_raises_expose_coordinates_issue(
     assert create_issue.call_args.args[2] == "legacy_expose_coordinates_entry-legacy"
 
 
-async def test_async_setup_entry_download_creates_local_path(hass_with_setup, tmp_path) -> None:
-    """When download_zones is true, a local path is generated under config_dir/polygonal_zones/."""
+async def test_async_setup_entry_download_zones_uses_local_snapshot_path(
+    hass_with_setup,
+) -> None:
+    """When download_zones is true, entities point at the managed local snapshot path.
+
+    The snapshot itself is bootstrapped by __init__.async_setup_entry before this
+    platform is ever forwarded (#84), so this platform does no downloading of its
+    own — it just assumes the file is in place.
+    """
     from custom_components.polygonal_zones import PolygonalZonesData
 
     hass, platform = hass_with_setup
-    # async_add_executor_job(Path.exists) → False so download_zones is invoked
-    hass.async_add_executor_job = AsyncMock(return_value=False)
 
     entry = SimpleNamespace(
         entry_id="entry-1",
@@ -255,101 +260,12 @@ async def test_async_setup_entry_download_creates_local_path(hass_with_setup, tm
             "custom_components.polygonal_zones.device_tracker.generate_entity_id",
             side_effect=lambda fmt, name, hass=None: fmt.format(name),
         ),
-        patch(
-            "custom_components.polygonal_zones.device_tracker.download_zones",
-            new=AsyncMock(),
-        ) as download_mock,
         # modern entry → setup clears any legacy privacy issue (stub hass has
         # no issue registry, so patch the delete call).
         patch("custom_components.polygonal_zones.device_tracker.ir.async_delete_issue"),
     ):
         await async_setup_entry(hass, entry, add_entities)
 
-    download_mock.assert_awaited_once()
     entities = add_entities.call_args.args[0]
     assert entities[0].editable_file is True
     assert entities[0].zone_urls == ["/polygonal_zones/entry-1.json"]
-
-
-async def test_async_setup_entry_download_failure_raises_config_entry_not_ready(
-    hass_with_setup, tmp_path
-) -> None:
-    """A failed initial download must raise ConfigEntryNotReady (HA retries setup)
-    rather than propagating a raw error that hard-fails the entry with no entities."""
-    from homeassistant.exceptions import ConfigEntryNotReady
-
-    from custom_components.polygonal_zones import PolygonalZonesData
-
-    hass, platform = hass_with_setup
-    hass.async_add_executor_job = AsyncMock(return_value=False)  # file doesn't exist yet
-
-    entry = SimpleNamespace(
-        entry_id="entry-1",
-        runtime_data=PolygonalZonesData(),
-        data={
-            "zone_urls": ["https://example.com/zones.json"],
-            "entities": ["device_tracker.alice"],
-            "download_zones": True,
-            "expose_coordinates": True,
-        },
-    )
-    add_entities = MagicMock()
-
-    with (
-        patch(
-            "custom_components.polygonal_zones.device_tracker.entity_platform.async_get_current_platform",
-            return_value=platform,
-        ),
-        patch(
-            "custom_components.polygonal_zones.device_tracker.download_zones",
-            new=AsyncMock(side_effect=OSError("host unreachable")),
-        ),
-        patch("custom_components.polygonal_zones.device_tracker.ir.async_delete_issue"),
-        pytest.raises(ConfigEntryNotReady),
-    ):
-        await async_setup_entry(hass, entry, add_entities)
-
-    # No entities were registered on the failed attempt.
-    add_entities.assert_not_called()
-
-
-async def test_async_setup_entry_download_unsupported_schema_raises_config_entry_error(
-    hass_with_setup, tmp_path
-) -> None:
-    """An unsupported schema version is permanent — surface ConfigEntryError so HA
-    stops retrying, rather than ConfigEntryNotReady which would spin forever."""
-    from homeassistant.exceptions import ConfigEntryError
-
-    from custom_components.polygonal_zones import PolygonalZonesData
-    from custom_components.polygonal_zones.utils.zones import UnsupportedSchemaVersion
-
-    hass, platform = hass_with_setup
-    hass.async_add_executor_job = AsyncMock(return_value=False)  # file doesn't exist yet
-
-    entry = SimpleNamespace(
-        entry_id="entry-1",
-        runtime_data=PolygonalZonesData(),
-        data={
-            "zone_urls": ["https://example.com/zones.json"],
-            "entities": ["device_tracker.alice"],
-            "download_zones": True,
-            "expose_coordinates": True,
-        },
-    )
-    add_entities = MagicMock()
-
-    with (
-        patch(
-            "custom_components.polygonal_zones.device_tracker.entity_platform.async_get_current_platform",
-            return_value=platform,
-        ),
-        patch(
-            "custom_components.polygonal_zones.device_tracker.download_zones",
-            new=AsyncMock(side_effect=UnsupportedSchemaVersion("schema 2 > max 1")),
-        ),
-        patch("custom_components.polygonal_zones.device_tracker.ir.async_delete_issue"),
-        pytest.raises(ConfigEntryError),
-    ):
-        await async_setup_entry(hass, entry, add_entities)
-
-    add_entities.assert_not_called()
