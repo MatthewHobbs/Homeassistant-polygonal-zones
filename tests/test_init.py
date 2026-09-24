@@ -1,7 +1,10 @@
 """Tests for the integration's package-level lifecycle hooks."""
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
+
+from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
+import pytest
 
 from custom_components.polygonal_zones import (
     PolygonalZonesData,
@@ -11,6 +14,7 @@ from custom_components.polygonal_zones import (
     async_setup_entry,
     async_unload_entry,
 )
+from custom_components.polygonal_zones.utils.zones import UnsupportedSchemaVersion
 
 
 async def test_async_setup_registers_services() -> None:
@@ -45,6 +49,7 @@ async def test_async_setup_entry_initialises_runtime_data_and_forwards() -> None
 
     entry = SimpleNamespace(
         entry_id="entry-1",
+        data={},
         async_on_unload=MagicMock(),
         add_update_listener=MagicMock(return_value=listener_unsub),
     )
@@ -57,6 +62,89 @@ async def test_async_setup_entry_initialises_runtime_data_and_forwards() -> None
     entry.async_on_unload.assert_called_once_with(listener_unsub)
     assert isinstance(entry.runtime_data, PolygonalZonesData)
     assert entry.runtime_data.entities == []
+
+
+def _download_entry(**data_overrides):
+    data = {
+        "zone_urls": ["https://example.com/zones.json"],
+        "download_zones": True,
+    }
+    data.update(data_overrides)
+    return SimpleNamespace(
+        entry_id="entry-1",
+        data=data,
+        async_on_unload=MagicMock(),
+        add_update_listener=MagicMock(),
+    )
+
+
+async def test_async_setup_entry_download_failure_raises_before_forward(tmp_path) -> None:
+    """A failed initial snapshot download raises ConfigEntryNotReady from __init__,
+    before the platform is forwarded — HA retries setup with backoff (#84). Raised
+    from the forwarded platform instead, entity_platform swallows it: no retry."""
+    forward_mock = AsyncMock()
+    entry = _download_entry()
+    hass = SimpleNamespace(
+        config=SimpleNamespace(config_dir=str(tmp_path)),
+        config_entries=SimpleNamespace(async_forward_entry_setups=forward_mock),
+        async_add_executor_job=AsyncMock(return_value=False),  # snapshot missing
+    )
+
+    with (
+        patch(
+            "custom_components.polygonal_zones.download_zones",
+            new=AsyncMock(side_effect=OSError("host unreachable")),
+        ),
+        pytest.raises(ConfigEntryNotReady),
+    ):
+        await async_setup_entry(hass, entry)
+
+    forward_mock.assert_not_awaited()
+
+
+async def test_async_setup_entry_download_unsupported_schema_raises_before_forward(
+    tmp_path,
+) -> None:
+    """An unsupported schema version is permanent: ConfigEntryError, not NotReady
+    (retrying with NotReady would spin forever), and still before the forward."""
+    forward_mock = AsyncMock()
+    entry = _download_entry()
+    hass = SimpleNamespace(
+        config=SimpleNamespace(config_dir=str(tmp_path)),
+        config_entries=SimpleNamespace(async_forward_entry_setups=forward_mock),
+        async_add_executor_job=AsyncMock(return_value=False),  # snapshot missing
+    )
+
+    with (
+        patch(
+            "custom_components.polygonal_zones.download_zones",
+            new=AsyncMock(side_effect=UnsupportedSchemaVersion("schema 2 > max 1")),
+        ),
+        pytest.raises(ConfigEntryError),
+    ):
+        await async_setup_entry(hass, entry)
+
+    forward_mock.assert_not_awaited()
+
+
+async def test_async_setup_entry_download_skipped_when_snapshot_exists(tmp_path) -> None:
+    """An existing snapshot short-circuits the bootstrap; forward proceeds normally."""
+    forward_mock = AsyncMock()
+    entry = _download_entry()
+    hass = SimpleNamespace(
+        config=SimpleNamespace(config_dir=str(tmp_path)),
+        config_entries=SimpleNamespace(async_forward_entry_setups=forward_mock),
+        async_add_executor_job=AsyncMock(return_value=True),  # snapshot already present
+    )
+
+    with patch(
+        "custom_components.polygonal_zones.download_zones", new=AsyncMock()
+    ) as download_mock:
+        result = await async_setup_entry(hass, entry)
+
+    assert result is True
+    download_mock.assert_not_awaited()
+    forward_mock.assert_awaited_once()
 
 
 async def test_async_unload_entry_releases_lock(tmp_path) -> None:
