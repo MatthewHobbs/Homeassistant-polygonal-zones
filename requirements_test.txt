@@ -1,8 +1,15 @@
 # Pinned to a known-green HA version range so nightly CI on an unpinned
 # floor doesn't silently green-on-break when HA core ships an API change.
-# Upper bound allows patch bumps within the same minor. Dependabot (see
-# .github/dependabot.yml) bumps weekly.
-homeassistant>=2026.8.3,<2027
+# Renovate bumps the lower bound weekly (see renovate.json); the upper bound
+# only moves when a new major HA year ships. This is the FLOOR HA supports
+# (CLAUDE.md, validate.yml's Pytest (HA floor) job pins exactly 2026.7.1) —
+# it should track that promise, not drift upward as an accident of routine
+# bumps. This file is also the single source of truth for the homeassistant
+# and shapely ranges used by _upstream-gate.yml, playwright.yml and
+# multi-arch.yml, which read it rather than duplicating the ranges — a
+# duplicated range is invisible to Renovate, so it would never see the cap
+# (<2027) need moving when HA 2027.1 ships.
+homeassistant>=2026.7.1,<2027
 mypy
 pytest
 pytest-asyncio
