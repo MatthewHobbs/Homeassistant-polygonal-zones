@@ -38,6 +38,17 @@
         "pip_requirements"
       ],
       "groupName": "python"
+    },
+    {
+      "description": "homeassistant/shapely in requirements_test.txt declare the supported FLOOR (CLAUDE.md; validate.yml's Pytest (HA floor) job tests it), not 'whatever's current' - widen never raises the lower bound, only the upper bound for an out-of-range release (e.g. <2027 -> <2028 once HA 2027.1 ships). Without this, the default range strategy ratchets the lower bound up on every routine release and silently re-drifts the floor (see requirements_test.txt's history before this rule existed).",
+      "matchManagers": [
+        "pip_requirements"
+      ],
+      "matchPackageNames": [
+        "homeassistant",
+        "shapely"
+      ],
+      "rangeStrategy": "widen"
     }
   ]
 }
