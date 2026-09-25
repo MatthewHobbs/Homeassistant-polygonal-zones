@@ -132,11 +132,56 @@ jobs:
       - run: pip install -r requirements_test.txt
       - run: mypy
 
+  # CLAUDE.md "Home Assistant: test against current stable" (set 2026-09-25):
+  # the declared floor must never be newer than the .1 release of the month
+  # before current stable, because current stable moves every month and a
+  # floor that was compliant silently stops being — so this runs on every
+  # push/PR and re-checks on the nightly gate whenever upstream moves, not
+  # just when this repo's own files change.
+  ha-floor-lag:
+    name: HA floor within lag bound
+    needs: [gate]
+    if: ${{ !cancelled() && (github.event_name == 'push' || github.event_name == 'pull_request' || needs.gate.outputs.changed == 'true') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check hacs.json's declared floor against the current-stable-derived bound
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet --disable-pip-version-check packaging
+          python3 - <<'PY'
+          import json, urllib.request
+          from packaging.version import Version
+
+          req = urllib.request.Request(
+              "https://version.home-assistant.io/stable.json",
+              headers={"User-Agent": "Homeassistant-polygonal-zones-CI"},
+          )
+          stable = json.load(urllib.request.urlopen(req, timeout=30))
+          current = Version(stable["homeassistant"]["default"])
+
+          year, month = current.release[0], current.release[1]
+          if month == 1:
+              bound_year, bound_month = year - 1, 12
+          else:
+              bound_year, bound_month = year, month - 1
+          bound = Version(f"{bound_year}.{bound_month}.1")
+
+          floor = Version(json.load(open("hacs.json"))["homeassistant"])
+
+          print(f"Current stable: {current}; bound (month before, .1): {bound}; declared floor: {floor}")
+          if floor > bound:
+              raise SystemExit(
+                  f"hacs.json's declared floor {floor} is newer than the allowed bound {bound} "
+                  f"(current stable {current}) - CLAUDE.md 'Home Assistant: test against current stable'"
+              )
+          PY
+
   # Record this upstream fingerprint as tested — only on a gated run where every
   # job passed. A failed nightly is NOT recorded, so it keeps re-alerting nightly
   # until fixed rather than caching a broken fingerprint and going silently green.
   record:
-    needs: [gate, hassfest, hacs, ruff, prettier, pytest, pytest-floor, mypy]
+    needs: [gate, hassfest, hacs, ruff, prettier, pytest, pytest-floor, mypy, ha-floor-lag]
     if: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && needs.gate.outputs.changed == 'true' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
     runs-on: ubuntu-latest
     steps:
