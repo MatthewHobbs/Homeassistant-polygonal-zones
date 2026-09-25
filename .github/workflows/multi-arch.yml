@@ -110,9 +110,12 @@ jobs:
       - name: Import shapely on ${{ matrix.platform }}
         if: steps.leg.outputs.run == 'true'
         run: |
+          # requirements_test.txt (mounted at /src, the repo root) is the
+          # single source of truth for the shapely range — read it inside the
+          # container rather than duplicating the range here.
           docker run --rm --platform=${{ matrix.platform }} \
             -v "$PWD:/src" -w /src python:3.14-slim \
-            bash -euxc 'pip install --quiet "shapely>=2.1.2,<3" && python tests/smoke/shapely_smoke.py'
+            bash -euxc 'pip install --quiet "$(grep -E "^shapely" requirements_test.txt)" && python tests/smoke/shapely_smoke.py'
 
   # Record the tested fingerprint only when the smoke passed (see _upstream-gate.yml).
   record:

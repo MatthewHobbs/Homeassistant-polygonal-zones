@@ -36,6 +36,8 @@ jobs:
       changed: ${{ steps.decide.outputs.changed }}
       cache_key: ${{ steps.fp.outputs.cache_key }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
       - name: Resolve upstream fingerprint (latest in-range homeassistant + shapely)
         id: fp
         run: |
@@ -43,8 +45,27 @@ jobs:
           python3 -m pip install --quiet --disable-pip-version-check packaging
           fp=$(python3 - <<'PY'
           import json, urllib.request
+          from packaging.requirements import Requirement
           from packaging.specifiers import SpecifierSet
           from packaging.version import Version
+
+          # requirements_test.txt is the single source of truth for these ranges
+          # (Renovate tracks it via pip_requirements). Reading it here, instead
+          # of hard-coding the ranges in this workflow, is what lets a Renovate
+          # cap bump (<2027 -> <2028) actually reach this fingerprint — a
+          # hard-coded copy is invisible to Renovate and would silently keep
+          # testing the old major forever.
+          specs = {}
+          with open("requirements_test.txt") as f:
+              for line in f:
+                  line = line.split("#", 1)[0].strip()
+                  if not line:
+                      continue
+                  try:
+                      req = Requirement(line)
+                  except Exception:
+                      continue
+                  specs[req.name] = str(req.specifier)
 
 
           def latest(pkg, spec):
@@ -66,8 +87,8 @@ jobs:
               return str(best)
 
 
-          ha = latest("homeassistant", ">=2026.7.1,<2027")
-          sh = latest("shapely", ">=2.1.2,<3")
+          ha = latest("homeassistant", specs["homeassistant"])
+          sh = latest("shapely", specs["shapely"])
           print(f"ha{ha}-sh{sh}")
           PY
           )

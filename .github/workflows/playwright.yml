@@ -58,7 +58,12 @@ jobs:
       - name: Install Home Assistant + runtime deps
         run: |
           set -eux
-          pip install "homeassistant>=2026.7.1,<2027" "shapely>=2.1.2,<3"
+          # requirements_test.txt is the single source of truth for these
+          # ranges (Renovate tracks it) — read from it rather than duplicating
+          # the ranges here, where a Renovate-driven cap bump would go unseen.
+          HA_REQ=$(grep -E '^homeassistant' requirements_test.txt)
+          SHAPELY_REQ=$(grep -E '^shapely' requirements_test.txt)
+          pip install "$HA_REQ" "$SHAPELY_REQ"
           # `pip install homeassistant` does NOT pull integration requirements
           # (HA installs them at runtime, which is not effective in this CI), so
           # the frontend package (hass_frontend) and the auto-loaded assist/media
