@@ -1,15 +1,20 @@
-# The lower bound here is the FLOOR HA supports (CLAUDE.md; validate.yml's
-# Pytest (HA floor) job pins exactly 2026.7.1) — it should not move without a
-# deliberate edit. renovate.json pins rangeStrategy=widen for this package so
-# Renovate only widens the upper bound (e.g. <2027 -> <2028 once HA 2027.1
-# ships) and never bumps the lower bound on routine releases — without that
-# rule the default strategy silently re-drifts the floor upward every week
-# (this file's own git history before that rule existed shows exactly that:
-# 2026.1 -> 2026.6.4 -> 2026.7.1 -> 2026.7.4 -> 2026.8.3). This file is also
-# the single source of truth for the homeassistant and shapely ranges used by
-# _upstream-gate.yml, playwright.yml and multi-arch.yml, which read it rather
-# than duplicating the ranges — a duplicated range is invisible to Renovate,
-# so it would never see the cap need widening either.
+# The lower bound here is the FLOOR HA supports. hacs.json's "homeassistant"
+# field is the authoritative declaration of that floor (also what HACS itself
+# enforces at install time); validate.yml's Pytest (HA floor) job reads that
+# field rather than a hard-coded copy. This bound should not move without a
+# deliberate edit to both this file and hacs.json — renovate.json pins
+# rangeStrategy=widen for this package specifically so Renovate only widens
+# the upper bound (e.g. <2027 -> <2028 once HA 2027.1 ships) and never bumps
+# the lower bound on routine releases. Without that rule the default range
+# strategy silently re-drifts the floor upward every week (this file's own
+# git history before that rule existed shows exactly that ratchet: 2026.1 ->
+# 2026.6.4 -> 2026.7.1 -> 2026.7.4 -> 2026.8.3).
+#
+# This file is also the single source of truth for the homeassistant and
+# shapely ranges used by _upstream-gate.yml, playwright.yml and
+# multi-arch.yml, which read it rather than duplicating the ranges — a
+# duplicated range is invisible to Renovate, so it would never see the cap
+# need widening either.
 homeassistant>=2026.7.1,<2027
 mypy
 pytest
