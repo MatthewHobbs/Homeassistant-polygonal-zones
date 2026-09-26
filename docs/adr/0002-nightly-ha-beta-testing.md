@@ -22,9 +22,18 @@ of after.
 
 Option A: a separate, non-required nightly job that resolves the latest HA
 _prerelease_ (dropping the `is_prerelease` filter for this one query) and
-runs the existing pytest/Playwright suite against it. `continue-on-error:
-true`, and its own cache-fingerprint namespace so it never interacts with the
-stable gate.
+runs the existing pytest/Playwright suite against it, on its own
+cache-fingerprint namespace so it never interacts with the stable gate.
+
+Runs on `schedule`/`workflow_dispatch` only — never on `push`/`pull_request`.
+This is a time-based signal about upstream HA betas, not a code-change signal,
+so there is no PR to protect and `continue-on-error` is not needed: without
+it, a failure fails the run normally and shows red in the Actions tab, which
+is what "start simple: red in Actions only" (below) actually requires. This
+matches `playwright.yml`'s own precedent (`continue-on-error:
+${{ github.event_name == 'pull_request' }}`, specifically so that "scheduled
+runs keep failing visibly") rather than the RFC's original
+`continue-on-error: true` wording (see Consequences).
 
 - **Cadence: nightly** — matches the existing gate's schedule; the
   fingerprint cache already skips re-running when nothing changed, so nightly
@@ -63,3 +72,21 @@ into the one that decides whether a release can ship.
 - No auto-opened issue on failure (start simple, per the decision above); if
   a failure goes unnoticed in practice, revisit failure handling rather than
   treating this as settled forever.
+- **Corrected during review, before implementation:** RFC 0006's option A
+  wording (see Alternatives) said `continue-on-error: true`. Caught in dual
+  review and verified against this repo's own `playwright.yml` precedent:
+  `continue-on-error` makes GitHub report the overall run as a success even
+  when the job fails, which would silently defeat "red in Actions only" as
+  the failure-visibility mechanism. Since this job only needs to run on
+  `schedule`/`workflow_dispatch` (never `push`/`pull_request` — there is no
+  PR for it to protect), `continue-on-error` is dropped entirely rather than
+  scoped, and a failure fails the run normally. Does not change the decision
+  (still option A, nightly, start simple) — corrects how to implement it.
+- Also checked and found NOT an issue: dropping `_upstream-gate.yml`'s
+  `is_prerelease` pre-filter is sufficient on its own. `packaging`'s
+  `SpecifierSet.contains()`/`in`, called per-candidate (as `latest()` already
+  does, not via `.filter()` over the whole list), defaults to matching
+  prereleases per PEP 440's own recommendation when no `prereleases=`
+  argument is given — confirmed against the installed `packaging` 26.1's own
+  docstring and empirically with a real beta version string. No
+  `prereleases=True` argument is needed.
