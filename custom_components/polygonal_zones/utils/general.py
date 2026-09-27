@@ -113,6 +113,32 @@ class _PublicOnlyResolver(DefaultResolver):  # type: ignore[misc, valid-type]
         return filtered
 
 
+def is_local_add_on_host(uri: str) -> bool:
+    """Return True if ``uri``'s host looks like a LAN-installed companion add-on.
+
+    Used to pick a staleness-safe ``download_zones`` default for new installs
+    (BACKLOG.md: "download_zones defaults to true, silently freezing
+    add-on-authored zones"). Only classifies what's cheap to check
+    synchronously — a private/loopback/link-local IP literal, ``localhost``,
+    or an mDNS ``.local`` name — since resolving a real DNS hostname just to
+    pick a form default isn't worth a network round-trip. A public https://
+    URL or a /config file path returns False.
+    """
+    parsed = urlparse(uri)
+    if parsed.scheme not in ("http", "https"):
+        return False
+    host = parsed.hostname
+    if not host:
+        return False
+    if host == "localhost" or host.endswith(".local"):
+        return True
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return ip.is_private or ip.is_loopback or ip.is_link_local
+
+
 async def load_data(uri: str, hass: HomeAssistant, *, allow_private_urls: bool = False) -> str:
     """Load data from an HTTP(S) URL or a file inside the HA config directory.
 
