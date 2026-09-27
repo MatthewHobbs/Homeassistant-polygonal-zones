@@ -19,8 +19,9 @@ from homeassistant.helpers.selector import TextSelectorType
 from homeassistant.util import dt as dt_util
 import voluptuous as vol
 
-from .const import CONF_CONSENT_CONFIRMED_AT, DOMAIN
+from .const import CONF_CONSENT_CONFIRMED_AT, CONF_DOWNLOAD_ZONES, CONF_ZONES_URL, DOMAIN
 from .utils.config_validation import validate_zone_urls
+from .utils.general import is_local_add_on_host
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,6 +32,31 @@ _CONSENT_NOTICE = (
     "device_tracker entities you select. Please ensure everyone whose "
     "device is being tracked is aware of this."
 )
+
+
+def _default_download_zones_off_for_add_on_hosts(user_input: dict[str, Any]) -> None:
+    """Override a new entry's ``download_zones`` to False for add-on-only sources.
+
+    New installs default ``download_zones`` to True (CRUD works out of the
+    box) — the right model when the integration owns the data. It's the
+    wrong default when every zone URL is the LAN-installed companion editor
+    add-on: the snapshot is only re-fetched when missing (never on reload),
+    so an edit made in the add-on after setup is silently invisible
+    (BACKLOG.md, P1). Only overrides the form's True fallback for a new
+    entry whose sources are *all* add-on-like; a mix of add-on + public URLs,
+    or an explicit choice made later via the options flow, is left alone.
+    """
+    zone_urls = [u for u in (user_input.get(CONF_ZONES_URL) or []) if u]
+    if (
+        user_input.get(CONF_DOWNLOAD_ZONES)
+        and zone_urls
+        and all(is_local_add_on_host(u) for u in zone_urls)
+    ):
+        _LOGGER.info(
+            "All zone_urls look like a LAN-installed add-on; defaulting "
+            "download_zones to False so live edits aren't frozen at setup"
+        )
+        user_input[CONF_DOWNLOAD_ZONES] = False
 
 
 def build_create_flow(
@@ -161,6 +187,7 @@ class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
                 errors["consent"] = "consent_required"
             if not errors:
                 user_input.pop("consent", None)
+                _default_download_zones_off_for_add_on_hosts(user_input)
                 # Persist evidence that consent was attested (GDPR Art. 7(1)
                 # accountability). The tick itself is a gate, not a setting, but
                 # a timestamp lets the operator demonstrate when it happened.

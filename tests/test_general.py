@@ -6,6 +6,7 @@ import pytest
 
 from custom_components.polygonal_zones.utils.general import (
     event_should_trigger,
+    is_local_add_on_host,
     redact_uri,
     safe_config_path,
 )
@@ -32,6 +33,44 @@ def test_redact_uri_malformed_port_does_not_raise() -> None:
     """A non-numeric port makes urlparse.port raise ValueError; redact must degrade
     to the raw string rather than crash a diagnostics dump."""
     assert redact_uri("http://example.com:bad/zones.json") == "http://example.com:bad/zones.json"
+
+
+def test_is_local_add_on_host_private_ipv4() -> None:
+    assert is_local_add_on_host("http://192.168.1.50:8000/zones.json") is True
+
+
+def test_is_local_add_on_host_loopback() -> None:
+    assert is_local_add_on_host("http://127.0.0.1:8000/zones.json") is True
+
+
+def test_is_local_add_on_host_link_local() -> None:
+    assert is_local_add_on_host("http://169.254.1.2/zones.json") is True
+
+
+def test_is_local_add_on_host_dot_local_name() -> None:
+    assert is_local_add_on_host("http://polygonal-zones-editor.local/zones.json") is True
+
+
+def test_is_local_add_on_host_localhost_name() -> None:
+    assert is_local_add_on_host("http://localhost:8000/zones.json") is True
+
+
+def test_is_local_add_on_host_public_url() -> None:
+    assert is_local_add_on_host("https://example.com/zones.json") is False
+
+
+def test_is_local_add_on_host_public_ip() -> None:
+    assert is_local_add_on_host("http://8.8.8.8/zones.json") is False
+
+
+def test_is_local_add_on_host_non_http_scheme() -> None:
+    # File paths / non-http schemes are never add-on-classified.
+    assert is_local_add_on_host("/config/zones.json") is False
+    assert is_local_add_on_host("ftp://192.168.1.50/zones.json") is False
+
+
+def test_is_local_add_on_host_no_hostname() -> None:
+    assert is_local_add_on_host("http://") is False
 
 
 def test_download_zone_relative_path() -> None:
