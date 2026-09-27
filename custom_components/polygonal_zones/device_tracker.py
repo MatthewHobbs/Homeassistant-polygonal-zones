@@ -80,6 +80,21 @@ async def async_setup_entry(
         # the warning doesn't persist after opt-out. No-op if none exists.
         ir.async_delete_issue(hass, DOMAIN, legacy_privacy_issue)
 
+    # Release A, PR A5: announce the coming Release B breaking change well
+    # before it ships, not alongside it. Raised unconditionally — every entry
+    # is affected once HA removes location_name, regardless of any config
+    # value. Not cleared here: Release B's own PR is responsible for deleting
+    # or rewording this once the state migration actually ships.
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        f"location_name_removal_coming_{entry.entry_id}",
+        is_fixable=False,
+        severity=ir.IssueSeverity.WARNING,
+        translation_key="location_name_removal_coming",
+        translation_placeholders={"title": entry.title},
+    )
+
     entities = [
         PolygonalZoneEntity(
             source,

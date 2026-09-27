@@ -149,8 +149,10 @@ async def test_async_setup_entry_no_download(hass_with_setup) -> None:
         ),
         # modern entry (expose_coordinates present) → setup clears any legacy
         # privacy issue via ir.async_delete_issue; patch it (stub hass has no
-        # issue registry).
+        # issue registry). ir.async_create_issue also fires unconditionally
+        # (the location_name_removal_coming notice), so patch that too.
         patch("custom_components.polygonal_zones.device_tracker.ir.async_delete_issue"),
+        patch("custom_components.polygonal_zones.device_tracker.ir.async_create_issue"),
     ):
         await async_setup_entry(hass, entry, add_entities)
 
@@ -185,10 +187,48 @@ async def test_async_setup_entry_wires_zone_source_token(hass_with_setup) -> Non
             side_effect=lambda fmt, name, hass=None: fmt.format(name),
         ),
         patch("custom_components.polygonal_zones.device_tracker.ir.async_delete_issue"),
+        patch("custom_components.polygonal_zones.device_tracker.ir.async_create_issue"),
     ):
         await async_setup_entry(hass, entry, add_entities)
 
     assert entry.runtime_data.source.token == "s3cr3t"
+
+
+async def test_async_setup_entry_raises_location_name_removal_coming(hass_with_setup) -> None:
+    """Release A, PR A5: every entry gets the deprecation notice unconditionally,
+    regardless of any config value — every install is affected eventually."""
+    hass, platform = hass_with_setup
+    entry = _entry_with_source(
+        entry_id="entry-notice",
+        title="My Zones",
+        zone_urls=["https://example.com/zones.json"],
+        entities=["device_tracker.alice"],
+        expose_coordinates=True,
+    )
+    add_entities = MagicMock()
+    with (
+        patch(
+            "custom_components.polygonal_zones.device_tracker.entity_platform.async_get_current_platform",
+            return_value=platform,
+        ),
+        patch(
+            "custom_components.polygonal_zones.device_tracker.generate_entity_id",
+            side_effect=lambda fmt, name, hass=None: fmt.format(name),
+        ),
+        patch("custom_components.polygonal_zones.device_tracker.ir.async_delete_issue"),
+        patch(
+            "custom_components.polygonal_zones.device_tracker.ir.async_create_issue"
+        ) as create_issue,
+    ):
+        await async_setup_entry(hass, entry, add_entities)
+
+    matching = [
+        call for call in create_issue.call_args_list if call.args[2].startswith("location_name")
+    ]
+    assert len(matching) == 1
+    assert matching[0].args[2] == "location_name_removal_coming_entry-notice"
+    assert matching[0].kwargs["translation_key"] == "location_name_removal_coming"
+    assert matching[0].kwargs["translation_placeholders"] == {"title": "My Zones"}
 
 
 async def test_async_setup_entry_clears_legacy_per_entity_load_issue(hass_with_setup) -> None:
@@ -213,6 +253,7 @@ async def test_async_setup_entry_clears_legacy_per_entity_load_issue(hass_with_s
         patch(
             "custom_components.polygonal_zones.device_tracker.ir.async_delete_issue"
         ) as del_issue,
+        patch("custom_components.polygonal_zones.device_tracker.ir.async_create_issue"),
     ):
         await async_setup_entry(hass, entry, add_entities)
 
@@ -250,8 +291,13 @@ async def test_async_setup_entry_legacy_entry_raises_expose_coordinates_issue(
     ):
         await async_setup_entry(hass, entry, add_entities)
 
-    create_issue.assert_called_once()
-    assert create_issue.call_args.args[2] == "legacy_expose_coordinates_entry-legacy"
+    # Two issues fire on a legacy entry: the privacy warning, and the
+    # unconditional location_name_removal_coming notice.
+    created = {call.args[2] for call in create_issue.call_args_list}
+    assert created == {
+        "legacy_expose_coordinates_entry-legacy",
+        "location_name_removal_coming_entry-legacy",
+    }
 
 
 async def test_async_setup_entry_download_zones_uses_local_snapshot_path(
@@ -286,6 +332,7 @@ async def test_async_setup_entry_download_zones_uses_local_snapshot_path(
         # modern entry → setup clears any legacy privacy issue (stub hass has
         # no issue registry, so patch the delete call).
         patch("custom_components.polygonal_zones.device_tracker.ir.async_delete_issue"),
+        patch("custom_components.polygonal_zones.device_tracker.ir.async_create_issue"),
     ):
         await async_setup_entry(hass, entry, add_entities)
 

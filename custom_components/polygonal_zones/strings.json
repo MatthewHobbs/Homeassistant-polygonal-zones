@@ -189,6 +189,10 @@
     "home_zone_missing": {
       "title": "Polygonal Zones: configured home zone not found",
       "description": "Entry `{entry_id}` is configured with `{home_zone_id}` as its home zone, but no currently loaded zone matches that id or name. The `home`/`not_home` state derived from it will stay `not_home` until this is fixed. Check the zone wasn't renamed or deleted, then open the integration's options and update the Home zone field, or call `polygonal_zones.reload_zones`."
+    },
+    "location_name_removal_coming": {
+      "title": "Polygonal Zones: a future update will change how state is reported",
+      "description": "Home Assistant is removing the `location_name` property this integration currently uses to show the matched zone name as \"{title}\"'s device_tracker state (HA 2027.7). A future release of this integration will move the zone name to a companion sensor (`sensor.polygonal_zones_*`) and change the device_tracker's own state to the standard `home`/`not_home`. If you have automations or dashboards keyed on the tracker's state being a zone name, plan to migrate them to the new sensor before that release ships. No action is needed yet — this is advance notice."
     }
   }
 }
