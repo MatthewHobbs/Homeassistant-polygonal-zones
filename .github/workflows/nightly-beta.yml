@@ -1,0 +1,86 @@
+name: Nightly HA beta
+
+# ADR 0002 / RFC 0006 (Option A): HA typically ships a beta about a week
+# before the matching final release. A breaking API change lands in that
+# beta, but nothing else in this repo's CI catches it until the final release
+# ships - at which point users already have it. This job resolves the latest
+# HA PRERELEASE in requirements_test.txt's range and runs the existing
+# pytest + Playwright suites against it, in its own cache-fingerprint
+# namespace so it never interacts with the stable gate.
+#
+# Runs on schedule/workflow_dispatch only - never push/pull_request. This is
+# a time-based signal about upstream HA betas, not a code-change signal, so
+# there is no PR to protect and continue-on-error is not used: a failure
+# fails the run normally and shows red in the Actions tab, which is the
+# "start simple" failure-visibility mechanism ADR 0002 chose. A red run here
+# means "HA's beta broke something," not "our code is broken" - this job is
+# never a required check and can never block a merge or release.
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# See validate.yml for why the key includes github.workflow. Never
+# push/pull_request-triggered, so cancel-in-progress is unconditionally false.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Resolves the latest in-range HA prerelease and whether it's already been
+  # tested. pytest-beta/playwright-beta install exactly gate's ha_version
+  # output (never re-query PyPI themselves) so the version they actually test
+  # can never drift from the fingerprint that record later marks as passing.
+  gate:
+    uses: ./.github/workflows/_upstream-gate.yml
+    with:
+      cache_prefix: nightly-beta
+      include_prereleases: true
+
+  pytest-beta:
+    name: Pytest (HA beta)
+    needs: [gate]
+    if: ${{ !cancelled() && needs.gate.outputs.changed == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements_test.txt
+      - name: Install deps (HA beta ${{ needs.gate.outputs.ha_version }} in place of the pinned range)
+        run: |
+          set -euo pipefail
+          grep -vE '^homeassistant' requirements_test.txt > /tmp/requirements_test.no-ha.txt
+          pip install -r /tmp/requirements_test.no-ha.txt
+          pip install "homeassistant==${{ needs.gate.outputs.ha_version }}"
+      - run: pytest --cov=custom_components/polygonal_zones --cov-report=term --cov-fail-under=98
+
+  playwright-beta:
+    name: Config flow (Playwright, HA beta)
+    needs: [gate]
+    if: ${{ !cancelled() && needs.gate.outputs.changed == 'true' }}
+    uses: ./.github/workflows/_playwright-config-flow.yml
+    with:
+      ha_version: ${{ needs.gate.outputs.ha_version }}
+      artifact_suffix: "-beta"
+
+  # Record the tested fingerprint only when every job passed (see
+  # _upstream-gate.yml) - a failed beta run is NOT recorded, so it keeps
+  # re-alerting nightly until fixed rather than caching a broken fingerprint
+  # and going silently green.
+  record:
+    needs: [gate, pytest-beta, playwright-beta]
+    if: ${{ needs.gate.outputs.changed == 'true' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ needs.gate.outputs.cache_key }}" > .upstream-fingerprint
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .upstream-fingerprint
+          key: ${{ needs.gate.outputs.cache_key }}
