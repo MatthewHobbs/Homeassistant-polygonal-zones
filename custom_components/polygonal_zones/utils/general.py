@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 
 import aiohttp
 from aiohttp.resolver import DefaultResolver
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import Event, HomeAssistant, State
 
 _LOGGER = logging.getLogger(__name__)
@@ -226,11 +227,20 @@ def event_should_trigger(event: Event, entity_id: str) -> bool:
     old_state: State | None = event.data.get("old_state")
     new_state: State | None = event.data.get("new_state")
 
-    if not (old_state and new_state):
+    if old_state is None:
         return False
+    if new_state is None or new_state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+        # Source removed, or reporting unavailable/unknown. GPS attributes are
+        # normally cleared in this case, so the attribute check below would
+        # otherwise filter this event out — always trigger instead, so
+        # PolygonalZoneEntity._update_state's own unavailable-reflection branch
+        # (which re-reads live state, not this event) actually gets a chance
+        # to run. Without this, a source going unavailable was never reflected
+        # on the mirror: the trigger that would call _update_state never fired.
+        return True
     if not all(attr in new_state.attributes for attr in REQUIRED_ATTRIBUTES):
         return False
-    # the old state is none when it is the first update of the entity
+    # the old state's attributes are missing when it is the first real update
     if not all(attr in old_state.attributes for attr in REQUIRED_ATTRIBUTES):
         return True
 

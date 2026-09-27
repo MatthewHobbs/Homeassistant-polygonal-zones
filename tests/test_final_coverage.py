@@ -179,7 +179,9 @@ def test_event_should_trigger_attribute_change_returns_true() -> None:
     from custom_components.polygonal_zones.utils.general import event_should_trigger
 
     old = SimpleNamespace(attributes={"latitude": 1, "longitude": 2, "gps_accuracy": 5})
-    new = SimpleNamespace(attributes={"latitude": 99, "longitude": 2, "gps_accuracy": 5})
+    new = SimpleNamespace(
+        attributes={"latitude": 99, "longitude": 2, "gps_accuracy": 5}, state="not_home"
+    )
     event = SimpleNamespace(
         data={"entity_id": "device_tracker.me", "old_state": old, "new_state": new}
     )
