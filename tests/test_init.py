@@ -62,6 +62,37 @@ async def test_async_setup_entry_initialises_runtime_data_and_forwards() -> None
     entry.async_on_unload.assert_called_once_with(listener_unsub)
     assert isinstance(entry.runtime_data, PolygonalZonesData)
     assert entry.runtime_data.entities == []
+    assert entry.runtime_data.source is not None
+
+
+async def test_async_setup_entry_builds_source_before_forwarding_platforms() -> None:
+    """The shared ZoneSource must exist before async_forward_entry_setups is
+    awaited — async_forward_entry_setups starts every platform concurrently, so
+    a platform that reads entry.runtime_data.source at the start of its own
+    async_setup_entry (not just device_tracker's) must never race its creation.
+    Regression test for the race PR A2 fixed (source used to be built inside
+    device_tracker's own async_setup_entry, after forwarding had already
+    started)."""
+    source_at_forward_time = None
+
+    async def _capture_source_and_forward(entry, _platforms):
+        nonlocal source_at_forward_time
+        source_at_forward_time = entry.runtime_data.source
+
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        data={"zone_urls": ["https://example.com/zones.json"]},
+        async_on_unload=MagicMock(),
+        add_update_listener=MagicMock(),
+    )
+    hass = SimpleNamespace(
+        config_entries=SimpleNamespace(async_forward_entry_setups=_capture_source_and_forward)
+    )
+
+    await async_setup_entry(hass, entry)
+
+    assert source_at_forward_time is not None
+    assert source_at_forward_time is entry.runtime_data.source
 
 
 def _download_entry(**data_overrides):
