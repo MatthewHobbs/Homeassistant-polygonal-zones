@@ -167,7 +167,7 @@ async def test_handle_state_change_builder_invokes_update_on_match() -> None:
 
     old = SimpleNamespace(attributes={"latitude": 1, "longitude": 2, "gps_accuracy": 5})
     new_attrs = {"latitude": 99, "longitude": 2, "gps_accuracy": 5}
-    new = SimpleNamespace(attributes=new_attrs)
+    new = SimpleNamespace(attributes=new_attrs, state="not_home")
     event = SimpleNamespace(
         data={"entity_id": "device_tracker.phone", "old_state": old, "new_state": new}
     )
