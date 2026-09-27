@@ -128,7 +128,7 @@ known to be inside resolves to its zone in every case.
 
 ---
 
-## `download_zones` defaults to true, silently freezing add-on-authored zones (2026-09-05) — OPEN, P1
+## `download_zones` defaults to true, silently freezing add-on-authored zones (2026-09-05) — RESOLVED 2026-09-27
 
 `config_flow.py:49` documents the default as `True` for new installs ("CRUD works out of the box").
 `device_tracker.py:105` then does:
@@ -165,9 +165,17 @@ local add-on host; (2) expose `zones_source: snapshot|live` and `snapshot_taken_
 attributes so the freeze is legible; (3) re-download on config-entry reload when the source is
 reachable, treating the snapshot as a cache rather than a fork.
 
+> **Fixed and shipped: option (1).** PR #94. `is_local_add_on_host()` (private/loopback/link-local
+> IP literals, `localhost`, `.local` names) classifies a zone URL as add-on-like; a brand-new entry
+> whose sources are _all_ add-on-like gets `download_zones` overridden to `False` regardless of the
+> form's `True` fallback. A mixed add-on + public source, or an explicit choice, is left alone.
+> Options (2) and (3) were not done — (1) alone closes the reported failure mode (a new install no
+> longer silently freezes), and adding staleness attributes or reload-refetch on top is now a
+> separate, optional enhancement rather than part of this fix.
+
 ---
 
-## Config flow cannot authenticate to a token-protected companion add-on (2026-09-05) — OPEN, P1
+## Config flow cannot authenticate to a token-protected companion add-on (2026-09-05) — RESOLVED 2026-09-27
 
 The add-on's `save_token` option gates **every** non-ingress request, `GET /zones.json` included
 (see the add-on repo's backlog — its description claims `POST /save_zones` only). The integration's
@@ -197,6 +205,15 @@ since it removes the secret from HA's config entirely — have the add-on scope 
 mutating methods only, so reads work unauthenticated on an already IP-restricted port. These are
 alternatives, not both; the second is cheaper and is the add-on's stated intent.
 
+> **Correction, then fix (2026-09-27):** the "scope to writes only" alternative was closed by the
+> add-on repo's own ADR 0002 — its `save_token` gate on reads (`GET /zones.json`, `GET
+/trackers.json`) is intentional, not a bug, added in 0.2.27 specifically to protect zone geometry.
+> So the header/token-field option was the only one left. PR #95: an optional `zone_source_token`
+> field in the config/options flow, sent as the `X-Save-Token` header — scoped by
+> `is_local_add_on_host()` so it's only ever sent to a URL that looks like the add-on, never to a
+> public source, and never across a redirect (already structurally blocked — `load_data` refuses
+> redirects outright). Redacted in diagnostics.
+
 ---
 
 ## `location_name` override is deprecated — hard removal in HA 2027.7 (2026-09-05) — OPEN, P2
@@ -219,7 +236,7 @@ Owner: matt. Next step: confirm the supported replacement for a zone-name-bearin
 
 ---
 
-## Playwright config-flow smoke fails on HA 2026.7.4 (2026-07-27) — OPEN, P1
+## Playwright config-flow smoke fails on HA 2026.7.4 (2026-07-27) — RESOLVED 2026-09-27
 
 Surfaced merging Dependabot PR #60 (`homeassistant` floor `>=2026.7.1` → `>=2026.7.4`, now merged).
 `Config flow (Playwright)` failed twice (initial + 1 retry): `Polygonal Zones` never became visible
@@ -257,6 +274,51 @@ harness or the integration code.
 > Left open deliberately. Close it after it passes on the next few PRs without intervention, or
 > close it now with the reason recorded as "environmental, HA 2026.7.4 only, not reproduced since"
 > — but do not close it as _fixed_, because nothing was fixed.
+
+> **Correction (2026-09-27): the passing runs above were not evidence for this item.** `Config flow
+(Playwright)` installs the _latest_ HA in `requirements_test.txt`'s range — every green run since
+> (15 in a row, including scheduled `main` runs) tested a newer HA than the one that failed, never
+> the floor (`hacs.json`'s `2026.7.1`, unchanged since it was declared). A pass on the latest version
+> answers a different question than this item asks; closing on that basis would have been the
+> "plausible answer read off the wrong field" mistake, not a real resolution.
+>
+> Fixed the actual gap instead of the report: added `config-flow-floor`, a second Playwright job
+> (mirrors `validate.yml`'s `Pytest` / `Pytest (HA floor)` split) that installs the exact floor
+> version and runs the same config-flow smoke against it, on every push/PR/schedule/dispatch,
+> non-required, same continue-on-error policy as the existing job. This is the first time the floor
+> has actually been re-tested since the original report.
+
+> **Root cause found (2026-09-27): a fragile test selector, not an HA/integration regression.**
+> `config-flow-floor`'s first run reproduced the exact original failure byte-for-byte — same
+> `radio_frequency`/`infrared` `ModuleNotFoundError`s, same dialog timeout, same retry pattern —
+> against the real floor (`2026.7.1`) for the first time since the report. That let the deferred
+> "inspect the Playwright screenshot artifact" step finally happen:
+>
+> - **Ruled out:** `radio_frequency`/`infrared` don't have a `services.yaml` even at `2026.7.1`
+>   (checked `home-assistant/core`'s tree at that tag directly) — confirming the original suspicion
+>   that they were never part of the `get_services` import sweep the harness's pre-install allowlist
+>   covers. Their `ModuleNotFoundError`s are real but unrelated: both declare
+>   `"integration_type": "entity"`, which HA auto-attempts to set up regardless of
+>   `configuration.yaml`, and this harness never installs their optional native deps
+>   (`rf-protocols`, `infrared-protocols`) — harmless log noise, not a blocker (HA continues booting
+>   past one failed component).
+> - **Confirmed:** the failure screenshot (`playwright-report-floor` artifact) showed the "Select
+>   brand" dialog open and correctly rendered, but its search field still showed the placeholder —
+>   nothing had been typed into it. `config-flow.spec.ts` selected the search box with
+>   `page.getByRole("textbox").first()`; on this HA frontend version the integrations dashboard's
+>   own filter box stayed in the accessibility tree behind the open dialog, so `.first()` silently
+>   grabbed that background textbox instead of the dialog's. `.fill()` never errored — it just typed
+>   into the wrong element — so the dialog's own field stayed empty and the unfiltered brand list
+>   sat there until the 30s timeout. Not reproducible against the latest HA in range (`config-flow`
+>   passed throughout), meaning this frontend version's dialog/focus behaviour differs enough to
+>   change which textbox `.first()` resolves to — a genuine cross-version test fragility, not a
+>   config-flow regression in this integration.
+>
+> **Fixed:** `config-flow.spec.ts` now selects the field with `page.getByPlaceholder("Search for a
+brand name")` instead of `.first()`, removing the ambiguity regardless of what else is in the
+> tree. **Confirmed:** `config-flow-floor` passed on the exact HA floor (`2026.7.1`) with this fix —
+> the first time this check has ever gone green against the version that originally failed.
+> `config-flow` (latest in range) passed too.
 
 ---
 

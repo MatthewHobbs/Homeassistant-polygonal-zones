@@ -31,8 +31,10 @@ test("Polygonal Zones appears in the Add Integration dialog", async ({ page }) =
   await expect(page.locator("home-assistant")).toBeAttached({ timeout: 30_000 });
   // If onboarding/auth didn't complete we'd be parked on those routes; fail
   // fast with a clear message instead of a generic button-not-found timeout.
-  await expect(page, "redirected away from the app — auth/onboarding incomplete")
-    .not.toHaveURL(/\/(onboarding|auth)\b/, { timeout: 30_000 });
+  await expect(page, "redirected away from the app — auth/onboarding incomplete").not.toHaveURL(
+    /\/(onboarding|auth)\b/,
+    { timeout: 30_000 }
+  );
 
   // Now deep-link into the integrations page. Avoid depending on the
   // sidebar/dashboard layout, which changes between HA frontend versions.
@@ -45,7 +47,17 @@ test("Polygonal Zones appears in the Add Integration dialog", async ({ page }) =
   await addButton.click();
 
   // The Add Integration dialog has a search box; type the integration name.
-  const search = page.getByRole("textbox").first();
+  // Scoped by placeholder, not page.getByRole("textbox").first(): on at
+  // least one HA frontend version (the declared HA floor) the integrations
+  // dashboard's own filter box stayed in the accessibility tree behind the
+  // open dialog, so .first() silently grabbed that background textbox
+  // instead of the dialog's — the fill() never errored, the dialog's search
+  // field stayed empty, and the unfiltered "Select brand" list just sat
+  // there until the 30s timeout. Confirmed via the failure screenshot: the
+  // dialog was open and correctly rendered, its search field showed the
+  // placeholder untouched. Matching the dialog's own field directly closes
+  // that ambiguity regardless of what else is in the tree.
+  const search = page.getByPlaceholder("Search for a brand name");
   await search.fill("Polygonal Zones");
 
   // The integration must be discoverable by its manifest `name`. The dialog
