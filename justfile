@@ -22,3 +22,18 @@ lint: venv
 
 test: venv
     .venv/bin/python -m pytest --cov=custom_components/polygonal_zones --cov-report=term --cov-fail-under=98
+
+# Real-hass suite (tests_hass/) — its own venv, since pytest-homeassistant-custom-component
+# hard-pins one exact homeassistant version and would fight requirements_test.txt's range
+# in the shared .venv. Not part of `just ci`; not coverage-gated (see requirements_test_hass.txt).
+venv-hass:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    uv venv --python 3.14 --quiet --allow-existing .venv-hass
+    uv pip install --python .venv-hass --quiet -r requirements_test_hass.txt
+    # shapely isn't in requirements_test_hass.txt to avoid duplicating its range
+    # (requirements_test.txt is the single source of truth Renovate tracks).
+    uv pip install --python .venv-hass --quiet "$(grep -E '^shapely' requirements_test.txt)"
+
+test-hass: venv-hass
+    .venv-hass/bin/pytest tests_hass -p homeassistant
