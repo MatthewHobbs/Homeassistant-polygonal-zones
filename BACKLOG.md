@@ -690,7 +690,7 @@ to match. Zero Dependabot PRs open as of this writing (re-verified via `gh pr li
 
 ---
 
-## Mirror never reflects source going unavailable via live state-change events (2026-09-27) — OPEN, P2
+## Mirror never reflects source going unavailable via live state-change events (2026-09-27) — RESOLVED 2026-09-27
 
 Found during the cross-model adversarial review of the `location_name` migration (RFC linked from
 that item, above), not part of that migration itself.
@@ -718,6 +718,12 @@ not independently verified.)
 **Fix:** `event_should_trigger` needs a path that still triggers when `new_state.state` is
 `unavailable`/`unknown` (or the entity_id disappears), even without the GPS attributes present,
 so `_update_state`'s existing branch actually gets exercised.
+
+> **Fixed.** `event_should_trigger` now triggers unconditionally when `new_state` is `None`
+> (source removed) or `new_state.state` is `unavailable`/`unknown`, before the GPS-attribute check
+> runs — `_update_state`'s existing branch (which re-reads live state itself) now actually gets
+> exercised from real state-change events. The `old_state is None` case (a truly first-ever event)
+> is unchanged — still doesn't trigger, since the entity's own initial-load path covers that.
 
 ---
 

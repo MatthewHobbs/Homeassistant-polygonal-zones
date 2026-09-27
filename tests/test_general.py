@@ -2,6 +2,7 @@
 
 from types import SimpleNamespace
 
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 import pytest
 
 from custom_components.polygonal_zones.utils.general import (
@@ -119,16 +120,22 @@ def test_safe_config_path_symlink_escape_blocked(tmp_path) -> None:
 REQUIRED = {"latitude": 1.0, "longitude": 2.0, "gps_accuracy": 5}
 
 
-def _state(attributes: dict) -> SimpleNamespace:
-    return SimpleNamespace(attributes=attributes)
+def _state(attributes: dict, state: str = "not_home") -> SimpleNamespace:
+    return SimpleNamespace(attributes=attributes, state=state)
 
 
-def _event(entity_id: str, old_attrs: dict | None, new_attrs: dict | None) -> SimpleNamespace:
+def _event(
+    entity_id: str,
+    old_attrs: dict | None,
+    new_attrs: dict | None,
+    *,
+    new_state: str = "not_home",
+) -> SimpleNamespace:
     return SimpleNamespace(
         data={
             "entity_id": entity_id,
             "old_state": _state(old_attrs) if old_attrs is not None else None,
-            "new_state": _state(new_attrs) if new_attrs is not None else None,
+            "new_state": _state(new_attrs, new_state) if new_attrs is not None else None,
         }
     )
 
@@ -159,4 +166,30 @@ def test_unchanged_location_does_not_trigger() -> None:
 def test_changed_latitude_triggers() -> None:
     new_attrs = {**REQUIRED, "latitude": 1.5}
     event = _event("device_tracker.me", REQUIRED, new_attrs)
+    assert event_should_trigger(event, "device_tracker.me") is True
+
+
+def test_no_prior_state_does_not_trigger() -> None:
+    """A truly first-ever event (old_state is None) does not trigger — covered instead
+    by the entity's own initial-load path, not this per-event listener."""
+    event = _event("device_tracker.me", None, REQUIRED)
+    assert event_should_trigger(event, "device_tracker.me") is False
+
+
+def test_source_removed_triggers() -> None:
+    """Source entity removed (new_state is None) must trigger, so _update_state's own
+    live-state lookup can reflect the removal — this was the reported bug."""
+    event = _event("device_tracker.me", REQUIRED, None)
+    assert event_should_trigger(event, "device_tracker.me") is True
+
+
+def test_source_unavailable_triggers_despite_missing_gps_attrs() -> None:
+    """A source going unavailable normally clears its GPS attributes too — must still
+    trigger so the mirror reflects it, instead of silently keeping stale state."""
+    event = _event("device_tracker.me", REQUIRED, {}, new_state=STATE_UNAVAILABLE)
+    assert event_should_trigger(event, "device_tracker.me") is True
+
+
+def test_source_unknown_triggers_despite_missing_gps_attrs() -> None:
+    event = _event("device_tracker.me", REQUIRED, {}, new_state=STATE_UNKNOWN)
     assert event_should_trigger(event, "device_tracker.me") is True
