@@ -316,8 +316,9 @@ harness or the integration code.
 >
 > **Fixed:** `config-flow.spec.ts` now selects the field with `page.getByPlaceholder("Search for a
 brand name")` instead of `.first()`, removing the ambiguity regardless of what else is in the
-> tree. Pending: confirm `config-flow-floor` and `config-flow` both pass on the PR that carries this
-> fix before treating this as fully closed.
+> tree. **Confirmed:** `config-flow-floor` passed on the exact HA floor (`2026.7.1`) with this fix —
+> the first time this check has ever gone green against the version that originally failed.
+> `config-flow` (latest in range) passed too.
 
 ---
 
