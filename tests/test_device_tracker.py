@@ -20,7 +20,7 @@ async def test_state_restored_on_restart() -> None:
         },
     )
     entity.async_get_last_state = AsyncMock(return_value=last_state)
-    entity.hass = SimpleNamespace()
+    entity.hass = SimpleNamespace(states=SimpleNamespace(get=lambda entity_id: None))
 
     await entity.async_added_to_hass()
 
@@ -32,7 +32,7 @@ async def test_no_previous_state_leaves_attrs_unset() -> None:
     """If nothing was persisted, the entity stays in its default unknown state."""
     entity = _make_entity()
     entity.async_get_last_state = AsyncMock(return_value=None)
-    entity.hass = SimpleNamespace()
+    entity.hass = SimpleNamespace(states=SimpleNamespace(get=lambda entity_id: None))
 
     await entity.async_added_to_hass()
 
@@ -56,7 +56,7 @@ async def test_restore_strips_gated_attrs_when_expose_off() -> None:
         },
     )
     entity.async_get_last_state = AsyncMock(return_value=last_state)
-    entity.hass = SimpleNamespace()
+    entity.hass = SimpleNamespace(states=SimpleNamespace(get=lambda entity_id: None))
 
     await entity.async_added_to_hass()
 

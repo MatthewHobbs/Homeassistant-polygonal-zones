@@ -235,6 +235,14 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         self._unsub = async_track_state_change_event(
             self.hass, [self._entity_id], self._handle_state_change_builder()
         )
+        # Resolve against whatever the source's current state already is. The
+        # shared source's own initial load is scheduled via async_at_started,
+        # which runs as a separate task rather than inline — with two platforms
+        # forwarded concurrently, that task can fire and notify listeners before
+        # this entity's own add_listener() above has run, in which case the
+        # one-shot notification is missed entirely and never retried. Resolving
+        # here too makes the initial state correct regardless of that ordering.
+        await self._update_state()
 
     def _handle_source_reloaded(self) -> None:
         """Source (re)loaded — re-resolve this mirror's state off the event loop."""
