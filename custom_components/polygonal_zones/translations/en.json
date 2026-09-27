@@ -14,6 +14,7 @@
           "consent": "I confirm everyone whose device I'm adding has been told it will be location-tracked",
           "download_zones": "Download the GeoJSON files",
           "expose_coordinates": "Expose GPS coordinates as entity attributes",
+          "home_zone_id": "Home zone",
           "prioritize_zone_files": "Prioritize order of zone files",
           "registered_entities": "Entities",
           "zone_source_token": "Add-on save token",
@@ -24,6 +25,7 @@
           "consent": "Shown only when you add a device_tracker that wasn't already tracked. This integration continuously records the GPS location of the entities you select. Tick to confirm before continuing.",
           "download_zones": "Use a local GeoJSON file to store the zones in. This will load the above defined files into a single file. The entities will only use this single file to retrieve the zones from. If no GeoJSON files are defined we will create an empty GeoJSON file.",
           "expose_coordinates": "When enabled, the mirror entity writes latitude, longitude, and gps_accuracy to its attributes on every update — Home Assistant's recorder then persists a full location history. Disable to publish only the zone name (privacy-first). New installs default to off.",
+          "home_zone_id": "The zone's id (preferred, survives a rename) or exact name — see the zone file's `properties.id`/`properties.name`. Blank means no zone counts as home; state stays not_home for that case.",
           "prioritize_zone_files": "When a device is inside zones from more than one file, zones from the file higher in your list win by default. A zone can override this by setting its own priority value.",
           "registered_entities": "Select the entities that you want to track in the zones.",
           "zone_source_token": "The add-on's save_token, if it has one configured. Sent as X-Save-Token only on requests to a local/LAN add-on URL above — never to a public https:// source.",
@@ -38,6 +40,7 @@
           "consent": "I confirm everyone whose device I'm adding has been told it will be location-tracked",
           "download_zones": "Download the GeoJSON files",
           "expose_coordinates": "Expose GPS coordinates as entity attributes",
+          "home_zone_id": "Home zone",
           "prioritize_zone_files": "Prioritize order of zone files",
           "registered_entities": "Entities",
           "zone_source_token": "Add-on save token",
@@ -48,6 +51,7 @@
           "consent": "This integration continuously records the GPS location of the device_tracker entities you select. Tick to confirm before continuing.",
           "download_zones": "Use a local GeoJSON file to store the zones in. This will load the above defined files into a single file. The entities will only use this single file to retrieve the zones from. If no GeoJSON files are defined we will create an empty GeoJSON file.",
           "expose_coordinates": "When enabled, the mirror entity writes latitude, longitude, and gps_accuracy to its attributes on every update — Home Assistant's recorder then persists a full location history. Disable to publish only the zone name (privacy-first). New installs default to off.",
+          "home_zone_id": "The zone's id (preferred, survives a rename) or exact name — see the zone file's `properties.id`/`properties.name`. Blank means no zone counts as home; state stays not_home for that case.",
           "prioritize_zone_files": "When a device is inside zones from more than one file, zones from the file higher in your list win by default. A zone can override this by setting its own priority value.",
           "registered_entities": "Select the entities that you want to track in the zones.",
           "zone_source_token": "The add-on's save_token, if it has one configured. Sent as X-Save-Token only on requests to a local/LAN add-on URL above — never to a public https:// source.",
@@ -70,6 +74,7 @@
         "data": {
           "allow_private_urls": "Allow private-network URLs (LAN)",
           "expose_coordinates": "Expose GPS coordinates as entity attributes",
+          "home_zone_id": "Home zone",
           "prioritize_zone_files": "Prioritize order of zone files",
           "download_zones": "Download the GeoJSON files",
           "zone_source_token": "Add-on save token",
@@ -78,6 +83,7 @@
         "data_description": {
           "allow_private_urls": "Turn this on only if your zone source is on your local network — e.g. the companion editor add-on at http://192.168.x.x:8000/zones.json. Public https:// URLs and files in /config work without it. Loopback, link-local, and cloud-metadata addresses stay blocked either way.",
           "expose_coordinates": "When enabled, the mirror entity writes latitude, longitude, and gps_accuracy to its attributes on every update — Home Assistant's recorder then persists a full location history. Disable to publish only the zone name (privacy-first).",
+          "home_zone_id": "The zone's id (preferred, survives a rename) or exact name — see the zone file's `properties.id`/`properties.name`. Blank means no zone counts as home; state stays not_home for that case.",
           "prioritize_zone_files": "When a device is inside zones from more than one file, zones from the file higher in your list win by default. A zone can override this by setting its own priority value.",
           "download_zones": "Use a local GeoJSON file to store the zones in. This will load the above defined files into a single file. The entities will only use this single file to retrieve the zones from. If no GeoJSON files are defined we will create an empty GeoJSON file.",
           "zone_source_token": "The add-on's save_token, if it has one configured. Sent as X-Save-Token only on requests to a local/LAN add-on URL above — never to a public https:// source.",
@@ -179,6 +185,10 @@
     "legacy_expose_coordinates": {
       "title": "Polygonal Zones is recording GPS coordinates",
       "description": "The Polygonal Zones entry \"{title}\" was created before the privacy option existed, so it exposes latitude/longitude/accuracy as entity attributes and Home Assistant records a full location history. To stop this, open the integration's options and turn off \"Expose GPS coordinates\"."
+    },
+    "home_zone_missing": {
+      "title": "Polygonal Zones: configured home zone not found",
+      "description": "Entry `{entry_id}` is configured with `{home_zone_id}` as its home zone, but no currently loaded zone matches that id or name. The `home`/`not_home` state derived from it will stay `not_home` until this is fixed. Check the zone wasn't renamed or deleted, then open the integration's options and update the Home zone field, or call `polygonal_zones.reload_zones`."
     }
   }
 }

@@ -21,6 +21,7 @@ def make_source(
     allow_private_urls: bool = False,
     zones: list[Zone] | None = None,
     loaded_ok: bool = True,
+    home_zone_id: str | None = None,
 ) -> ZoneSource:
     """Build a ``ZoneSource`` (defaults to a loaded, healthy source)."""
     src = ZoneSource(
@@ -29,6 +30,7 @@ def make_source(
         prioritize,
         editable_file,
         allow_private_urls=allow_private_urls,
+        home_zone_id=home_zone_id,
     )
     if zones is not None:
         src.zones = zones

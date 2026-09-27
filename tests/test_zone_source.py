@@ -38,7 +38,54 @@ async def test_initial_load_success_sets_state_and_notifies() -> None:
     assert src.zones == _ZONES
     assert src.last_zones_loaded_at is not None
     listener.assert_called_once()
-    del_issue.assert_called_once()
+    # Both the load-failure issue and the (unset, so always-clear) home-zone
+    # issue are cleared on a successful load.
+    cleared = {call.args[2] for call in del_issue.call_args_list}
+    assert cleared == {src.issue_id, src.home_zone_missing_issue_id}
+
+
+async def test_load_success_matching_home_zone_clears_issue() -> None:
+    """A configured home_zone_id that matches a loaded zone clears the repair issue."""
+    src = ZoneSource("entry-1", ["http://x"], False, False, home_zone_id="Home")
+    with (
+        patch(
+            "custom_components.polygonal_zones.zone_source.load_zones",
+            new=AsyncMock(return_value=ZoneLoadResult(zones=_ZONES)),
+        ),
+        patch("custom_components.polygonal_zones.zone_source.ir.async_delete_issue") as del_issue,
+        patch(
+            "custom_components.polygonal_zones.zone_source.ir.async_create_issue"
+        ) as create_issue,
+    ):
+        await src._async_initial_load(_hass())
+
+    create_issue.assert_not_called()
+    cleared = {call.args[2] for call in del_issue.call_args_list}
+    assert src.home_zone_missing_issue_id in cleared
+
+
+async def test_load_success_missing_home_zone_raises_issue() -> None:
+    """A configured home_zone_id that matches nothing raises the repair issue —
+    checked on every (re)load, since a rename/deletion can invalidate it later."""
+    src = ZoneSource("entry-1", ["http://x"], False, False, home_zone_id="Not A Real Zone")
+    with (
+        patch(
+            "custom_components.polygonal_zones.zone_source.load_zones",
+            new=AsyncMock(return_value=ZoneLoadResult(zones=_ZONES)),
+        ),
+        patch("custom_components.polygonal_zones.zone_source.ir.async_delete_issue"),
+        patch(
+            "custom_components.polygonal_zones.zone_source.ir.async_create_issue"
+        ) as create_issue,
+    ):
+        await src._async_initial_load(_hass())
+
+    create_issue.assert_called_once()
+    _hass_arg, domain, issue_id = create_issue.call_args.args
+    assert domain == "polygonal_zones"
+    assert issue_id == src.home_zone_missing_issue_id
+    placeholders = create_issue.call_args.kwargs["translation_placeholders"]
+    assert placeholders == {"entry_id": "entry-1", "home_zone_id": "Not A Real Zone"}
 
 
 async def test_async_load_raises_when_all_uris_fail() -> None:
@@ -164,7 +211,8 @@ async def test_async_reload_success_notifies_and_clears_issue() -> None:
 
     assert src.zones == _ZONES
     listener.assert_called_once()
-    del_issue.assert_called_once()
+    cleared = {call.args[2] for call in del_issue.call_args_list}
+    assert cleared == {src.issue_id, src.home_zone_missing_issue_id}
 
 
 async def test_async_reload_failure_marks_failed_and_raises() -> None:
