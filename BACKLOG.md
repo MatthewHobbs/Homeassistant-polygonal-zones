@@ -687,3 +687,49 @@ The 6 Dependabot PRs open since 2026-07-04 (#38 HA test-floor bump `>=2026.7.1,<
 5 GitHub Actions SHA bumps: setup-node, upload-artifact, hassfest, attest-build-provenance,
 ruff-action) were consolidated into PR #44, which also raised the `manifest.json` shapely floor
 to match. Zero Dependabot PRs open as of this writing (re-verified via `gh pr list`).
+
+---
+
+## Mirror never reflects source going unavailable via live state-change events (2026-09-27) — OPEN, P2
+
+Found during the cross-model adversarial review of the `location_name` migration (RFC linked from
+that item, above), not part of that migration itself.
+
+`device_tracker.py`'s `_update_state` has a real "reflect unavailable" branch:
+
+```python
+if entity_state is None or entity_state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+    self._set_available(False)
+    return
+```
+
+But it's only ever reached via `_handle_state_change_builder`'s `func(event)`, which is gated by
+`event_should_trigger` (`utils/general.py`). That function returns `False` whenever the new state
+lacks all of `latitude`/`longitude`/`gps_accuracy` — which is exactly the case when a source
+tracker transitions into `unavailable`/`unknown` (those attributes are normally cleared). So the
+live state-change event that would reveal "source went unavailable" is filtered out before
+`_update_state` ever runs on it, making that branch unreachable from real events in practice —
+confirmed by reading both functions together, not just asserted. The mirror keeps its last known
+(available) location/zone indefinitely once the source stops reporting usable GPS attributes,
+instead of flipping unavailable. (The branch is presumably still reachable via
+`_handle_source_reloaded`, i.e. on a zone reload, just not from the source's own state changes —
+not independently verified.)
+
+**Fix:** `event_should_trigger` needs a path that still triggers when `new_state.state` is
+`unavailable`/`unknown` (or the entity_id disappears), even without the GPS attributes present,
+so `_update_state`'s existing branch actually gets exercised.
+
+---
+
+## `in_zones` is always empty, so mirror-tracked people never count toward a real zone's occupancy (2026-09-27) — OPEN, P3
+
+Also found during the adversarial review above. `PolygonalZoneEntity` never sets `_attr_in_zones`,
+so it's always `[]`/unset on every mirror. HA's own zone entities compute their occupant count from
+every tracker's `in_zones` (or the coordinate-based fallback) — a real HA zone (e.g. `zone.home`)
+never counts a person tracked _only_ via a polygonal_zones mirror as present, even when the
+matched polygon corresponds to that zone.
+
+**Not a separate fix:** this is resolved as a direct byproduct of the `location_name` migration's
+Release A (see the RFC linked above) — mirrors start setting `_attr_in_zones` from the matched
+polygon as part of that work, which is also what the migration needs `in_zones` for regardless.
+Logged here for visibility/tracking only; no standalone action needed once Release A ships.
