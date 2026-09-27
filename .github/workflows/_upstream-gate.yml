@@ -18,6 +18,11 @@ on:
         description: "Per-caller cache namespace so one workflow's pass doesn't silence another"
         required: true
         type: string
+      include_prereleases:
+        description: "Resolve the latest homeassistant PRERELEASE instead of the latest stable (ADR 0002: nightly HA beta testing). Never affects the shapely query."
+        required: false
+        type: boolean
+        default: false
     outputs:
       changed:
         description: "true when this upstream fingerprint has not yet been recorded as passing"
@@ -25,6 +30,12 @@ on:
       cache_key:
         description: "the cache key the caller must save (on success) to mark this fingerprint tested"
         value: ${{ jobs.gate.outputs.cache_key }}
+      ha_version:
+        description: "the exact homeassistant version this fingerprint resolved to"
+        value: ${{ jobs.gate.outputs.ha_version }}
+      shapely_version:
+        description: "the exact shapely version this fingerprint resolved to"
+        value: ${{ jobs.gate.outputs.shapely_version }}
 
 permissions:
   contents: read
@@ -35,6 +46,8 @@ jobs:
     outputs:
       changed: ${{ steps.decide.outputs.changed }}
       cache_key: ${{ steps.fp.outputs.cache_key }}
+      ha_version: ${{ steps.fp.outputs.ha_version }}
+      shapely_version: ${{ steps.fp.outputs.shapely_version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -43,8 +56,8 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m pip install --quiet --disable-pip-version-check packaging
-          fp=$(python3 - <<'PY'
-          import json, urllib.request
+          fp=$(INCLUDE_PRERELEASES="${{ inputs.include_prereleases }}" python3 - <<'PY'
+          import json, os, urllib.request
           from packaging.requirements import Requirement
           from packaging.specifiers import SpecifierSet
           from packaging.version import Version
@@ -68,7 +81,7 @@ jobs:
                   specs[req.name] = str(req.specifier)
 
 
-          def latest(pkg, spec):
+          def latest(pkg, spec, allow_prerelease=False):
               url = f"https://pypi.org/pypi/{pkg}/json"
               data = json.load(urllib.request.urlopen(url, timeout=30))
               spec_set = SpecifierSet(spec)
@@ -80,20 +93,33 @@ jobs:
                       parsed = Version(ver)
                   except Exception:
                       continue
-                  if parsed.is_prerelease:
+                  if parsed.is_prerelease and not allow_prerelease:
                       continue
                   if str(parsed) in spec_set and (best is None or parsed > best):
                       best = parsed
               return str(best)
 
 
-          ha = latest("homeassistant", specs["homeassistant"])
+          # Only the homeassistant query ever considers prereleases (ADR 0002 /
+          # RFC 0006 Option A: "dropping the is_prerelease filter for this one
+          # query") - shapely is never beta-tested here.
+          include_prereleases = os.environ.get("INCLUDE_PRERELEASES") == "true"
+          ha = latest("homeassistant", specs["homeassistant"], allow_prerelease=include_prereleases)
           sh = latest("shapely", specs["shapely"])
           print(f"ha{ha}-sh{sh}")
           PY
           )
           key="upstream-tested-${{ inputs.cache_prefix }}-$fp"
           echo "cache_key=$key" >> "$GITHUB_OUTPUT"
+          # Parse the exact versions back out of the fingerprint (rather than a
+          # second PyPI query) so a caller that needs to `pip install` this
+          # exact fingerprint - e.g. nightly-beta.yml - can never drift from
+          # what "changed"/cache_key actually describe.
+          ha_version="${fp%-sh*}"
+          ha_version="${ha_version#ha}"
+          shapely_version="${fp#*-sh}"
+          echo "ha_version=$ha_version" >> "$GITHUB_OUTPUT"
+          echo "shapely_version=$shapely_version" >> "$GITHUB_OUTPUT"
           echo "Upstream fingerprint: $fp  (cache key: $key)"
 
       - name: Has this fingerprint already passed a nightly?

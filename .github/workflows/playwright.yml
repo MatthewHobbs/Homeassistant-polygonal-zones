@@ -41,115 +41,12 @@ jobs:
     name: Config flow (Playwright)
     needs: [gate]
     if: ${{ !cancelled() && (github.event_name == 'push' || github.event_name == 'pull_request' || needs.gate.outputs.changed == 'true') }}
-    runs-on: ubuntu-latest
-    # Non-blocking on PRs only: this heavyweight smoke must never fail a PR (it
-    # is not a required check). Scheduled/manual runs keep failing visibly so
-    # the nightly signal isn't lost.
-    continue-on-error: ${{ github.event_name == 'pull_request' }}
-    env:
-      HA_URL: "http://127.0.0.1:8123"
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.14"
-
-      - name: Install Home Assistant + runtime deps
-        run: |
-          set -eux
-          # requirements_test.txt is the single source of truth for these
-          # ranges (Renovate tracks it) — read from it rather than duplicating
-          # the ranges here, where a Renovate-driven cap bump would go unseen.
-          HA_REQ=$(grep -E '^homeassistant' requirements_test.txt)
-          SHAPELY_REQ=$(grep -E '^shapely' requirements_test.txt)
-          pip install "$HA_REQ" "$SHAPELY_REQ"
-          # `pip install homeassistant` does NOT pull integration requirements
-          # (HA installs them at runtime, which is not effective in this CI), so
-          # the frontend package (hass_frontend) and the auto-loaded assist/media
-          # stack are all absent. The SPA's initial load calls get_services,
-          # which imports every services.yaml-bearing integration to describe its
-          # services; any that can't import make get_services error and the UI
-          # hangs forever on "Loading data". Pre-install the pinned requirements
-          # of the frontend + that stack, read straight from each component's
-          # manifest (so versions match this HA build) and resolved in one pip
-          # pass. Components absent in this HA version are skipped. Only the
-          # Python modules are needed — get_services imports them to read service
-          # descriptions but never instantiates them, so no system libs (the
-          # ffmpeg binary, libturbojpeg) are required just to clear "Loading data".
-          python - <<'PY' > /tmp/ha-reqs.txt
-          import json, pathlib, homeassistant
-          base = pathlib.Path(homeassistant.__path__[0]) / "components"
-          # `hassio` is here for its requirement (aiohasupervisor), not to run it:
-          # on recent HA cores `analytics` imports `homeassistant.components.hassio`
-          # at module load, so when get_services imports analytics to read its
-          # service descriptions, a missing aiohasupervisor raises ModuleNotFound,
-          # get_services errors, and the SPA hangs forever on "Loading data" →
-          # the smoke times out. Pre-installing hassio's pinned requirement fixes it.
-          comps = (
-              "frontend recorder conversation assist_pipeline tts ffmpeg camera "
-              "analytics hassio ai_task image_processing met radio_browser google_translate"
-          ).split()
-          reqs = []
-          for c in comps:
-              m = base / c / "manifest.json"
-              if m.exists():
-                  reqs += json.loads(m.read_text()).get("requirements", [])
-          print("\n".join(sorted(set(reqs))))
-          PY
-          echo "Pre-installing integration requirements:"
-          cat /tmp/ha-reqs.txt
-          pip install -r /tmp/ha-reqs.txt
-
-      - name: Stage HA config dir with the integration installed
-        run: |
-          set -eux
-          HA_CONFIG="$RUNNER_TEMP/ha-config"
-          mkdir -p "$HA_CONFIG/custom_components"
-          cp -r custom_components/polygonal_zones "$HA_CONFIG/custom_components/"
-          # Minimal config rather than `default_config`. default_config drags in
-          # dozens of optional integrations (cloud, bluetooth, stream, camera,
-          # assist_pipeline, mobile_app, …) whose system/Python deps (ffmpeg,
-          # usb, turbojpeg, aiohasupervisor, …) aren't present in a bare pip
-          # install, so default_config's setup *fails* and floods the log. The
-          # smoke only needs the SPA shell (`frontend`) and the integrations
-          # config panel (`config`); `onboarding` and `websocket_api`/`http`
-          # load automatically (bootstrap + frontend deps).
-          printf 'frontend:\nconfig:\n' > "$HA_CONFIG/configuration.yaml"
-          echo "HA_CONFIG=$HA_CONFIG" >> "$GITHUB_ENV"
-
-      - name: Start Home Assistant
-        run: |
-          set -eux
-          nohup hass --config "$HA_CONFIG" --log-file "$RUNNER_TEMP/ha.log" >/dev/null 2>&1 &
-          echo "HA_PID=$!" >> "$GITHUB_ENV"
-
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "24"
-
-      - name: Install Playwright
-        working-directory: tests/e2e
-        run: |
-          npm install
-          npx playwright install --with-deps chromium
-
-      - name: Run config-flow smoke
-        working-directory: tests/e2e
-        run: npx playwright test
-
-      - name: Dump Home Assistant log on failure
-        if: failure()
-        run: cat "$RUNNER_TEMP/ha.log" || true
-
-      - name: Upload Playwright report
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: playwright-report
-          path: tests/e2e/playwright-report
-          if-no-files-found: ignore
-          retention-days: 7
+    uses: ./.github/workflows/_playwright-config-flow.yml
+    with:
+      # Non-blocking on PRs only: this heavyweight smoke must never fail a PR
+      # (it is not a required check). Scheduled/manual runs keep failing
+      # visibly so the nightly signal isn't lost.
+      continue_on_error: ${{ github.event_name == 'pull_request' }}
 
   # Record the tested fingerprint only when the smoke passed (see _upstream-gate.yml).
   # On schedule, continue-on-error is false, so a failed smoke leaves the fingerprint
