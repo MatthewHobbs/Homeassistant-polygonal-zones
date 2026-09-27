@@ -82,10 +82,11 @@ To change any of these settings after setup: Settings → Devices & Services →
 
 ## Usage
 
-For each tracked entity the integration creates a mirror entity:
+For each tracked entity the integration creates a mirror `device_tracker` and a companion `sensor`:
 
 ```
 device_tracker.alice_phone        →  device_tracker.polygonal_zones_alice_phone
+                                   →  sensor.polygonal_zones_alice_phone
 ```
 
 The mirror's state is the name of the zone the source device is inside, falling back to `"away"`. Use it directly in automations:
@@ -104,6 +105,19 @@ automation:
 ```
 
 The mirror entity always exposes `source_entity`, `last_load_result`, and `last_zones_loaded_at` (non-location load diagnostics). When **Expose GPS coordinates** is enabled, `latitude`, `longitude`, and `gps_accuracy` are also written on each update — along with `zone_uris` and `matched_zones` (every zone the point currently intersects). Those last two are gated with coordinates because they reveal fine-grained location (`matched_zones`) or can surface LAN hostnames (`zone_uris`); with **Expose GPS coordinates** off, only the zone name plus the load-diagnostic attributes leave the entity.
+
+The companion `sensor.polygonal_zones_*` publishes the same matched zone name (or `away`) as a plain string, resolved independently of the mirror `device_tracker`. It exists so automations have a stable place to read the zone name from that isn't `device_tracker.*`'s `state` — see the deprecation notice below.
+
+> **⚠️ Deprecation notice: `device_tracker` `state`/`location_name` is going away**
+>
+> Home Assistant has deprecated the `location_name` property this integration uses to publish the zone name as the mirror `device_tracker`'s `state` (a warning is logged on every setup, and the integration also raises a persistent repair issue in **Settings → Repairs**). HA will stop supporting it entirely in **2027.7**.
+>
+> **Nothing has changed yet** — today, `state` is still the zone name, exactly as documented above. But when the removal ships (tracked as "Release B" — no date set yet), `state` will fall back to HA's own standard `home` / `not_home` / coordinates, and anything reading the zone name from `state` will break. To avoid that:
+>
+> - **Point automations that read the zone name at `sensor.polygonal_zones_*` instead of `device_tracker.polygonal_zones_*`'s `state`** — the sensor already carries the same value today and isn't affected by the removal.
+> - If you use HA's own zone-occupancy features (e.g. `zone.home`'s person count), set **`home_zone_id`** in this integration's options — it publishes `in_zones` on the mirror, which is HA's supported replacement mechanism.
+>
+> Follow progress on [issue #86](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/86).
 
 ## Use cases
 
@@ -281,6 +295,8 @@ Full privacy details (logging, outbound requests, cloud-backup GDPR note, deleti
 ## Roadmap
 
 Open work items are tracked as [GitHub issues](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues); editor add-on work lives in the [add-on repo's issues](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon/issues).
+
+**`location_name` removal.** See the [deprecation notice in Usage](#usage) above. [Issue #86](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/86) tracks the removal itself; no date is set.
 
 **Distribution.** This integration is intentionally distributed through **HACS** and is **not** being submitted to Home Assistant core. The Silver/Gold/Platinum quality-scale rules are implemented (see [`quality_scale.yaml`](custom_components/polygonal_zones/quality_scale.yaml)), but the manifest stays at `bronze` because a higher tier requires HA architecture-team review via core submission — a trade we deliberately decline, to keep HACS's release autonomy. (Revisitable if adoption grows substantially.)
 
