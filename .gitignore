@@ -2,6 +2,7 @@
 addon
 venv
 .venv
+.venv-hass
 
 **.pyc
 __pycache__

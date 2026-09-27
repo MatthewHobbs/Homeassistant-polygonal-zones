@@ -18,10 +18,11 @@ nothing to boot. (The paired editor add-on is a _separate_ repo; that one is a c
 
 - **Local:** `.venv/bin/pytest` (with `--cov`, coverage gate **≥98%**), `.venv/bin/ruff check` +
   `ruff format`, `.venv/bin/mypy custom_components/polygonal_zones`, and `npx prettier@3` for
-  JSON/Markdown/YAML.
+  JSON/Markdown/YAML. `just test-hass` runs the separate `tests_hass/` real-hass suite in its own
+  `.venv-hass` — never mix its install into the main `.venv`; see `requirements_test_hass.txt`.
 - **CI is the merge gate.** The **required** status check on `main` is **`Pytest`** (branch
   protection). Full CI set: Hassfest, HACS, Ruff, Prettier, Mypy, Pytest, Pytest (HA floor), plus
-  **non-required** Playwright and multi-arch smoke.
+  **non-required** Playwright, Playwright (HA floor), Pytest (real hass), and multi-arch smoke.
 - This is a **public** repo → GitHub Actions minutes are free; optimise CI for latency/clarity,
   not minutes.
 
