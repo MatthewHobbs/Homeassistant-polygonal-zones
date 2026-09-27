@@ -236,7 +236,7 @@ Owner: matt. Next step: confirm the supported replacement for a zone-name-bearin
 
 ---
 
-## Playwright config-flow smoke fails on HA 2026.7.4 (2026-07-27) — OPEN, P1
+## Playwright config-flow smoke fails on HA 2026.7.4 (2026-07-27) — RESOLVED 2026-09-27
 
 Surfaced merging Dependabot PR #60 (`homeassistant` floor `>=2026.7.1` → `>=2026.7.4`, now merged).
 `Config flow (Playwright)` failed twice (initial + 1 retry): `Polygonal Zones` never became visible
@@ -286,9 +286,38 @@ harness or the integration code.
 > (mirrors `validate.yml`'s `Pytest` / `Pytest (HA floor)` split) that installs the exact floor
 > version and runs the same config-flow smoke against it, on every push/PR/schedule/dispatch,
 > non-required, same continue-on-error policy as the existing job. This is the first time the floor
-> has actually been re-tested since the original report. Still open until its first real result
-> lands — do not mark this resolved from this commit alone; check `config-flow-floor`'s outcome on
-> the next few runs and update this entry with what it actually shows.
+> has actually been re-tested since the original report.
+
+> **Root cause found (2026-09-27): a fragile test selector, not an HA/integration regression.**
+> `config-flow-floor`'s first run reproduced the exact original failure byte-for-byte — same
+> `radio_frequency`/`infrared` `ModuleNotFoundError`s, same dialog timeout, same retry pattern —
+> against the real floor (`2026.7.1`) for the first time since the report. That let the deferred
+> "inspect the Playwright screenshot artifact" step finally happen:
+>
+> - **Ruled out:** `radio_frequency`/`infrared` don't have a `services.yaml` even at `2026.7.1`
+>   (checked `home-assistant/core`'s tree at that tag directly) — confirming the original suspicion
+>   that they were never part of the `get_services` import sweep the harness's pre-install allowlist
+>   covers. Their `ModuleNotFoundError`s are real but unrelated: both declare
+>   `"integration_type": "entity"`, which HA auto-attempts to set up regardless of
+>   `configuration.yaml`, and this harness never installs their optional native deps
+>   (`rf-protocols`, `infrared-protocols`) — harmless log noise, not a blocker (HA continues booting
+>   past one failed component).
+> - **Confirmed:** the failure screenshot (`playwright-report-floor` artifact) showed the "Select
+>   brand" dialog open and correctly rendered, but its search field still showed the placeholder —
+>   nothing had been typed into it. `config-flow.spec.ts` selected the search box with
+>   `page.getByRole("textbox").first()`; on this HA frontend version the integrations dashboard's
+>   own filter box stayed in the accessibility tree behind the open dialog, so `.first()` silently
+>   grabbed that background textbox instead of the dialog's. `.fill()` never errored — it just typed
+>   into the wrong element — so the dialog's own field stayed empty and the unfiltered brand list
+>   sat there until the 30s timeout. Not reproducible against the latest HA in range (`config-flow`
+>   passed throughout), meaning this frontend version's dialog/focus behaviour differs enough to
+>   change which textbox `.first()` resolves to — a genuine cross-version test fragility, not a
+>   config-flow regression in this integration.
+>
+> **Fixed:** `config-flow.spec.ts` now selects the field with `page.getByPlaceholder("Search for a
+brand name")` instead of `.first()`, removing the ambiguity regardless of what else is in the
+> tree. Pending: confirm `config-flow-floor` and `config-flow` both pass on the PR that carries this
+> fix before treating this as fully closed.
 
 ---
 
