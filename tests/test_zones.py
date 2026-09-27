@@ -3,7 +3,7 @@
 import pytest
 from shapely.geometry import Polygon
 
-from custom_components.polygonal_zones.utils.zones import Zone, get_locations_zone
+from custom_components.polygonal_zones.utils.zones import Zone, get_locations_zone, zone_key
 
 
 def _zone(name: str, polygon_coords: list[tuple[float, float]], priority: int = 0) -> Zone:
@@ -16,6 +16,29 @@ SQUARE_A = [(0, 0), (1, 0), (1, 1), (0, 1)]
 SQUARE_B = [(2, 0), (3, 0), (3, 1), (2, 1)]
 SQUARE_C = [(4, 4), (6, 4), (6, 6), (4, 6)]
 SQUARE_D = [(4.5, 4.5), (5.5, 4.5), (5.5, 5.5), (4.5, 5.5)]
+
+
+def test_zone_key_prefers_properties_id() -> None:
+    z = Zone(name="Home", geometry=Polygon(SQUARE_A), properties={"id": "abc-123"})
+    assert zone_key(z) == "abc-123"
+
+
+def test_zone_key_falls_back_to_name_when_no_id() -> None:
+    z = Zone(name="Home", geometry=Polygon(SQUARE_A))
+    assert zone_key(z) == "Home"
+
+
+def test_zone_key_falls_back_to_name_when_id_is_empty_string() -> None:
+    z = Zone(name="Home", geometry=Polygon(SQUARE_A), properties={"id": ""})
+    assert zone_key(z) == "Home"
+
+
+def test_get_locations_zone_includes_zone_key() -> None:
+    zones = [_zone("A", SQUARE_A)]
+    zones[0].properties["id"] = "zone-a-id"
+    result = get_locations_zone(lat=0.5, lon=0.5, acc=1, zones=zones)
+    assert result is not None
+    assert result["zone_key"] == "zone-a-id"
 
 
 def test_point_inside_single_zone() -> None:

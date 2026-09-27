@@ -16,6 +16,7 @@ from homeassistant.helpers import config_validation as cv
 from .const import (
     CONF_ALLOW_PRIVATE_URLS,
     CONF_DOWNLOAD_ZONES,
+    CONF_HOME_ZONE_ID,
     CONF_PRIORITIZE_ZONE_FILES,
     CONF_ZONE_SOURCE_TOKEN,
     CONF_ZONES_URL,
@@ -40,8 +41,9 @@ class PolygonalZonesData:
     """Runtime data for a polygonal_zones config entry.
 
     ``source`` is the single entry-scoped :class:`ZoneSource` that owns the
-    loaded zones + load lifecycle; every mirror entity reads from it. It is
-    populated by the device_tracker platform's ``async_setup_entry``.
+    loaded zones + load lifecycle; every mirror entity reads from it. Built by
+    ``async_setup_entry`` (see ``_build_zone_source``) before any platform is
+    forwarded.
     """
 
     entities: list[PolygonalZoneEntity] = field(default_factory=list)
@@ -92,6 +94,7 @@ def _build_zone_source(entry: PolygonalZonesConfigEntry) -> ZoneSource:
     prioritize = bool(entry.data.get(CONF_PRIORITIZE_ZONE_FILES))
     allow_private_urls = bool(entry.data.get(CONF_ALLOW_PRIVATE_URLS, False))
     zone_source_token: str | None = entry.data.get(CONF_ZONE_SOURCE_TOKEN) or None
+    home_zone_id: str | None = entry.data.get(CONF_HOME_ZONE_ID) or None
 
     editable_file = False
     if entry.data.get(CONF_DOWNLOAD_ZONES):
@@ -106,6 +109,7 @@ def _build_zone_source(entry: PolygonalZonesConfigEntry) -> ZoneSource:
         editable_file,
         allow_private_urls=allow_private_urls,
         token=zone_source_token,
+        home_zone_id=home_zone_id,
     )
 
 

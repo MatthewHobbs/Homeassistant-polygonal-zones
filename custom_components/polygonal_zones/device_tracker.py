@@ -6,6 +6,7 @@ import time
 from typing import Any
 
 from homeassistant.components.device_tracker import SourceType, TrackerEntity
+from homeassistant.components.zone import ENTITY_ID_HOME
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ENTITIES, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
@@ -255,6 +256,22 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         )
         _LOGGER.debug("State of entity '%s' changed. new zone: %s", self._attr_unique_id, zone)
         self._attr_location_name = zone["name"] if zone is not None else "away"
+        # Additive, non-breaking (Release A, PR A3): in_zones doesn't affect
+        # `state` while location_name is still set (location_name wins), but
+        # publishing it now means HA's own zone occupancy count and any
+        # automation already reading in_zones benefit immediately, and it's
+        # the exact mechanism Release B's state migration needs already in
+        # place. Only ever the configured home zone — no real zone.* entity
+        # exists for our other (polygon) zones to reference. See the RFC.
+        self._attr_in_zones = (
+            [ENTITY_ID_HOME]
+            if (
+                zone is not None
+                and self._source.home_zone_id
+                and zone["zone_key"] == self._source.home_zone_id
+            )
+            else []
+        )
         # Base attributes are non-location diagnostics — safe to publish even when
         # coordinates are off (they reveal load health, not where the device is).
         loaded_at = self._source.last_zones_loaded_at

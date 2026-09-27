@@ -79,6 +79,24 @@ def test_build_options_flow_has_zone_source_token() -> None:
     assert "zone_source_token" in keys
 
 
+def test_build_create_flow_has_home_zone_id() -> None:
+    schema = build_create_flow()
+    keys = {str(k) for k in schema.schema}
+    assert "home_zone_id" in keys
+
+
+def test_build_create_flow_home_zone_id_defaults_empty() -> None:
+    schema = build_create_flow()
+    home_zone_key = next(k for k in schema.schema if str(k) == "home_zone_id")
+    assert home_zone_key.default() == ""
+
+
+def test_build_options_flow_has_home_zone_id() -> None:
+    schema = build_options_flow()
+    keys = {str(k) for k in schema.schema}
+    assert "home_zone_id" in keys
+
+
 def test_build_options_flow_has_zone_urls_and_priority() -> None:
     schema = build_options_flow()
     keys = {str(k) for k in schema.schema}

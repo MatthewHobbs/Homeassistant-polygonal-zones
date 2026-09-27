@@ -23,7 +23,7 @@ from homeassistant.helpers.start import async_at_started
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
-from .utils.zones import Zone, ZoneFileCorrupt, load_zones
+from .utils.zones import Zone, ZoneFileCorrupt, load_zones, zone_key
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -43,6 +43,7 @@ class ZoneSource:
         *,
         allow_private_urls: bool = False,
         token: str | None = None,
+        home_zone_id: str | None = None,
     ) -> None:
         """Initialise the source (does not load — see ``async_schedule_initial_load``)."""
         self.entry_id = entry_id
@@ -51,6 +52,9 @@ class ZoneSource:
         self.editable_file = editable_file
         self.allow_private_urls = allow_private_urls
         self.token = token
+        # The polygon whose zone_key() equals this counts as "home" for
+        # in_zones (Release A, PR A3) — blank/unset means no zone is home.
+        self.home_zone_id = home_zone_id
 
         self.zones: list[Zone] = []
         self.last_load_failures: list[tuple[str, str]] = []
@@ -69,6 +73,11 @@ class ZoneSource:
     def issue_id(self) -> str:
         """Repair-issue id for a fully-failed load on this entry."""
         return f"zone_load_failed_{self.entry_id}"
+
+    @property
+    def home_zone_missing_issue_id(self) -> str:
+        """Repair-issue id for a configured home zone that no longer resolves."""
+        return f"home_zone_missing_{self.entry_id}"
 
     def add_listener(self, listener: Callable[[], None]) -> Callable[[], None]:
         """Register a callback fired after every (re)load; returns an unsubscribe."""
@@ -161,6 +170,34 @@ class ZoneSource:
         self.last_zones_loaded_at = dt_util.utcnow()
         self.last_load_result = "ok"
         self.loaded_ok = True
+        self._check_home_zone(hass)
+
+    def _check_home_zone(self, hass: HomeAssistant) -> None:
+        """Raise/clear a repair issue when a configured home zone stops resolving.
+
+        Checked on every (re)load, not just once at setup: an edit made in the
+        add-on (a rename with no ``id``, or a deleted zone) can invalidate a
+        previously-valid ``home_zone_id`` at any time, silently — no error,
+        ``in_zones`` just never matches it again (Release A, PR A3).
+        """
+        if not self.home_zone_id:
+            ir.async_delete_issue(hass, DOMAIN, self.home_zone_missing_issue_id)
+            return
+        if any(zone_key(z) == self.home_zone_id for z in self.zones):
+            ir.async_delete_issue(hass, DOMAIN, self.home_zone_missing_issue_id)
+            return
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            self.home_zone_missing_issue_id,
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="home_zone_missing",
+            translation_placeholders={
+                "entry_id": self.entry_id,
+                "home_zone_id": self.home_zone_id,
+            },
+        )
 
     async def async_reload(self, hass: HomeAssistant) -> None:
         """Reload from source and notify listeners. Raises on failure.

@@ -67,6 +67,19 @@ class Zone:
     properties: dict[str, Any] = field(default_factory=dict)
 
 
+def zone_key(zone: Zone) -> str:
+    """Return the stable identifier for a zone.
+
+    Its ``properties.id`` (the editor add-on's stable per-zone UUID, see
+    docs/ZONES_FORMAT.md) when the producer stamped one, else its ``name``.
+    Used to match a config-designated "home zone" that survives a rename when
+    the producer sets ``id`` — matching by name alone fails silently (no
+    error, permanently unmatched) if the zone is later renamed.
+    """
+    zone_id = zone.properties.get("id")
+    return zone_id if isinstance(zone_id, str) and zone_id else zone.name
+
+
 @dataclass
 class ZoneLoadResult:
     """Outcome of a multi-URI zone load.
@@ -301,12 +314,14 @@ def get_locations_zone(lat: float, lon: float, acc: float | None, zones: list[Zo
         zones: list of ``Zone`` objects to search.
 
     Returns:
-        ``{"name": ..., "distance_to_centroid": <metres>, "matched_zones": [...]}``
-        or ``None`` if the point falls outside every zone.
+        ``{"name": ..., "distance_to_centroid": <metres>, "matched_zones": [...],
+        "zone_key": ...}`` or ``None`` if the point falls outside every zone.
 
         ``matched_zones`` is the full list of zone names the buffered GPS point
         intersects (including the winner) — used for overlap-debugging in the
-        mirror entity's attributes.
+        mirror entity's attributes. ``zone_key`` is the winning zone's stable
+        identifier (see :func:`zone_key`) — used to check it against a
+        config-designated "home zone".
     """
     if not zones:
         return None
@@ -340,6 +355,7 @@ def get_locations_zone(lat: float, lon: float, acc: float | None, zones: list[Zo
             "name": z.name,
             "distance_to_centroid": get_distance_to_centroid(z.geometry, gps_point),
             "matched_zones": matched_names,
+            "zone_key": zone_key(z),
         }
 
     # Filter to the highest-priority candidates (lowest priority value wins)
@@ -351,4 +367,5 @@ def get_locations_zone(lat: float, lon: float, acc: float | None, zones: list[Zo
         "name": closest.name,
         "distance_to_centroid": get_distance_to_centroid(closest.geometry, gps_point),
         "matched_zones": matched_names,
+        "zone_key": zone_key(closest),
     }

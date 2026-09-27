@@ -22,6 +22,7 @@ import voluptuous as vol
 from .const import (
     CONF_CONSENT_CONFIRMED_AT,
     CONF_DOWNLOAD_ZONES,
+    CONF_HOME_ZONE_ID,
     CONF_ZONE_SOURCE_TOKEN,
     CONF_ZONES_URL,
     DOMAIN,
@@ -129,6 +130,11 @@ def build_create_flow(
                 default=defaults.get(CONF_ZONE_SOURCE_TOKEN, ""),
                 description={"advanced": True},
             ): selector.TextSelector(selector.TextSelectorConfig(type=TextSelectorType.PASSWORD)),
+            vol.Optional(
+                CONF_HOME_ZONE_ID,
+                default=defaults.get(CONF_HOME_ZONE_ID, ""),
+                description={"advanced": True},
+            ): selector.TextSelector(),
         }
     )
 
@@ -175,6 +181,10 @@ def build_options_flow(
                 CONF_ZONE_SOURCE_TOKEN,
                 default=defaults.get(CONF_ZONE_SOURCE_TOKEN, ""),
             ): selector.TextSelector(selector.TextSelectorConfig(type=TextSelectorType.PASSWORD)),
+            vol.Optional(
+                CONF_HOME_ZONE_ID,
+                default=defaults.get(CONF_HOME_ZONE_ID, ""),
+            ): selector.TextSelector(),
         }
     )
 

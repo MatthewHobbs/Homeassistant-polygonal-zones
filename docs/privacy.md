@@ -23,9 +23,14 @@ The integration continuously monitors the GPS position of every `device_tracker`
 | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | Resolved zone name                | Entity state (`device_tracker.polygonal_zones_<name>`)                                                                     |
 | Latitude, longitude, GPS accuracy | Entity attributes — only if **Expose GPS coordinates** is enabled                                                          |
+| Home-zone membership (`in_zones`) | Entity attribute — published whenever a **Home zone** is configured, regardless of **Expose GPS coordinates**              |
 | Zone history                      | Home Assistant's recorder database (HA's `home-assistant_v2.db`)                                                           |
 | Downloaded zone file              | `<config>/polygonal_zones/<entry_id>.json` (mode 0600, directory 0700) — only if **Download the GeoJSON files** is enabled |
 | GPS coordinates in logs           | Only at `DEBUG` log level — never written at default (`INFO`) level                                                        |
+
+### Home zone (`in_zones`)
+
+When you configure a **Home zone**, the mirror entity publishes a boolean-strength signal — whether the tracked device is currently inside that specific zone — as its `in_zones` attribute, referencing HA's built-in `zone.home`. This is weaker than the zone name (it only ever reveals "home or not", never which of your other zones the device is in), but it's published **regardless of the Expose GPS coordinates setting**, since it carries no coordinates. Leave the **Home zone** field blank to opt out entirely.
 
 ### Expose GPS coordinates
 
