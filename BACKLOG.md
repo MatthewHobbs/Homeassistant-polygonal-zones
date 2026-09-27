@@ -234,6 +234,17 @@ nearer the deadline.
 Owner: matt. Next step: confirm the supported replacement for a zone-name-bearing tracker on
 2026.9+ before changing anything — the migration path matters more than the warning.
 
+> **Update (2026-09-27): replacement confirmed, not a drop-in.** `in_zones` (HA's stated
+> replacement) requires real `zone.*` entities to already exist — checked against HA core's own
+> reference migration (`mobile_app`, HA PR #171814) and the `zone` integration's source: `zone` is a
+> single-owner `EntityComponent`, not an extensible platform, so we have no supported way to
+> register entities for our polygons through it. Full writeup, options, and owner's steer ("move
+> zone name off state" — publish it via a companion sensor/attribute instead, let `device_tracker`'s
+> `state` fall back to HA's standard `home`/`not_home`/coordinates):
+> [RFC: retire location_name for polygonal_zones trackers](https://claude.ai/artifact/JX66teGzgzCzM4SXTxRXnh).
+> Still open: new-entity design, transition timing, user communication, and whether this ships as
+> one PR or two. Not implemented yet.
+
 ---
 
 ## Playwright config-flow smoke fails on HA 2026.7.4 (2026-07-27) — RESOLVED 2026-09-27
