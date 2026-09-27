@@ -245,6 +245,17 @@ Owner: matt. Next step: confirm the supported replacement for a zone-name-bearin
 > Still open: new-entity design, transition timing, user communication, and whether this ships as
 > one PR or two. Not implemented yet.
 
+> **Update (2026-09-27): Release A shipped (#101–#105), additive only.** Real-hass test harness
+> (`tests_hass/`, `pytest-homeassistant-custom-component`); the `_build_zone_source`
+> platform-forwarding race fix; `home_zone_id` + `_attr_in_zones` publication; a companion
+> `sensor.polygonal_zones_*` entity carrying the matched zone's name so it survives Release B; and
+> an unconditional repair issue (`location_name_removal_coming`) warning every user ahead of the
+> 2027.7 deadline. `location_name`/`state` themselves are untouched — nothing above changes what a
+> mirror's `state` reads today. **Still open, and still P2:** Release B — actually removing
+> `location_name` and flipping `state` to HA's standard `home`/`not_home`/coordinates — is
+> deliberately out of scope and unscheduled. ~9 months of runway remain to the hard-removal
+> deadline.
+
 ---
 
 ## Playwright config-flow smoke fails on HA 2026.7.4 (2026-07-27) — RESOLVED 2026-09-27
@@ -727,7 +738,7 @@ so `_update_state`'s existing branch actually gets exercised.
 
 ---
 
-## `in_zones` is always empty, so mirror-tracked people never count toward a real zone's occupancy (2026-09-27) — OPEN, P3
+## `in_zones` is always empty, so mirror-tracked people never count toward a real zone's occupancy (2026-09-27) — RESOLVED (partially), 2026-09-27
 
 Also found during the adversarial review above. `PolygonalZoneEntity` never sets `_attr_in_zones`,
 so it's always `[]`/unset on every mirror. HA's own zone entities compute their occupant count from
@@ -739,3 +750,14 @@ matched polygon corresponds to that zone.
 Release A (see the RFC linked above) — mirrors start setting `_attr_in_zones` from the matched
 polygon as part of that work, which is also what the migration needs `in_zones` for regardless.
 Logged here for visibility/tracking only; no standalone action needed once Release A ships.
+
+> **Update (2026-09-27): shipped in PR A3 (#103), but only for the designated home zone.**
+> `PolygonalZoneEntity.update_location` now sets `_attr_in_zones = [ENTITY_ID_HOME]` when the
+> matched polygon's `zone_key` equals the (opt-in, per-entry) `home_zone_id`, else `[]`. This fixes
+> occupancy counting for **`zone.home` specifically**, and only when a user configures
+> `home_zone_id` — it does **not** generalise to arbitrary polygon zones, since (per the RFC) `zone`
+> is a single-owner `EntityComponent` with no supported way to register a real `zone.*` entity per
+> polygon. A user whose polygon isn't the designated home zone still contributes no occupancy to any
+> real HA zone. Fully general zone occupancy would need HA core to expose an extensible `zone`
+> platform — out of this project's control — so this is closed as resolved-to-the-extent-possible,
+> not deferred.
