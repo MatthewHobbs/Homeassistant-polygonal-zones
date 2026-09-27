@@ -139,13 +139,23 @@ def is_local_add_on_host(uri: str) -> bool:
     return ip.is_private or ip.is_loopback or ip.is_link_local
 
 
-async def load_data(uri: str, hass: HomeAssistant, *, allow_private_urls: bool = False) -> str:
+async def load_data(
+    uri: str, hass: HomeAssistant, *, allow_private_urls: bool = False, token: str | None = None
+) -> str:
     """Load data from an HTTP(S) URL or a file inside the HA config directory.
 
     ``allow_private_urls=True`` relaxes the SSRF resolver to accept RFC-1918
     private addresses so a user can point the integration at a LAN-installed
     zone source (e.g. the companion editor add-on at ``http://192.168.x.x:8000``).
     Loopback / link-local / multicast / metadata addresses stay blocked.
+
+    ``token``, if given, is sent as the ``X-Save-Token`` header — but ONLY when
+    ``uri`` classifies as :func:`is_local_add_on_host`, so a token configured
+    for the companion add-on is never sent to an unrelated public URL. This is
+    the add-on's own read-gate (its ``save_token`` option protects GET
+    ``/zones.json``/``/trackers.json`` too, by design — see that repo's ADR
+    0002); it is never sent across a redirect, since ``allow_redirects=False``
+    below already refuses redirects outright.
     """
     parsed = urlparse(uri)
 
@@ -156,13 +166,16 @@ async def load_data(uri: str, hass: HomeAssistant, *, allow_private_urls: bool =
         connector = aiohttp.TCPConnector(
             resolver=_PublicOnlyResolver(allow_private=allow_private_urls)
         )
+        headers = {"X-Save-Token": token} if token and is_local_add_on_host(uri) else None
         # ``trust_env=False`` explicitly: do NOT inherit HTTP_PROXY / HTTPS_PROXY
         # / NO_PROXY / .netrc from the environment. aiohttp defaults to False
         # already; pinning it keeps the SSRF-hardened resolver authoritative and
         # guards against a future env-proxy leak that would bypass our DNS gate.
         async with (
             aiohttp.ClientSession(connector=connector, trust_env=False) as session,
-            session.get(uri, timeout=FETCH_TIMEOUT, allow_redirects=False) as response,
+            session.get(
+                uri, timeout=FETCH_TIMEOUT, allow_redirects=False, headers=headers
+            ) as response,
         ):
             if 300 <= response.status < 400:
                 raise ValueError(

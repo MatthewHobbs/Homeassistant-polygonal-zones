@@ -17,6 +17,7 @@ from .const import (
     CONF_ALLOW_PRIVATE_URLS,
     CONF_DOWNLOAD_ZONES,
     CONF_PRIORITIZE_ZONE_FILES,
+    CONF_ZONE_SOURCE_TOKEN,
     CONF_ZONES_URL,
     DOMAIN,
 )
@@ -91,6 +92,7 @@ async def _async_bootstrap_zone_snapshot(
     zone_uris = [zone_uri for zone_uri in zone_uris if zone_uri]
     prioritize = bool(entry.data.get(CONF_PRIORITIZE_ZONE_FILES))
     allow_private_urls = bool(entry.data.get(CONF_ALLOW_PRIVATE_URLS, False))
+    zone_source_token: str | None = entry.data.get(CONF_ZONE_SOURCE_TOKEN) or None
 
     relative = download_zone_relative_path(entry.entry_id)
     download_path = safe_config_path(hass.config.config_dir, relative)
@@ -106,6 +108,7 @@ async def _async_bootstrap_zone_snapshot(
             prioritize,
             hass,
             allow_private_urls=allow_private_urls,
+            token=zone_source_token,
         )
     except UnsupportedSchemaVersion as err:
         # The source file's format is newer than this integration understands.

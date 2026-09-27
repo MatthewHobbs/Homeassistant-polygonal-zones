@@ -116,9 +116,12 @@ async def download_zones(
     hass: HomeAssistant,
     *,
     allow_private_urls: bool = False,
+    token: str | None = None,
 ) -> None:
     """Download the zones in sources_uris to."""
-    zones = await get_zones(source_uris, hass, prioritize, allow_private_urls=allow_private_urls)
+    zones = await get_zones(
+        source_uris, hass, prioritize, allow_private_urls=allow_private_urls, token=token
+    )
     geo_json = zones_to_geojson(zones)
 
     await save_zones(geo_json, dest_uri, hass)

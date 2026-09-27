@@ -43,6 +43,21 @@ async def test_diagnostics_redacts_identifying_lists() -> None:
     assert result["entities"][0]["zone_count"] == 1
 
 
+async def test_diagnostics_redacts_zone_source_token() -> None:
+    """zone_source_token is a genuine secret (X-Save-Token), not just an
+    identifier — it must never appear verbatim in a diagnostics dump."""
+    entry = SimpleNamespace(
+        entry_id="entry-2",
+        title="Polygonal Zones",
+        version=1,
+        runtime_data=PolygonalZonesData(),
+        data={"zone_urls": [], "entities": [], "zone_source_token": "s3cr3t-token"},
+    )
+    result = await async_get_config_entry_diagnostics(SimpleNamespace(), entry)
+    assert result["entry"]["data"]["zone_source_token"] == "<redacted>"
+    assert "s3cr3t-token" not in repr(result)
+
+
 async def test_diagnostics_redacts_personalised_title() -> None:
     """A user-personalised title (e.g. 'Alice's tracking') is redacted."""
     entry = SimpleNamespace(
