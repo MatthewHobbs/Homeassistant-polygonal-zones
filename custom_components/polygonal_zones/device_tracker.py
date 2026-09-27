@@ -23,6 +23,7 @@ from .const import (
     CONF_DOWNLOAD_ZONES,
     CONF_EXPOSE_COORDINATES,
     CONF_PRIORITIZE_ZONE_FILES,
+    CONF_ZONE_SOURCE_TOKEN,
     CONF_ZONES_URL,
     DOMAIN,
 )
@@ -68,6 +69,9 @@ async def async_setup_entry(
     # Opt-in SSRF relaxation for LAN addon installs. Default strict; user
     # flips the toggle in config/options. See issue #28.
     allow_private_urls: bool = bool(entry.data.get(CONF_ALLOW_PRIVATE_URLS, False))
+    # Sent as X-Save-Token on reads, but only to a URI that classifies as a
+    # local add-on host (see is_local_add_on_host) — never anywhere else.
+    zone_source_token: str | None = entry.data.get(CONF_ZONE_SOURCE_TOKEN) or None
 
     # Legacy entries created before the privacy option existed have no stored
     # CONF_EXPOSE_COORDINATES and default to True — they are silently exposing
@@ -107,6 +111,7 @@ async def async_setup_entry(
         prioritize,
         editable_file,
         allow_private_urls=allow_private_urls,
+        token=zone_source_token,
     )
     entry.runtime_data.source = source
 

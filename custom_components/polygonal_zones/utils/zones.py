@@ -205,13 +205,14 @@ async def _load_zones_from_uri(
     hass: HomeAssistant,
     *,
     allow_private_urls: bool = False,
+    token: str | None = None,
 ) -> list[Zone]:
     """Fetch one zone file and parse it off the event loop.
 
     The network fetch stays on the loop; the CPU-heavy parse (``json.loads`` +
     shapely construction) is offloaded to the executor.
     """
-    raw = await load_data(uri, hass, allow_private_urls=allow_private_urls)
+    raw = await load_data(uri, hass, allow_private_urls=allow_private_urls, token=token)
     return await hass.async_add_executor_job(_parse_zone_document, raw, idx, prioritize, uri)
 
 
@@ -221,6 +222,7 @@ async def load_zones(
     prioritize: bool,
     *,
     allow_private_urls: bool = False,
+    token: str | None = None,
 ) -> ZoneLoadResult:
     """Load every URI independently; return successes plus per-URI failure records.
 
@@ -231,13 +233,20 @@ async def load_zones(
 
     ``allow_private_urls`` relaxes the SSRF resolver for RFC-1918 / ULA
     addresses so a user can point the integration at a LAN-installed source.
+    ``token`` is only ever sent to a URI that classifies as a local add-on
+    host (see :func:`load_data`) — never to any other configured source.
     """
     result = ZoneLoadResult()
     for idx, uri in enumerate(uris):
         try:
             result.zones.extend(
                 await _load_zones_from_uri(
-                    uri, idx, prioritize, hass, allow_private_urls=allow_private_urls
+                    uri,
+                    idx,
+                    prioritize,
+                    hass,
+                    allow_private_urls=allow_private_urls,
+                    token=token,
                 )
             )
         except UnsupportedSchemaVersion:
@@ -257,6 +266,7 @@ async def get_zones(
     prioritize: bool,
     *,
     allow_private_urls: bool = False,
+    token: str | None = None,
 ) -> list[Zone]:
     """Load every URI; return successful zones or raise if all URIs failed.
 
@@ -266,7 +276,9 @@ async def get_zones(
     the union is returned. When every URI fails, ``ZoneFileCorrupt`` is raised
     with the first failure's message so existing retry/backoff logic keeps working.
     """
-    result = await load_zones(uris, hass, prioritize, allow_private_urls=allow_private_urls)
+    result = await load_zones(
+        uris, hass, prioritize, allow_private_urls=allow_private_urls, token=token
+    )
     if uris and not result.zones and result.failures:
         first_uri, first_msg = result.failures[0]
         raise ZoneFileCorrupt(

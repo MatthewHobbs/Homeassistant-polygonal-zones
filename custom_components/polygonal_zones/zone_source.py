@@ -42,6 +42,7 @@ class ZoneSource:
         editable_file: bool,
         *,
         allow_private_urls: bool = False,
+        token: str | None = None,
     ) -> None:
         """Initialise the source (does not load — see ``async_schedule_initial_load``)."""
         self.entry_id = entry_id
@@ -49,6 +50,7 @@ class ZoneSource:
         self.prioritize = prioritize
         self.editable_file = editable_file
         self.allow_private_urls = allow_private_urls
+        self.token = token
 
         self.zones: list[Zone] = []
         self.last_load_failures: list[tuple[str, str]] = []
@@ -143,7 +145,11 @@ class ZoneSource:
     async def _async_load(self, hass: HomeAssistant) -> None:
         """Fetch + parse every URI once; raise ``ZoneFileCorrupt`` if all fail."""
         result = await load_zones(
-            self.zone_urls, hass, self.prioritize, allow_private_urls=self.allow_private_urls
+            self.zone_urls,
+            hass,
+            self.prioritize,
+            allow_private_urls=self.allow_private_urls,
+            token=self.token,
         )
         if self.zone_urls and not result.zones and result.failures:
             first_uri, first_msg = result.failures[0]
