@@ -18,6 +18,11 @@ on:
         description: "Per-caller cache namespace so one workflow's pass doesn't silence another"
         required: true
         type: string
+      include_prereleases:
+        description: "Resolve the latest homeassistant PRERELEASE instead of the latest stable (ADR 0002: nightly HA beta testing). Never affects the shapely query."
+        required: false
+        type: boolean
+        default: false
     outputs:
       changed:
         description: "true when this upstream fingerprint has not yet been recorded as passing"
@@ -43,8 +48,8 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m pip install --quiet --disable-pip-version-check packaging
-          fp=$(python3 - <<'PY'
-          import json, urllib.request
+          fp=$(INCLUDE_PRERELEASES="${{ inputs.include_prereleases }}" python3 - <<'PY'
+          import json, os, urllib.request
           from packaging.requirements import Requirement
           from packaging.specifiers import SpecifierSet
           from packaging.version import Version
@@ -68,7 +73,7 @@ jobs:
                   specs[req.name] = str(req.specifier)
 
 
-          def latest(pkg, spec):
+          def latest(pkg, spec, allow_prerelease=False):
               url = f"https://pypi.org/pypi/{pkg}/json"
               data = json.load(urllib.request.urlopen(url, timeout=30))
               spec_set = SpecifierSet(spec)
@@ -80,14 +85,18 @@ jobs:
                       parsed = Version(ver)
                   except Exception:
                       continue
-                  if parsed.is_prerelease:
+                  if parsed.is_prerelease and not allow_prerelease:
                       continue
                   if str(parsed) in spec_set and (best is None or parsed > best):
                       best = parsed
               return str(best)
 
 
-          ha = latest("homeassistant", specs["homeassistant"])
+          # Only the homeassistant query ever considers prereleases (ADR 0002 /
+          # RFC 0006 Option A: "dropping the is_prerelease filter for this one
+          # query") - shapely is never beta-tested here.
+          include_prereleases = os.environ.get("INCLUDE_PRERELEASES") == "true"
+          ha = latest("homeassistant", specs["homeassistant"], allow_prerelease=include_prereleases)
           sh = latest("shapely", specs["shapely"])
           print(f"ha{ha}-sh{sh}")
           PY

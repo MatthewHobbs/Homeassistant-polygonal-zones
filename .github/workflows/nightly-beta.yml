@@ -1,0 +1,218 @@
+name: Nightly HA beta
+
+# ADR 0002 / RFC 0006 (Option A): HA typically ships a beta about a week
+# before the matching final release. A breaking API change lands in that
+# beta, but nothing else in this repo's CI catches it until the final release
+# ships - at which point users already have it. This job resolves the latest
+# HA PRERELEASE in requirements_test.txt's range and runs the existing
+# pytest + Playwright suites against it, in its own cache-fingerprint
+# namespace so it never interacts with the stable gate.
+#
+# Runs on schedule/workflow_dispatch only - never push/pull_request. This is
+# a time-based signal about upstream HA betas, not a code-change signal, so
+# there is no PR to protect and continue-on-error is not used: a failure
+# fails the run normally and shows red in the Actions tab, which is the
+# "start simple" failure-visibility mechanism ADR 0002 chose. A red run here
+# means "HA's beta broke something," not "our code is broken" - this job is
+# never a required check and can never block a merge or release.
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# See validate.yml for why the key includes github.workflow. Never
+# push/pull_request-triggered, so cancel-in-progress is unconditionally false.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Skip the heavy jobs below unless the latest HA prerelease (or shapely)
+  # actually moved since the last passing nightly-beta run.
+  gate:
+    uses: ./.github/workflows/_upstream-gate.yml
+    with:
+      cache_prefix: nightly-beta
+      include_prereleases: true
+
+  # Resolves the actual version string once so pytest-beta and
+  # playwright-beta both install the exact same HA prerelease that gate's
+  # fingerprint was computed from, rather than each re-resolving "latest"
+  # independently and risking a race against a beta published mid-run.
+  resolve-beta:
+    name: Resolve latest HA prerelease
+    needs: [gate]
+    if: ${{ !cancelled() && needs.gate.outputs.changed == 'true' }}
+    runs-on: ubuntu-latest
+    outputs:
+      ha_version: ${{ steps.resolve.outputs.ha_version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Resolve latest in-range homeassistant prerelease
+        id: resolve
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet --disable-pip-version-check packaging
+          ha=$(python3 - <<'PY'
+          import json, urllib.request
+          from packaging.requirements import Requirement
+          from packaging.specifiers import SpecifierSet
+          from packaging.version import Version
+
+          # requirements_test.txt is the single source of truth for the range
+          # (see _upstream-gate.yml).
+          with open("requirements_test.txt") as f:
+              for line in f:
+                  line = line.split("#", 1)[0].strip()
+                  if not line:
+                      continue
+                  req = Requirement(line)
+                  if req.name == "homeassistant":
+                      spec = str(req.specifier)
+                      break
+              else:
+                  raise SystemExit("homeassistant requirement not found in requirements_test.txt")
+
+          data = json.load(
+              urllib.request.urlopen("https://pypi.org/pypi/homeassistant/json", timeout=30)
+          )
+          spec_set = SpecifierSet(spec)
+          best = None
+          for ver, files in data["releases"].items():
+              if not files:  # yanked / no artifacts
+                  continue
+              try:
+                  parsed = Version(ver)
+              except Exception:
+                  continue
+              # No prereleases=True needed: SpecifierSet.__contains__ called
+              # per-candidate matches prereleases by default (see ADR 0002's
+              # Consequences - verified against packaging's own docstring).
+              if str(parsed) in spec_set and (best is None or parsed > best):
+                  best = parsed
+          if best is None:
+              raise SystemExit(f"No homeassistant release in range {spec!r} found")
+          print(best)
+          PY
+          )
+          echo "ha_version=$ha" >> "$GITHUB_OUTPUT"
+          echo "Latest HA prerelease in range: $ha"
+
+  pytest-beta:
+    name: Pytest (HA beta)
+    needs: [gate, resolve-beta]
+    if: ${{ !cancelled() && needs.gate.outputs.changed == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements_test.txt
+      - run: pip install -r requirements_test.txt
+      - name: Install latest HA prerelease (${{ needs.resolve-beta.outputs.ha_version }})
+        run: pip install "homeassistant==${{ needs.resolve-beta.outputs.ha_version }}"
+      - run: pytest --cov=custom_components/polygonal_zones --cov-report=term --cov-fail-under=98
+
+  playwright-beta:
+    name: Config flow (Playwright, HA beta)
+    needs: [gate, resolve-beta]
+    if: ${{ !cancelled() && needs.gate.outputs.changed == 'true' }}
+    runs-on: ubuntu-latest
+    env:
+      HA_URL: "http://127.0.0.1:8123"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - name: Install Home Assistant prerelease (${{ needs.resolve-beta.outputs.ha_version }}) + runtime deps
+        run: |
+          set -eux
+          SHAPELY_REQ=$(grep -E '^shapely' requirements_test.txt)
+          pip install "homeassistant==${{ needs.resolve-beta.outputs.ha_version }}" "$SHAPELY_REQ"
+          # Same rationale as playwright.yml: pip install homeassistant doesn't
+          # pull integration requirements, so pre-install what get_services
+          # needs to import without erroring (see playwright.yml for detail).
+          python - <<'PY' > /tmp/ha-reqs.txt
+          import json, pathlib, homeassistant
+          base = pathlib.Path(homeassistant.__path__[0]) / "components"
+          comps = (
+              "frontend recorder conversation assist_pipeline tts ffmpeg camera "
+              "analytics hassio ai_task image_processing met radio_browser google_translate"
+          ).split()
+          reqs = []
+          for c in comps:
+              m = base / c / "manifest.json"
+              if m.exists():
+                  reqs += json.loads(m.read_text()).get("requirements", [])
+          print("\n".join(sorted(set(reqs))))
+          PY
+          echo "Pre-installing integration requirements:"
+          cat /tmp/ha-reqs.txt
+          pip install -r /tmp/ha-reqs.txt
+
+      - name: Stage HA config dir with the integration installed
+        run: |
+          set -eux
+          HA_CONFIG="$RUNNER_TEMP/ha-config"
+          mkdir -p "$HA_CONFIG/custom_components"
+          cp -r custom_components/polygonal_zones "$HA_CONFIG/custom_components/"
+          printf 'frontend:\nconfig:\n' > "$HA_CONFIG/configuration.yaml"
+          echo "HA_CONFIG=$HA_CONFIG" >> "$GITHUB_ENV"
+
+      - name: Start Home Assistant
+        run: |
+          set -eux
+          nohup hass --config "$HA_CONFIG" --log-file "$RUNNER_TEMP/ha.log" >/dev/null 2>&1 &
+          echo "HA_PID=$!" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+
+      - name: Install Playwright
+        working-directory: tests/e2e
+        run: |
+          npm install
+          npx playwright install --with-deps chromium
+
+      - name: Run config-flow smoke
+        working-directory: tests/e2e
+        run: npx playwright test
+
+      - name: Dump Home Assistant log on failure
+        if: failure()
+        run: cat "$RUNNER_TEMP/ha.log" || true
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report-beta
+          path: tests/e2e/playwright-report
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # Record the tested fingerprint only when every job passed (see
+  # _upstream-gate.yml) - a failed beta run is NOT recorded, so it keeps
+  # re-alerting nightly until fixed rather than caching a broken fingerprint
+  # and going silently green.
+  record:
+    needs: [gate, resolve-beta, pytest-beta, playwright-beta]
+    if: ${{ needs.gate.outputs.changed == 'true' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ needs.gate.outputs.cache_key }}" > .upstream-fingerprint
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .upstream-fingerprint
+          key: ${{ needs.gate.outputs.cache_key }}
