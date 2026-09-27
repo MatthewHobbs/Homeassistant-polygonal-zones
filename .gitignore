@@ -19,3 +19,4 @@ htmlcov/
 # Claude Code session artifacts (never commit to a public repo)
 .eod-*
 .claude/worktrees/
+.adv-review/
