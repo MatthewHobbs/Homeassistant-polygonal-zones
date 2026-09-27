@@ -18,17 +18,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import (
-    CONF_ALLOW_PRIVATE_URLS,
-    CONF_DOWNLOAD_ZONES,
-    CONF_EXPOSE_COORDINATES,
-    CONF_PRIORITIZE_ZONE_FILES,
-    CONF_ZONE_SOURCE_TOKEN,
-    CONF_ZONES_URL,
-    DOMAIN,
-)
+from .const import CONF_EXPOSE_COORDINATES, DOMAIN
 from .utils import event_should_trigger, get_locations_zone
-from .utils.general import download_zone_relative_path
 from .utils.geometry import exterior_coords
 from .utils.zones import Zone
 from .zone_source import ZoneSource
@@ -55,23 +46,17 @@ async def async_setup_entry(
 ) -> None:
     """Set up the entities from a config entry.
 
-    Builds one entry-scoped :class:`ZoneSource` (a single fetch/parse + load
-    lifecycle shared by every mirror), then a thin mirror entity per tracked
-    ``device_tracker`` that reads from it.
+    ``__init__.async_setup_entry`` builds the shared :class:`ZoneSource` and
+    stores it on ``entry.runtime_data.source`` before this platform is
+    forwarded (see PR A2 of the location_name migration's Release A) — this
+    just builds a thin mirror entity per tracked ``device_tracker`` that reads
+    from it.
     """
-    zone_uris: list[str] = entry.data.get(CONF_ZONES_URL) or []
-    zone_uris = [zone_uri for zone_uri in zone_uris if zone_uri]
-    prioritize: bool = bool(entry.data.get(CONF_PRIORITIZE_ZONE_FILES))
+    source: ZoneSource = entry.runtime_data.source
     # Existing entries (upgraded from < v1.11) have no stored value; default
     # to True to preserve their current behaviour. New entries default to
     # False via the config flow (privacy by default).
     expose_coordinates: bool = bool(entry.data.get(CONF_EXPOSE_COORDINATES, True))
-    # Opt-in SSRF relaxation for LAN addon installs. Default strict; user
-    # flips the toggle in config/options. See issue #28.
-    allow_private_urls: bool = bool(entry.data.get(CONF_ALLOW_PRIVATE_URLS, False))
-    # Sent as X-Save-Token on reads, but only to a URI that classifies as a
-    # local add-on host (see is_local_add_on_host) — never anywhere else.
-    zone_source_token: str | None = entry.data.get(CONF_ZONE_SOURCE_TOKEN) or None
 
     # Legacy entries created before the privacy option existed have no stored
     # CONF_EXPOSE_COORDINATES and default to True — they are silently exposing
@@ -93,27 +78,6 @@ async def async_setup_entry(
         # out (or this is a modern entry). Clear any previously-raised issue so
         # the warning doesn't persist after opt-out. No-op if none exists.
         ir.async_delete_issue(hass, DOMAIN, legacy_privacy_issue)
-
-    editable_file = False
-
-    if entry.data.get(CONF_DOWNLOAD_ZONES):
-        # __init__.async_setup_entry bootstraps the initial snapshot (raising
-        # ConfigEntryNotReady/ConfigEntryError there, before this platform is
-        # forwarded — see #84) before this platform ever runs, so the file is
-        # already in place by the time we get here.
-        relative = download_zone_relative_path(entry.entry_id)
-        zone_uris = [f"/{relative}"]
-        editable_file = True
-
-    source = ZoneSource(
-        entry.entry_id,
-        zone_uris,
-        prioritize,
-        editable_file,
-        allow_private_urls=allow_private_urls,
-        token=zone_source_token,
-    )
-    entry.runtime_data.source = source
 
     entities = [
         PolygonalZoneEntity(

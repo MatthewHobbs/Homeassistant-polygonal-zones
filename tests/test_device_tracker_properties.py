@@ -6,10 +6,24 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from custom_components.polygonal_zones import PolygonalZonesData, _build_zone_source
 from custom_components.polygonal_zones.device_tracker import (
     async_setup_entry,
 )
 from tests.helpers import make_entity as _make_entity
+
+
+def _entry_with_source(**data_overrides) -> SimpleNamespace:
+    """Build a stub config entry with runtime_data.source already set, mirroring
+    what __init__.async_setup_entry does before forwarding a platform (PR A2)."""
+    entry = SimpleNamespace(
+        entry_id=data_overrides.pop("entry_id", "entry-1"),
+        title=data_overrides.pop("title", "Polygonal Zones"),
+        runtime_data=PolygonalZonesData(),
+        data=data_overrides,
+    )
+    entry.runtime_data.source = _build_zone_source(entry)
+    return entry
 
 
 @pytest.fixture(autouse=True)
@@ -114,18 +128,12 @@ def hass_with_setup(tmp_path):
 
 async def test_async_setup_entry_no_download(hass_with_setup) -> None:
     """async_setup_entry creates an entity per CONF_ENTITIES and stores in runtime_data."""
-    from custom_components.polygonal_zones import PolygonalZonesData
-
     hass, platform = hass_with_setup
 
-    entry = SimpleNamespace(
-        entry_id="entry-1",
-        runtime_data=PolygonalZonesData(),
-        data={
-            "zone_urls": ["https://example.com/zones.json"],
-            "entities": ["device_tracker.alice", "device_tracker.bob"],
-            "expose_coordinates": True,
-        },
+    entry = _entry_with_source(
+        zone_urls=["https://example.com/zones.json"],
+        entities=["device_tracker.alice", "device_tracker.bob"],
+        expose_coordinates=True,
     )
 
     add_entities = MagicMock()
@@ -155,19 +163,14 @@ async def test_async_setup_entry_no_download(hass_with_setup) -> None:
 async def test_async_setup_entry_wires_zone_source_token(hass_with_setup) -> None:
     """entry.data's zone_source_token reaches the shared ZoneSource, so load_data
     can send it as X-Save-Token on requests to the add-on host."""
-    from custom_components.polygonal_zones import PolygonalZonesData
-
     hass, platform = hass_with_setup
 
-    entry = SimpleNamespace(
+    entry = _entry_with_source(
         entry_id="entry-token",
-        runtime_data=PolygonalZonesData(),
-        data={
-            "zone_urls": ["http://192.168.1.50:8000/zones.json"],
-            "entities": ["device_tracker.alice"],
-            "expose_coordinates": True,
-            "zone_source_token": "s3cr3t",
-        },
+        zone_urls=["http://192.168.1.50:8000/zones.json"],
+        entities=["device_tracker.alice"],
+        expose_coordinates=True,
+        zone_source_token="s3cr3t",
     )
 
     add_entities = MagicMock()
@@ -191,17 +194,11 @@ async def test_async_setup_entry_wires_zone_source_token(hass_with_setup) -> Non
 async def test_async_setup_entry_clears_legacy_per_entity_load_issue(hass_with_setup) -> None:
     """Upgrade migration: the old per-entity ``zone_load_failed_<id>`` repair issue
     is cleared on setup now that the shared source uses a per-entry id."""
-    from custom_components.polygonal_zones import PolygonalZonesData
-
     hass, platform = hass_with_setup
-    entry = SimpleNamespace(
-        entry_id="entry-1",
-        runtime_data=PolygonalZonesData(),
-        data={
-            "zone_urls": ["https://example.com/zones.json"],
-            "entities": ["device_tracker.alice"],
-            "expose_coordinates": True,
-        },
+    entry = _entry_with_source(
+        zone_urls=["https://example.com/zones.json"],
+        entities=["device_tracker.alice"],
+        expose_coordinates=True,
     )
     add_entities = MagicMock()
     with (
@@ -227,17 +224,13 @@ async def test_async_setup_entry_legacy_entry_raises_expose_coordinates_issue(
     hass_with_setup,
 ) -> None:
     """A legacy entry with no expose_coordinates key raises a privacy repair issue."""
-    from custom_components.polygonal_zones import PolygonalZonesData
-
     hass, platform = hass_with_setup
-    entry = SimpleNamespace(
+    entry = _entry_with_source(
         entry_id="entry-legacy",
         title="Legacy",
-        runtime_data=PolygonalZonesData(),
-        data={
-            "zone_urls": ["https://example.com/zones.json"],
-            "entities": ["device_tracker.alice"],
-        },  # no expose_coordinates key -> legacy default True
+        zone_urls=["https://example.com/zones.json"],
+        entities=["device_tracker.alice"],
+        # no expose_coordinates key -> legacy default True
     )
     add_entities = MagicMock()
     with (
@@ -270,19 +263,13 @@ async def test_async_setup_entry_download_zones_uses_local_snapshot_path(
     platform is ever forwarded (#84), so this platform does no downloading of its
     own — it just assumes the file is in place.
     """
-    from custom_components.polygonal_zones import PolygonalZonesData
-
     hass, platform = hass_with_setup
 
-    entry = SimpleNamespace(
-        entry_id="entry-1",
-        runtime_data=PolygonalZonesData(),
-        data={
-            "zone_urls": ["https://example.com/zones.json"],
-            "entities": ["device_tracker.alice"],
-            "download_zones": True,
-            "expose_coordinates": True,
-        },
+    entry = _entry_with_source(
+        zone_urls=["https://example.com/zones.json"],
+        entities=["device_tracker.alice"],
+        download_zones=True,
+        expose_coordinates=True,
     )
 
     add_entities = MagicMock()

@@ -25,10 +25,10 @@ from .services import register_services
 from .utils.general import download_zone_relative_path, safe_config_path
 from .utils.local_zones import download_zones, release_file_lock
 from .utils.zones import UnsupportedSchemaVersion
+from .zone_source import ZoneSource
 
 if TYPE_CHECKING:
     from .device_tracker import PolygonalZoneEntity
-    from .zone_source import ZoneSource
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 PLATFORMS: list[Platform] = [Platform.DEVICE_TRACKER]
@@ -64,16 +64,49 @@ async def async_setup(hass: HomeAssistant, _config: dict) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: PolygonalZonesConfigEntry) -> bool:
     """Set up polygonal_zones from a config entry.
 
-    The platform's ``async_setup_entry`` populates ``entry.runtime_data.entities``;
-    we just initialise the container, bootstrap the zone snapshot (if enabled)
-    and forward.
+    Builds the shared :class:`ZoneSource` here — before any platform is
+    forwarded — so every forwarded platform can read
+    ``entry.runtime_data.source`` from the moment its own ``async_setup_entry``
+    starts. ``async_forward_entry_setups`` starts every platform concurrently;
+    building the source inside one platform's own setup (as device_tracker
+    used to) would race a second platform that needs it too.
     """
     entry.runtime_data = PolygonalZonesData()
     if entry.data.get(CONF_DOWNLOAD_ZONES):
         await _async_bootstrap_zone_snapshot(hass, entry)
+    entry.runtime_data.source = _build_zone_source(entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
     return True
+
+
+def _build_zone_source(entry: PolygonalZonesConfigEntry) -> ZoneSource:
+    """Build the entry-scoped ``ZoneSource`` shared by every platform's entities.
+
+    When ``download_zones`` is enabled, the configured URLs are a one-time seed
+    for ``_async_bootstrap_zone_snapshot`` (already run by the time this is
+    called); the source itself reads only the managed local snapshot file.
+    """
+    zone_uris: list[str] = entry.data.get(CONF_ZONES_URL) or []
+    zone_uris = [zone_uri for zone_uri in zone_uris if zone_uri]
+    prioritize = bool(entry.data.get(CONF_PRIORITIZE_ZONE_FILES))
+    allow_private_urls = bool(entry.data.get(CONF_ALLOW_PRIVATE_URLS, False))
+    zone_source_token: str | None = entry.data.get(CONF_ZONE_SOURCE_TOKEN) or None
+
+    editable_file = False
+    if entry.data.get(CONF_DOWNLOAD_ZONES):
+        relative = download_zone_relative_path(entry.entry_id)
+        zone_uris = [f"/{relative}"]
+        editable_file = True
+
+    return ZoneSource(
+        entry.entry_id,
+        zone_uris,
+        prioritize,
+        editable_file,
+        allow_private_urls=allow_private_urls,
+        token=zone_source_token,
+    )
 
 
 async def _async_bootstrap_zone_snapshot(
