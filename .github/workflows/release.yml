@@ -3,6 +3,7 @@ name: Release
 on:
   release:
     types: [published]
+  workflow_dispatch: {}
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -36,6 +37,9 @@ jobs:
           fi
 
       - name: Verify manifest version matches tag
+        # workflow_dispatch has no tag (GITHUB_REF_NAME is the branch) — this
+        # check only makes sense for a real release publish.
+        if: github.event_name == 'release'
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
           MANIFEST_VERSION=$(jq -r .version custom_components/polygonal_zones/manifest.json)
@@ -55,6 +59,10 @@ jobs:
           subject-path: polygonal_zones.zip
 
       - name: Upload zip to release
+        # A manual dispatch run has no corresponding release object to attach
+        # to — exercising build + attestation is the point of a dry run, not
+        # publishing anything, so this step never runs outside a real release.
+        if: github.event_name == 'release'
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           files: polygonal_zones.zip
