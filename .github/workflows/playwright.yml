@@ -48,11 +48,40 @@ jobs:
       # visibly so the nightly signal isn't lost.
       continue_on_error: ${{ github.event_name == 'pull_request' }}
 
+  # BACKLOG.md: "Playwright config-flow smoke fails on HA 2026.7.4" (2026-07-27)
+  # found the dialog timing out against radio_frequency/infrared setup errors
+  # specific to that HA version, but nothing since has re-tested the *floor*
+  # HA version specifically — config-flow above always installs the latest
+  # in requirements_test.txt's range, which has moved well past the floor.
+  # Mirrors validate.yml's Pytest / Pytest (HA floor) split so both ends of
+  # the supported range actually get exercised, not just the newest one.
+  resolve-floor:
+    name: Resolve HA floor
+    needs: [gate]
+    if: ${{ !cancelled() && (github.event_name == 'push' || github.event_name == 'pull_request' || needs.gate.outputs.changed == 'true') }}
+    runs-on: ubuntu-latest
+    outputs:
+      floor: ${{ steps.floor.outputs.floor }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: floor
+        run: echo "floor=$(jq -r .homeassistant hacs.json)" >> "$GITHUB_OUTPUT"
+
+  config-flow-floor:
+    name: Config flow (Playwright, HA floor)
+    needs: [gate, resolve-floor]
+    if: ${{ !cancelled() && (github.event_name == 'push' || github.event_name == 'pull_request' || needs.gate.outputs.changed == 'true') }}
+    uses: ./.github/workflows/_playwright-config-flow.yml
+    with:
+      ha_version: ${{ needs.resolve-floor.outputs.floor }}
+      artifact_suffix: "-floor"
+      continue_on_error: ${{ github.event_name == 'pull_request' }}
+
   # Record the tested fingerprint only when the smoke passed (see _upstream-gate.yml).
   # On schedule, continue-on-error is false, so a failed smoke leaves the fingerprint
   # unrecorded and it re-runs next night until fixed.
   record:
-    needs: [gate, config-flow]
+    needs: [gate, config-flow, config-flow-floor]
     if: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && needs.gate.outputs.changed == 'true' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
     runs-on: ubuntu-latest
     steps:
