@@ -30,6 +30,12 @@ on:
       cache_key:
         description: "the cache key the caller must save (on success) to mark this fingerprint tested"
         value: ${{ jobs.gate.outputs.cache_key }}
+      ha_version:
+        description: "the exact homeassistant version this fingerprint resolved to"
+        value: ${{ jobs.gate.outputs.ha_version }}
+      shapely_version:
+        description: "the exact shapely version this fingerprint resolved to"
+        value: ${{ jobs.gate.outputs.shapely_version }}
 
 permissions:
   contents: read
@@ -40,6 +46,8 @@ jobs:
     outputs:
       changed: ${{ steps.decide.outputs.changed }}
       cache_key: ${{ steps.fp.outputs.cache_key }}
+      ha_version: ${{ steps.fp.outputs.ha_version }}
+      shapely_version: ${{ steps.fp.outputs.shapely_version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -103,6 +111,15 @@ jobs:
           )
           key="upstream-tested-${{ inputs.cache_prefix }}-$fp"
           echo "cache_key=$key" >> "$GITHUB_OUTPUT"
+          # Parse the exact versions back out of the fingerprint (rather than a
+          # second PyPI query) so a caller that needs to `pip install` this
+          # exact fingerprint - e.g. nightly-beta.yml - can never drift from
+          # what "changed"/cache_key actually describe.
+          ha_version="${fp%-sh*}"
+          ha_version="${ha_version#ha}"
+          shapely_version="${fp#*-sh}"
+          echo "ha_version=$ha_version" >> "$GITHUB_OUTPUT"
+          echo "shapely_version=$shapely_version" >> "$GITHUB_OUTPUT"
           echo "Upstream fingerprint: $fp  (cache key: $key)"
 
       - name: Has this fingerprint already passed a nightly?
