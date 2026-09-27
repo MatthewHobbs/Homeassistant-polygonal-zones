@@ -13,9 +13,12 @@ if TYPE_CHECKING:
 
 # Keys whose values may carry user-meaningful identifiers; replace with placeholder.
 # - ``entities`` / ``zone_urls`` live inside entry.data and carry URIs + entity_ids.
+# - ``zone_source_token`` is the add-on's X-Save-Token credential — a genuine
+#   secret, not just an identifier; it must never appear verbatim in a dump a
+#   user might paste into a public bug report.
 # - ``title`` is the config-entry title, which a user may have personalised
 #   (e.g. "Alice's tracking") — redact before shipping diagnostics externally.
-TO_REDACT_DATA = {"entities", "zone_urls"}
+TO_REDACT_DATA = {"entities", "zone_urls", "zone_source_token"}
 TO_REDACT_ENTRY_FIELDS = {"title"}
 
 

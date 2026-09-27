@@ -152,6 +152,42 @@ async def test_async_setup_entry_no_download(hass_with_setup) -> None:
     assert entry.runtime_data.entities == entities
 
 
+async def test_async_setup_entry_wires_zone_source_token(hass_with_setup) -> None:
+    """entry.data's zone_source_token reaches the shared ZoneSource, so load_data
+    can send it as X-Save-Token on requests to the add-on host."""
+    from custom_components.polygonal_zones import PolygonalZonesData
+
+    hass, platform = hass_with_setup
+
+    entry = SimpleNamespace(
+        entry_id="entry-token",
+        runtime_data=PolygonalZonesData(),
+        data={
+            "zone_urls": ["http://192.168.1.50:8000/zones.json"],
+            "entities": ["device_tracker.alice"],
+            "expose_coordinates": True,
+            "zone_source_token": "s3cr3t",
+        },
+    )
+
+    add_entities = MagicMock()
+
+    with (
+        patch(
+            "custom_components.polygonal_zones.device_tracker.entity_platform.async_get_current_platform",
+            return_value=platform,
+        ),
+        patch(
+            "custom_components.polygonal_zones.device_tracker.generate_entity_id",
+            side_effect=lambda fmt, name, hass=None: fmt.format(name),
+        ),
+        patch("custom_components.polygonal_zones.device_tracker.ir.async_delete_issue"),
+    ):
+        await async_setup_entry(hass, entry, add_entities)
+
+    assert entry.runtime_data.source.token == "s3cr3t"
+
+
 async def test_async_setup_entry_clears_legacy_per_entity_load_issue(hass_with_setup) -> None:
     """Upgrade migration: the old per-entity ``zone_load_failed_<id>`` repair issue
     is cleared on setup now that the shared source uses a per-entry id."""

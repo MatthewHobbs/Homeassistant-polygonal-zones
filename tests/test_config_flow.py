@@ -61,6 +61,24 @@ def test_build_options_flow_exposes_download_zones() -> None:
     assert download_key.default() is False
 
 
+def test_build_create_flow_has_zone_source_token() -> None:
+    schema = build_create_flow()
+    keys = {str(k) for k in schema.schema}
+    assert "zone_source_token" in keys
+
+
+def test_build_create_flow_zone_source_token_defaults_empty() -> None:
+    schema = build_create_flow()
+    token_key = next(k for k in schema.schema if str(k) == "zone_source_token")
+    assert token_key.default() == ""
+
+
+def test_build_options_flow_has_zone_source_token() -> None:
+    schema = build_options_flow()
+    keys = {str(k) for k in schema.schema}
+    assert "zone_source_token" in keys
+
+
 def test_build_options_flow_has_zone_urls_and_priority() -> None:
     schema = build_options_flow()
     keys = {str(k) for k in schema.schema}

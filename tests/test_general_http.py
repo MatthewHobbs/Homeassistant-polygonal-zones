@@ -51,8 +51,10 @@ class _FakeResponse:
 class _FakeSession:
     def __init__(self, response: _FakeResponse) -> None:
         self._response = response
+        self.get_kwargs: dict = {}
 
-    def get(self, *_a, **_kw) -> _FakeResponse:
+    def get(self, *_a, **kwargs) -> _FakeResponse:
+        self.get_kwargs = kwargs
         return self._response
 
     async def __aenter__(self):
@@ -179,3 +181,67 @@ async def test_load_data_wires_allow_private_urls_to_resolver(tmp_path, flag) ->
 
     assert isinstance(captured["resolver"], _PublicOnlyResolver)
     assert captured["resolver"]._allow_private is flag
+
+
+async def test_load_data_sends_token_header_for_local_add_on_host(tmp_path) -> None:
+    session = _FakeSession(_FakeResponse())
+    with (
+        patch(
+            "custom_components.polygonal_zones.utils.general.aiohttp.TCPConnector",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "custom_components.polygonal_zones.utils.general.aiohttp.ClientSession",
+            return_value=session,
+        ),
+    ):
+        await load_data(
+            "http://192.168.1.50:8000/zones.json",
+            _hass(tmp_path),
+            allow_private_urls=True,
+            token="s3cr3t",
+        )
+
+    assert session.get_kwargs["headers"] == {"X-Save-Token": "s3cr3t"}
+
+
+async def test_load_data_never_sends_token_to_public_host(tmp_path) -> None:
+    """The token is scoped to the local add-on host — never leaked to a public URL,
+    even if one happens to be configured alongside the add-on."""
+    session = _FakeSession(_FakeResponse())
+    with (
+        patch(
+            "custom_components.polygonal_zones.utils.general.aiohttp.TCPConnector",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "custom_components.polygonal_zones.utils.general.aiohttp.ClientSession",
+            return_value=session,
+        ),
+    ):
+        await load_data(
+            "https://example.com/zones.json",
+            _hass(tmp_path),
+            token="s3cr3t",
+        )
+
+    assert session.get_kwargs["headers"] is None
+
+
+async def test_load_data_no_token_sends_no_headers(tmp_path) -> None:
+    session = _FakeSession(_FakeResponse())
+    with (
+        patch(
+            "custom_components.polygonal_zones.utils.general.aiohttp.TCPConnector",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "custom_components.polygonal_zones.utils.general.aiohttp.ClientSession",
+            return_value=session,
+        ),
+    ):
+        await load_data(
+            "http://192.168.1.50:8000/zones.json", _hass(tmp_path), allow_private_urls=True
+        )
+
+    assert session.get_kwargs["headers"] is None

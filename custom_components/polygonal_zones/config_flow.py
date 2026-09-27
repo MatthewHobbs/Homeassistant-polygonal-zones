@@ -19,7 +19,13 @@ from homeassistant.helpers.selector import TextSelectorType
 from homeassistant.util import dt as dt_util
 import voluptuous as vol
 
-from .const import CONF_CONSENT_CONFIRMED_AT, CONF_DOWNLOAD_ZONES, CONF_ZONES_URL, DOMAIN
+from .const import (
+    CONF_CONSENT_CONFIRMED_AT,
+    CONF_DOWNLOAD_ZONES,
+    CONF_ZONE_SOURCE_TOKEN,
+    CONF_ZONES_URL,
+    DOMAIN,
+)
 from .utils.config_validation import validate_zone_urls
 from .utils.general import is_local_add_on_host
 
@@ -118,6 +124,11 @@ def build_create_flow(
                 default=defaults.get("allow_private_urls", False),
                 description={"advanced": True},
             ): selector.BooleanSelector(),
+            vol.Optional(
+                CONF_ZONE_SOURCE_TOKEN,
+                default=defaults.get(CONF_ZONE_SOURCE_TOKEN, ""),
+                description={"advanced": True},
+            ): selector.TextSelector(selector.TextSelectorConfig(type=TextSelectorType.PASSWORD)),
         }
     )
 
@@ -160,6 +171,10 @@ def build_options_flow(
                 "allow_private_urls",
                 default=defaults.get("allow_private_urls", False),
             ): selector.BooleanSelector(selector.BooleanSelectorConfig()),
+            vol.Optional(
+                CONF_ZONE_SOURCE_TOKEN,
+                default=defaults.get(CONF_ZONE_SOURCE_TOKEN, ""),
+            ): selector.TextSelector(selector.TextSelectorConfig(type=TextSelectorType.PASSWORD)),
         }
     )
 
