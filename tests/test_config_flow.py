@@ -180,6 +180,100 @@ async def test_config_flow_valid_input_creates_entry(tmp_path) -> None:
     assert data["consent_confirmed_at"]
 
 
+async def test_config_flow_local_add_on_source_overrides_download_zones_to_false(
+    tmp_path,
+) -> None:
+    """A brand-new entry whose only zone source is a LAN add-on must not silently
+    freeze it at setup — download_zones is overridden to False even though the
+    form's own fallback default is True (BACKLOG.md, P1)."""
+    flow = ConfigFlow()
+    flow.hass = _hass(tmp_path)
+    flow.async_show_form = MagicMock(return_value={"type": "form"})
+    flow.async_create_entry = MagicMock(return_value={"type": "create_entry"})
+
+    result = await flow.async_step_user(
+        {
+            "zone_urls": ["http://192.168.1.50:8000/zones.json"],
+            "entities": ["device_tracker.x"],
+            "consent": True,
+            "download_zones": True,
+            "allow_private_urls": True,
+        }
+    )
+
+    assert result == {"type": "create_entry"}
+    data = flow.async_create_entry.call_args.kwargs["data"]
+    assert data["download_zones"] is False
+
+
+async def test_config_flow_public_source_keeps_download_zones_true(tmp_path) -> None:
+    """A public zone source is unaffected by the add-on override."""
+    flow = ConfigFlow()
+    flow.hass = _hass(tmp_path)
+    flow.async_show_form = MagicMock(return_value={"type": "form"})
+    flow.async_create_entry = MagicMock(return_value={"type": "create_entry"})
+
+    result = await flow.async_step_user(
+        {
+            "zone_urls": ["https://example.com/zones.json"],
+            "entities": ["device_tracker.x"],
+            "consent": True,
+            "download_zones": True,
+        }
+    )
+
+    assert result == {"type": "create_entry"}
+    data = flow.async_create_entry.call_args.kwargs["data"]
+    assert data["download_zones"] is True
+
+
+async def test_config_flow_mixed_sources_keeps_download_zones_true(tmp_path) -> None:
+    """A mix of add-on + public sources is left alone — only an add-on-only
+    entry gets the safer default, since the public source still benefits
+    from a materialised local snapshot."""
+    flow = ConfigFlow()
+    flow.hass = _hass(tmp_path)
+    flow.async_show_form = MagicMock(return_value={"type": "form"})
+    flow.async_create_entry = MagicMock(return_value={"type": "create_entry"})
+
+    result = await flow.async_step_user(
+        {
+            "zone_urls": ["http://192.168.1.50:8000/zones.json", "https://example.com/x.json"],
+            "entities": ["device_tracker.x"],
+            "consent": True,
+            "download_zones": True,
+            "allow_private_urls": True,
+        }
+    )
+
+    assert result == {"type": "create_entry"}
+    data = flow.async_create_entry.call_args.kwargs["data"]
+    assert data["download_zones"] is True
+
+
+async def test_config_flow_local_add_on_source_leaves_explicit_false_alone(tmp_path) -> None:
+    """The override only ever flips True -> False; it never touches an entry
+    that already opted out."""
+    flow = ConfigFlow()
+    flow.hass = _hass(tmp_path)
+    flow.async_show_form = MagicMock(return_value={"type": "form"})
+    flow.async_create_entry = MagicMock(return_value={"type": "create_entry"})
+
+    result = await flow.async_step_user(
+        {
+            "zone_urls": ["http://192.168.1.50:8000/zones.json"],
+            "entities": ["device_tracker.x"],
+            "consent": True,
+            "download_zones": False,
+            "allow_private_urls": True,
+        }
+    )
+
+    assert result == {"type": "create_entry"}
+    data = flow.async_create_entry.call_args.kwargs["data"]
+    assert data["download_zones"] is False
+
+
 async def test_options_flow_invalid_url_renders_form(tmp_path) -> None:
     flow = OptionsFlowHandler()
     flow.hass = _hass(tmp_path)
