@@ -30,7 +30,7 @@ Reviewing a dependency bump was never what this workflow was for.
 
 ---
 
-## Release-only action bumps are unverified by any PR check (2026-09-05) — OPEN, P2
+## Release-only action bumps are unverified by any PR check (2026-09-05) — RESOLVED 2026-09-27
 
 `actions/attest-build-provenance` was bumped 4.1.1 → 4.2.2 (#67) and `softprops/action-gh-release`
 3.0.2 → 3.0.3 (#71). Both are used **only** in `release.yml`, which triggers on `v*` tags. No pull
@@ -60,12 +60,14 @@ this code path will be a real release, where a failure is most expensive and lea
 > before creating the release, or the tag lands with no artifact attached until the workflow is
 > re-run.
 
-**Mitigation available now:** `release.yml` accepts `workflow_dispatch`, so the path can be
-exercised deliberately before the next real tag rather than discovered during one.
-
-**Worth considering longer-term:** a scheduled or manual smoke job that runs the release workflow's
-attestation step against a throwaway artifact, so provenance tooling is covered by something other
-than production releases.
+> **Update (2026-09-27): the "mitigation available now" line above was wrong** — `release.yml` had
+> no `workflow_dispatch` trigger at all; that was never actually true. Fixed properly rather than
+> just correcting the note: added `workflow_dispatch`, gated the tag/version check and the
+> `action-gh-release` upload step to `github.event_name == 'release'` (a manual dispatch has no
+> tag and no release object to attach to), so a dry run exercises the build-zip +
+> `attest-build-provenance` steps — the part this item was actually about — without ever touching
+> a real GitHub release. Dispatched once on the feature branch before merging to confirm it behaves
+> as designed (attestation minted, upload step skipped, no side effects).
 
 ---
 
