@@ -8,6 +8,7 @@ it to the entity. These helpers keep that construction in one place.
 from __future__ import annotations
 
 from custom_components.polygonal_zones.device_tracker import PolygonalZoneEntity
+from custom_components.polygonal_zones.sensor import PolygonalZoneSensor
 from custom_components.polygonal_zones.utils.zones import Zone
 from custom_components.polygonal_zones.zone_source import ZoneSource
 
@@ -50,3 +51,17 @@ def make_entity(
     if source is None:
         source = make_source(**source_kwargs)
     return PolygonalZoneEntity(source, tracked_entity_id, own_id, expose_coordinates)
+
+
+def make_sensor(
+    *,
+    source: ZoneSource | None = None,
+    tracked_entity_id: str = "device_tracker.phone",
+    own_id: str = "sensor.polygonal_zones_phone",
+    expose_coordinates: bool = True,
+    **source_kwargs,
+) -> PolygonalZoneSensor:
+    """Build a ``PolygonalZoneSensor`` backed by a shared ``ZoneSource``."""
+    if source is None:
+        source = make_source(**source_kwargs)
+    return PolygonalZoneSensor(source, tracked_entity_id, own_id, expose_coordinates)
