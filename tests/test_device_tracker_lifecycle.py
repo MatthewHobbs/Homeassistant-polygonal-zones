@@ -68,6 +68,42 @@ async def test_update_location_outside_zones_marks_away() -> None:
     entity.hass = _make_hass()
     await entity.update_location(latitude=10, longitude=10, gps_accuracy=1)
     assert entity._attr_location_name == "away"
+    assert entity._attr_in_zones == []
+
+
+async def test_update_location_matches_home_zone_sets_in_zones() -> None:
+    """Additive (Release A, PR A3): matching the configured home zone publishes
+    in_zones without touching location_name/state, which still wins today."""
+    entity = _make_entity(zones=[_HOME], home_zone_id="Home")
+    entity.hass = _make_hass()
+
+    await entity.update_location(latitude=0.5, longitude=0.5, gps_accuracy=10)
+
+    assert entity._attr_location_name == "Home"
+    assert entity._attr_in_zones == ["zone.home"]
+
+
+async def test_update_location_non_home_zone_leaves_in_zones_empty() -> None:
+    """A matched zone that isn't the configured home zone doesn't set in_zones —
+    there's no real HA zone.* entity for a non-home polygon to reference."""
+    entity = _make_entity(zones=[_HOME], home_zone_id="Some Other Zone")
+    entity.hass = _make_hass()
+
+    await entity.update_location(latitude=0.5, longitude=0.5, gps_accuracy=10)
+
+    assert entity._attr_location_name == "Home"
+    assert entity._attr_in_zones == []
+
+
+async def test_update_location_no_home_zone_configured_leaves_in_zones_empty() -> None:
+    """Blank home_zone_id (the default) never sets in_zones, even for a real match."""
+    entity = _make_entity(zones=[_HOME])
+    entity.hass = _make_hass()
+
+    await entity.update_location(latitude=0.5, longitude=0.5, gps_accuracy=10)
+
+    assert entity._attr_location_name == "Home"
+    assert entity._attr_in_zones == []
 
 
 async def test_update_location_expose_coordinates_false_omits_gps_attributes() -> None:
@@ -239,10 +275,12 @@ async def test_async_reload_zones_clears_repair_issue_on_success() -> None:
     ):
         await entity.async_reload_zones()
 
-    mock_delete.assert_called_once()
-    _hass, domain, issue_id = mock_delete.call_args.args
-    assert domain == "polygonal_zones"
-    assert issue_id == "zone_load_failed_entry-id"
+    # Both the load-failure issue and the (unset, so always-clear) home-zone
+    # issue are cleared on a successful reload.
+    domains = {call.args[1] for call in mock_delete.call_args_list}
+    issue_ids = {call.args[2] for call in mock_delete.call_args_list}
+    assert domains == {"polygonal_zones"}
+    assert issue_ids == {"zone_load_failed_entry-id", "home_zone_missing_entry-id"}
 
 
 async def test_async_reload_zones_warning_does_not_leak_entity_id(caplog) -> None:
