@@ -82,3 +82,42 @@ async def test_mirror_reflects_matched_zone_name_via_real_hass(hass: HomeAssista
     mirror = hass.states.get("device_tracker.polygonal_zones_test_phone")
     assert mirror is not None
     assert mirror.state == "Home"
+
+
+async def test_companion_sensor_reflects_same_zone_via_real_hass(hass: HomeAssistant) -> None:
+    """Release A, PR A4: the companion sensor resolves independently of the
+    device_tracker mirror and agrees with it — proving the two platforms,
+    forwarded concurrently by async_forward_entry_setups, both see the shared
+    ZoneSource correctly (the exact scenario PR A2's race fix protects)."""
+    zones_path = hass.config.path("polygonal_zones_test_sensor.geojson")
+    await hass.async_add_executor_job(
+        Path(zones_path).write_text, json.dumps(_ZONE_GEOJSON), "utf-8"
+    )
+
+    hass.states.async_set(
+        "device_tracker.test_phone_2",
+        "not_home",
+        {"latitude": 51.5125, "longitude": -0.13, "gps_accuracy": 5},
+    )
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "zone_urls": ["polygonal_zones_test_sensor.geojson"],
+            "entities": ["device_tracker.test_phone_2"],
+            "download_zones": False,
+            "expose_coordinates": True,
+            "consent_confirmed_at": "2026-09-27T00:00:00+00:00",
+        },
+    )
+    entry.add_to_hass(hass)
+
+    assert await async_setup_component(hass, DOMAIN, {})
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    mirror = hass.states.get("device_tracker.polygonal_zones_test_phone_2")
+    sensor = hass.states.get("sensor.polygonal_zones_test_phone_2")
+    assert mirror is not None
+    assert sensor is not None
+    assert mirror.state == "Home"
+    assert sensor.state == "Home"
