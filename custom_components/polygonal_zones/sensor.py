@@ -94,6 +94,13 @@ class PolygonalZoneSensor(RestoreSensor):
         self._unsub = async_track_state_change_event(
             self.hass, [self._entity_id], self._handle_state_change_builder()
         )
+        # See device_tracker.PolygonalZoneEntity.async_added_to_hass: the shared
+        # source's one-shot initial-load notification can fire (as a separate
+        # task, via async_at_started) before this entity's own add_listener()
+        # above has run, since the two platforms are forwarded concurrently.
+        # Resolving here too makes the initial state correct regardless of
+        # that ordering.
+        await self._update_state()
 
     def _handle_source_reloaded(self) -> None:
         """Source (re)loaded — re-resolve this sensor's state off the event loop."""
