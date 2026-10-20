@@ -3,12 +3,14 @@
   "description": [
     "Renovate replaces Dependabot in this repo rather than sitting alongside it: both would raise PRs for the same pip and GitHub Actions updates.",
     "Nothing here is hash-locked - requirements_test.txt carries no --hash lines - so Renovate can manage Python safely. That is the difference from the add-on repo, where the hash-locked lockfile keeps Python with Dependabot.",
-    "Dependabot security alerts are unaffected by removing dependabot.yml; that file controls version-update PRs only."
+    "Dependabot security alerts are unaffected by removing dependabot.yml; that file controls version-update PRs only.",
+    "dependencyDashboard is off explicitly because config:recommended enables it through its :dependencyDashboard preset; leaving it out of extends is not enough."
   ],
   "extends": [
     "config:recommended",
     ":semanticCommitTypeAll(build)"
   ],
+  "dependencyDashboard": false,
   "timezone": "Europe/London",
   "schedule": [
     "before 6am on saturday"
