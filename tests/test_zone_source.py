@@ -264,9 +264,10 @@ def test_async_shutdown_cancels_pending_callbacks() -> None:
 
 
 def _executor_hass() -> SimpleNamespace:
-    async def run(func, *args):
-        await asyncio.sleep(0)  # a real executor hop, so concurrent callers overlap
-        return func(*args)
+    """A hass whose executor hands back a real Future, as Home Assistant's does."""
+
+    def run(func, *args):
+        return asyncio.get_running_loop().run_in_executor(None, func, *args)
 
     return SimpleNamespace(async_add_executor_job=run)
 
@@ -350,3 +351,60 @@ async def test_resolve_cache_is_bounded() -> None:
             await src.async_resolve(_executor_hass(), float(i), 0.0, 1)
 
     assert len(src._resolved) <= zs._RESOLVE_CACHE_MAX
+
+
+async def test_cancelling_one_caller_does_not_cancel_the_run_another_waits_on() -> None:
+    """A platform-add timeout or an unload cancels one entity's update; the sibling
+    entity asking for the same position must still get its answer, and later calls
+    must not be poisoned by the cancellation."""
+    import threading
+
+    src = _source()
+    src.zones = _ZONES
+    release = threading.Event()
+    calls = []
+
+    def slow(lat, lon, acc, zones):
+        calls.append(1)
+        release.wait(5)
+        return {"name": "Home", "zone_key": "Home", "matched_zones": ["Home"]}
+
+    with patch(_GET, side_effect=slow):
+        first = asyncio.ensure_future(src.async_resolve(_executor_hass(), 0.5, 0.5, 10))
+        second = asyncio.ensure_future(src.async_resolve(_executor_hass(), 0.5, 0.5, 10))
+        await asyncio.sleep(0.05)  # both are now waiting on the one run
+        first.cancel()
+        await asyncio.sleep(0)
+        release.set()
+
+        assert (await second)["name"] == "Home"
+        assert first.cancelled()
+        again = await src.async_resolve(_executor_hass(), 0.5, 0.5, 10)
+
+    assert again["name"] == "Home"
+    assert len(calls) == 1  # the run was shared, not restarted
+
+
+async def test_a_run_nobody_awaits_any_more_is_still_evicted_when_it_fails() -> None:
+    """Only the done-callback can do this: the one caller was cancelled while the run
+    was still going, so no await is left on the failure path to evict it."""
+    import threading
+
+    src = _source()
+    src.zones = _ZONES
+    release = threading.Event()
+
+    def boom(*_a):
+        release.wait(5)
+        raise RuntimeError("boom")
+
+    with patch(_GET, side_effect=boom):
+        caller = asyncio.ensure_future(src.async_resolve(_executor_hass(), 0.5, 0.5, 10))
+        await asyncio.sleep(0.05)  # the run is in flight, blocked in the executor
+        caller.cancel()
+        await asyncio.sleep(0)
+        assert len(src._resolved) == 1  # still shared: only the caller was cancelled
+        release.set()
+        await asyncio.sleep(0.1)
+
+    assert src._resolved == {}
