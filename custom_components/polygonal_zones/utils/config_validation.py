@@ -30,6 +30,10 @@ async def validate_zone_urls(
         if parsed.scheme in ("http", "https"):
             if not parsed.hostname:
                 return {"zone_urls": "invalid_url"}
+            try:
+                _ = parsed.port  # raises ValueError for a malformed port
+            except ValueError:
+                return {"zone_urls": "invalid_url"}
             if not allow_private_urls:
                 try:
                     ip = ipaddress.ip_address(parsed.hostname)

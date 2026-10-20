@@ -19,15 +19,18 @@ The integration continuously monitors the GPS position of every `device_tracker`
 
 ### What is stored and where
 
-| Data                              | Where it goes                                                                                                              |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Resolved zone name                | Entity state (`device_tracker.polygonal_zones_<name>`)                                                                     |
-| Latitude, longitude, GPS accuracy | Entity attributes — only if **Expose GPS coordinates** is enabled                                                          |
-| Home-zone membership (`in_zones`) | Entity attribute — published whenever a **Home zone** is configured, regardless of **Expose GPS coordinates**              |
-| Zone history                      | Home Assistant's recorder database (HA's `home-assistant_v2.db`)                                                           |
-| Last-reported timestamp           | `sensor.polygonal_zones_<name>_last_reported` — only if you enable it (off by default); see below                          |
-| Downloaded zone file              | `<config>/polygonal_zones/<entry_id>.json` (mode 0600, directory 0700) — only if **Download the GeoJSON files** is enabled |
-| GPS coordinates in logs           | Only at `DEBUG` log level — never written at default (`INFO`) level                                                        |
+| Data                                | Where it goes                                                                                                              |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Resolved zone name                  | Entity state (`device_tracker.polygonal_zones_<name>`)                                                                     |
+| Latitude, longitude, GPS accuracy   | Entity attributes — only if **Expose GPS coordinates** is enabled                                                          |
+| Home-zone membership (`in_zones`)   | Entity attribute — published whenever a **Home zone** is configured, regardless of **Expose GPS coordinates**              |
+| Zone history                        | Home Assistant's recorder database (HA's `home-assistant_v2.db`)                                                           |
+| Last-reported timestamp             | `sensor.polygonal_zones_<name>_last_reported` — only if you enable it (off by default); see below                          |
+| Downloaded zone file                | `<config>/polygonal_zones/<entry_id>.json` (mode 0600, directory 0700) — only if **Download the GeoJSON files** is enabled |
+| Zone name and matched zones in logs | Only at `DEBUG` log level. Coordinates themselves are never logged                                                         |
+| Zone source URLs (`zone_uris`)      | Entity attribute with credentials and query strings removed — only if **Expose GPS coordinates** is enabled                |
+| Source tracker (`source_entity`)    | Entity attribute, always published                                                                                         |
+| Consent timestamp                   | Stored in the config entry (`consent_confirmed_at`)                                                                        |
 
 ### Home zone (`in_zones`)
 
@@ -70,7 +73,9 @@ When `zone_urls` points at an `http(s)://` URL, the integration fetches it from 
 
 ### Logging
 
-GPS coordinates and zone names are only logged at `DEBUG` level. At default log settings they are never written to the HA log. `WARNING`-level log lines (raised when a zone file can't be fetched) include the source `entity_id` (e.g. `device_tracker.alice_phone`) — if you forward HA logs to an external aggregator, consider redacting those lines.
+Zone names, the zones a position matches and distances are logged at `DEBUG` level; coordinates are never logged. `WARNING`-level log lines (raised when a zone file can't be fetched) include the zone URL with any credentials and query string removed, the error type and the config entry id. If you forward HA logs to an external aggregator, consider redacting those lines.
+
+Do not put a secret in a zone URL (`user:pass@` or `?token=`): use the add-on token field instead. Releases before 1.15.1 wrote the full URL, credentials and query string included, to the log, to the `zone_uris` attribute and so to the recorder history and backups. If any of your zone URLs carried a credential or token, rotate it and treat old logs and history as sensitive.
 
 ---
 
@@ -94,7 +99,7 @@ Your `zones.json` file contains the precise polygon coordinates of every place y
 
 - **HA backups and snapshots include it.** The zones file lives in `/data` inside the add-on container, which is captured in every HA backup. Deleting a zone from the editor does not remove it from snapshots taken before the deletion. If you need to fully remove a zone for privacy reasons, also delete the old backups that contain it (**Settings → System → Backups → ⋮ → Remove**).
 - **Do not host zones.json on a public URL.** See the [DOCS.md](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon/blob/main/polygonal_zones_editor/DOCS.md) section "Last resort — public-CDN mirror" for the full explanation of why this is a privacy risk.
-- **Cloud backups.** If you use Nabu Casa cloud backup and the recorder database is included (the default), the location history of every tracked person is transferred to Nabu Casa's US-hosted infrastructure. Under GDPR Art. 46 (the rules for sending personal data outside the UK/EU), this is a cross-border transfer of personal data. Either apply the `recorder` exclude block above before enabling cloud backup, or review Nabu Casa's data-processing terms.
+- **Cloud backups.** If you use Nabu Casa cloud backup and the recorder database is included (the default), the location history of every tracked person is transferred to Nabu Casa's cloud (see their privacy policy for where it is hosted). Under GDPR Art. 46 (the rules for sending personal data outside the UK/EU), this is a cross-border transfer of personal data. Either apply the `recorder` exclude block above before enabling cloud backup, or review Nabu Casa's data-processing terms.
 
 ---
 
