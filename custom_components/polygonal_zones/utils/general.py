@@ -26,7 +26,7 @@ FETCH_TIMEOUT = aiohttp.ClientTimeout(total=10, connect=5, sock_read=8)
 # leaves a raw ``'`` in a query, Python then switches the error repr to ``"…"``
 # quoting, and a pattern that ends at the first ``'`` would leave the token.
 _URL_IN_TEXT = re.compile(r"https?://\S+", re.IGNORECASE)
-_USERINFO = re.compile(r"(https?://)[^/\s@]*@", re.IGNORECASE)
+_USERINFO = re.compile(r"(https?://)[^/?#\s@]*@", re.IGNORECASE)
 
 
 def _strip_credentials_and_query(uri: str) -> str:
@@ -36,9 +36,12 @@ def _strip_credentials_and_query(uri: str) -> str:
     even when a malformed password holds ``/``, ``?`` or ``#``, then the query and
     fragment go. It may drop a real ``@`` from a path; it never keeps a credential.
     """
-    scheme, sep, rest = uri.partition("://")
-    rest = rest.rpartition("@")[2]
-    return f"{scheme}{sep}{re.split(r'[?#]', rest, maxsplit=1)[0]}"
+    # The scheme may be followed by "://", ":/" or just ":" (urlparse accepts all
+    # three and reports no host), so split off whatever prefix is there.
+    prefix = re.match(r"[A-Za-z][A-Za-z0-9+.-]*:/{0,2}", uri)
+    head = prefix.group(0) if prefix else ""
+    rest = uri[len(head) :].rpartition("@")[2]
+    return f"{head}{re.split(r'[?#]', rest, maxsplit=1)[0]}"
 
 
 def redact_uri(uri: str) -> str:
