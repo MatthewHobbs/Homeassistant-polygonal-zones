@@ -67,14 +67,14 @@ rules:
     status: exempt
     comment: Single synthetic DeviceEntryType.SERVICE device per config entry; nothing dynamic to add post-setup.
   entity-category:
-    status: exempt
-    comment: TrackerEntity has no entity_category by convention.
+    status: done
+    comment: The last-reported sensor is diagnostic; the device_tracker mirror and zone-name sensor are primary entities.
   entity-device-class:
-    status: exempt
-    comment: TrackerEntity has no device_class.
+    status: done
+    comment: The last-reported sensor is a timestamp; TrackerEntity has no device_class.
   entity-disabled-by-default:
-    status: exempt
-    comment: All entities are enabled by default; user explicitly selected them in config flow.
+    status: done
+    comment: The last-reported diagnostic sensor is disabled by default; the mirror and zone-name sensor are enabled because the user selected the tracker in the config flow.
   entity-translations:
     status: exempt
     comment: Entity name is derived from the source device_tracker; no static name to translate.

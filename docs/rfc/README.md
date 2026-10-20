@@ -6,9 +6,9 @@ live as docs so they can be read and commented on without a PR per draft; this i
 that lives in git, so what was decided survives even if a doc is deleted. The copy in git is
 authoritative, and an RFC authorises nothing.
 
-| #    | Title                                                  | Status | Decided | Doc                                                                         | ADR  |
-| ---- | ------------------------------------------------------ | ------ | ------- | --------------------------------------------------------------------------- | ---- |
-| 0001 | Detecting and refreshing stale trackers ([#110][i110]) | Draft  |         | [doc](https://claude.ai/code/artifact/945903cd-0c3a-47ca-b594-fe8c78855664) | none |
+| #    | Title                                                  | Status  | Decided    | Doc                                                                         | ADR                                             |
+| ---- | ------------------------------------------------------ | ------- | ---------- | --------------------------------------------------------------------------- | ----------------------------------------------- |
+| 0001 | Detecting and refreshing stale trackers ([#110][i110]) | Decided | 2026-10-20 | [doc](https://claude.ai/code/artifact/945903cd-0c3a-47ca-b594-fe8c78855664) | [ADR 0003](../adr/0003-last-reported-sensor.md) |
 
 Status is one of **Draft**, **Decided**, **Withdrawn** or **Superseded**. A withdrawn RFC stays
 listed: it records what was considered and why it lost.

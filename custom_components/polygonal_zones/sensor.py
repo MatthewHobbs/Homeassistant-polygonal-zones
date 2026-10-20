@@ -17,14 +17,17 @@ from __future__ import annotations
 from collections.abc import Callable, Coroutine
 from typing import Any
 
-from homeassistant.components.sensor import RestoreSensor
+from homeassistant.components.sensor import RestoreSensor, SensorDeviceClass, SensorEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_ENTITIES
-from homeassistant.core import HomeAssistant
+from homeassistant.const import CONF_ENTITIES, STATE_UNAVAILABLE, STATE_UNKNOWN, EntityCategory
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity import generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.event import (
+    async_track_state_change_event,
+    async_track_state_report_event,
+)
 
 from .const import CONF_EXPOSE_COORDINATES
 from .utils import event_should_trigger, get_locations_zone
@@ -56,6 +59,18 @@ async def async_setup_entry(
         for entity_id in entry.data.get(CONF_ENTITIES, [])
     ]
     async_add_entities(entities, True)
+
+    async_add_entities(
+        [
+            PolygonalZoneLastReportedSensor(
+                entity_id,
+                generate_entity_id(
+                    "sensor.polygonal_zones_{}_last_reported", entity_id.split(".")[-1], hass=hass
+                ),
+            )
+            for entity_id in entry.data.get(CONF_ENTITIES, [])
+        ]
+    )
 
 
 class PolygonalZoneSensor(RestoreSensor):
@@ -171,3 +186,59 @@ class PolygonalZoneSensor(RestoreSensor):
             "manufacturer": "Polygonal Zones Community",
             "entry_type": DeviceEntryType.SERVICE,
         }
+
+
+class PolygonalZoneLastReportedSensor(SensorEntity):
+    """When the source tracker last reported, so automations can detect a silent one.
+
+    Staleness is ``now() - states(<this sensor>)``; keeping the timestamp here, not
+    a ticking "seconds since" value, means the entity only writes state when the
+    tracker actually reports. Disabled by default: the user opts in per device.
+
+    Must follow both ``state_changed`` and ``state_reported``: a phone that
+    re-reports an unchanged position fires only the latter, and listening to
+    ``state_changed`` alone would call a healthy stationary tracker stale.
+    """
+
+    _attr_should_poll = False
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(self, tracked_entity_id: str, own_id: str) -> None:
+        """Initialize the sensor."""
+        self._entity_id = tracked_entity_id
+        self._unsubs: list[Callable[[], None]] = []
+
+        self.entity_id = own_id
+        self._attr_unique_id = own_id
+        self._attr_name = f"{tracked_entity_id.split('.')[-1]} last reported"
+        self._attr_extra_state_attributes = {"source_entity": tracked_entity_id}
+
+    async def async_added_to_hass(self) -> None:
+        """Seed from the source's current state and follow its reports."""
+        self._refresh()
+        self._unsubs = [
+            async_track_state_change_event(self.hass, [self._entity_id], self._handle_event),
+            async_track_state_report_event(self.hass, [self._entity_id], self._handle_event),
+        ]
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Handle cleanup when the entity is removed."""
+        for unsub in self._unsubs:
+            unsub()
+        self._unsubs = []
+
+    @callback
+    def _handle_event(self, event: Any) -> None:
+        self._refresh()
+        self.async_write_ha_state()
+
+    def _refresh(self) -> None:
+        # Advances only on a real report. HA stamps an "unavailable"/"unknown"
+        # state with a fresh last_reported too, but that is the silence this
+        # sensor exists to expose, not the tracker speaking, so keep the old
+        # value (likewise if the source entity is gone).
+        state = self.hass.states.get(self._entity_id)
+        if state is not None and state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            self._attr_native_value = state.last_reported
