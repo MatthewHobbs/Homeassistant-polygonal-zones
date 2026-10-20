@@ -1,12 +1,22 @@
 """Tests for the companion zone-name sensor (Release A, PR A4)."""
 
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from homeassistant.const import CONF_ENTITIES
+from homeassistant.components.sensor import SensorDeviceClass
+from homeassistant.const import (
+    CONF_ENTITIES,
+    EVENT_STATE_CHANGED,
+    EVENT_STATE_REPORTED,
+    EntityCategory,
+)
 from shapely.geometry import Polygon
 
-from custom_components.polygonal_zones.sensor import async_setup_entry
+from custom_components.polygonal_zones.sensor import (
+    PolygonalZoneLastReportedSensor,
+    async_setup_entry,
+)
 from custom_components.polygonal_zones.utils.zones import Zone
 from tests.helpers import make_sensor as _make_sensor
 from tests.helpers import make_source
@@ -39,8 +49,9 @@ async def test_async_setup_entry_creates_one_sensor_per_entity() -> None:
     ):
         await async_setup_entry(_make_hass(), entry, add_entities)
 
-    add_entities.assert_called_once()
-    entities = add_entities.call_args.args[0]
+    # Two calls: the zone-name sensors, then the last-reported sensors.
+    assert add_entities.call_count == 2
+    entities = add_entities.call_args_list[0].args[0]
     assert len(entities) == 2
     assert {e.entity_id for e in entities} == {
         "sensor.polygonal_zones_alice",
@@ -50,6 +61,12 @@ async def test_async_setup_entry_creates_one_sensor_per_entity() -> None:
         "sensor.polygonal_zones_alice_zone",
         "sensor.polygonal_zones_bob_zone",
     }
+    last_reported = add_entities.call_args_list[1].args[0]
+    assert {e.entity_id for e in last_reported} == {
+        "sensor.polygonal_zones_alice_last_reported",
+        "sensor.polygonal_zones_bob_last_reported",
+    }
+    assert all(isinstance(e, PolygonalZoneLastReportedSensor) for e in last_reported)
 
 
 async def test_update_location_sets_native_value() -> None:
@@ -265,3 +282,194 @@ def test_device_info_matches_device_tracker_mirror() -> None:
 
 def test_should_not_poll() -> None:
     assert _make_sensor().should_poll is False
+
+
+_T1 = datetime(2026, 10, 20, 9, 0, tzinfo=UTC)
+_T2 = datetime(2026, 10, 20, 9, 5, tzinfo=UTC)
+
+
+def _last_reported_sensor(last_reported: datetime | None = _T1):
+    sensor = PolygonalZoneLastReportedSensor(
+        "device_tracker.phone", "sensor.polygonal_zones_phone_last_reported", "entry1"
+    )
+    sensor.async_get_last_sensor_data = AsyncMock(return_value=None)
+    state = (
+        None
+        if last_reported is None
+        else SimpleNamespace(state="home", last_reported=last_reported)
+    )
+    sensor.hass = SimpleNamespace(states=SimpleNamespace(get=MagicMock(return_value=state)))
+    sensor.async_write_ha_state = MagicMock()
+    return sensor
+
+
+def test_last_reported_sensor_is_a_disabled_diagnostic_timestamp() -> None:
+    sensor = _last_reported_sensor()
+
+    assert sensor.entity_registry_enabled_default is False
+    assert sensor.entity_category is EntityCategory.DIAGNOSTIC
+    assert sensor.device_class is SensorDeviceClass.TIMESTAMP
+    # Independent of the generated entity_id, so a "_2" suffix can't re-key it.
+    assert sensor.unique_id == "entry1_device_tracker.phone_last_reported"
+    assert sensor.name == "phone last reported"
+    assert sensor.device_info["identifiers"] == {("polygonal_zones", "entry1")}
+    assert sensor.extra_state_attributes == {"source_entity": "device_tracker.phone"}
+
+
+async def test_last_reported_added_to_hass_seeds_value_and_follows_both_event_kinds() -> None:
+    sensor = _last_reported_sensor(_T1)
+    on_change = MagicMock(return_value=lambda: None)
+    on_report = MagicMock(return_value=lambda: None)
+
+    with (
+        patch(
+            "custom_components.polygonal_zones.sensor.async_track_state_change_event",
+            new=on_change,
+        ),
+        patch(
+            "custom_components.polygonal_zones.sensor.async_track_state_report_event",
+            new=on_report,
+        ),
+    ):
+        await sensor.async_added_to_hass()
+
+    assert sensor.native_value == _T1
+    # state_reported is the one an unchanged re-report fires; dropping either
+    # listener makes a healthy stationary tracker look stale (or vice versa).
+    assert on_change.call_args.args[1] == ["device_tracker.phone"]
+    assert on_report.call_args.args[1] == ["device_tracker.phone"]
+
+
+async def test_last_reported_restored_value_wins_over_the_seed() -> None:
+    sensor = _last_reported_sensor(_T2)  # source's own last_reported is the restart time
+    sensor.async_get_last_sensor_data = AsyncMock(return_value=SimpleNamespace(native_value=_T1))
+
+    with (
+        patch("custom_components.polygonal_zones.sensor.async_track_state_change_event"),
+        patch("custom_components.polygonal_zones.sensor.async_track_state_report_event"),
+    ):
+        await sensor.async_added_to_hass()
+
+    assert sensor.native_value == _T1
+
+
+async def test_last_reported_restores_when_source_is_unavailable() -> None:
+    sensor = _last_reported_sensor(_T2)
+    sensor.hass.states.get.return_value = SimpleNamespace(state="unavailable", last_reported=_T2)
+    sensor.async_get_last_sensor_data = AsyncMock(return_value=SimpleNamespace(native_value=_T1))
+
+    with (
+        patch("custom_components.polygonal_zones.sensor.async_track_state_change_event"),
+        patch("custom_components.polygonal_zones.sensor.async_track_state_report_event"),
+    ):
+        await sensor.async_added_to_hass()
+
+    assert sensor.native_value == _T1
+
+
+async def test_last_reported_non_datetime_restore_falls_back_to_the_seed() -> None:
+    """Only a datetime is restorable into a TIMESTAMP sensor (a str would raise on write)."""
+    for restored in (None, "Home"):
+        sensor = _last_reported_sensor(_T2)
+        sensor.async_get_last_sensor_data = AsyncMock(
+            return_value=SimpleNamespace(native_value=restored)
+        )
+
+        with (
+            patch("custom_components.polygonal_zones.sensor.async_track_state_change_event"),
+            patch("custom_components.polygonal_zones.sensor.async_track_state_report_event"),
+        ):
+            await sensor.async_added_to_hass()
+
+        assert sensor.native_value == _T2
+
+
+def _state_changed(old_state):
+    return SimpleNamespace(event_type=EVENT_STATE_CHANGED, data={"old_state": old_state})
+
+
+async def test_last_reported_ignores_a_sources_first_write_and_restored_placeholder() -> None:
+    sensor = _last_reported_sensor(_T1)
+    sensor._refresh()
+    sensor.hass.states.get.return_value = SimpleNamespace(state="home", last_reported=_T2)
+
+    for old_state in (None, SimpleNamespace(attributes={"restored": True})):
+        sensor._handle_event(_state_changed(old_state))
+
+    assert sensor.native_value == _T1
+    sensor.async_write_ha_state.assert_not_called()
+
+
+async def test_last_reported_counts_every_state_reported_event() -> None:
+    """state_reported carries no old_state and is always a genuine report."""
+    sensor = _last_reported_sensor(_T1)
+    sensor._refresh()
+    sensor.hass.states.get.return_value = SimpleNamespace(state="home", last_reported=_T2)
+
+    sensor._handle_event(SimpleNamespace(event_type=EVENT_STATE_REPORTED, data={}))
+
+    assert sensor.native_value == _T2
+
+
+async def test_last_reported_accepts_a_state_changed_with_a_real_previous_state() -> None:
+    sensor = _last_reported_sensor(_T1)
+    sensor._refresh()
+    sensor.hass.states.get.return_value = SimpleNamespace(state="home", last_reported=_T2)
+
+    sensor._handle_event(_state_changed(SimpleNamespace(attributes={})))
+
+    assert sensor.native_value == _T2
+
+
+async def test_last_reported_event_updates_value_and_writes_state() -> None:
+    sensor = _last_reported_sensor(_T1)
+    sensor._refresh()
+    sensor.hass.states.get.return_value = SimpleNamespace(state="home", last_reported=_T2)
+
+    sensor._handle_event(MagicMock())
+
+    assert sensor.native_value == _T2
+    sensor.async_write_ha_state.assert_called_once()
+
+
+async def test_last_reported_keeps_last_value_when_source_disappears() -> None:
+    """A vanished source is the silence the sensor exists to show: keep the value."""
+    sensor = _last_reported_sensor(_T1)
+    sensor._refresh()
+    sensor.hass.states.get.return_value = None
+
+    sensor._handle_event(MagicMock())
+
+    assert sensor.native_value == _T1
+
+
+async def test_last_reported_ignores_unavailable_and_unknown_source_states() -> None:
+    """HA stamps these with a fresh last_reported, but the tracker has not spoken."""
+    sensor = _last_reported_sensor(_T1)
+    sensor._refresh()
+    for state in ("unavailable", "unknown"):
+        sensor.hass.states.get.return_value = SimpleNamespace(state=state, last_reported=_T2)
+
+        sensor._handle_event(MagicMock())
+
+        assert sensor.native_value == _T1
+
+
+async def test_last_reported_no_source_state_leaves_value_unset() -> None:
+    sensor = _last_reported_sensor(None)
+
+    sensor._refresh()
+
+    assert sensor.native_value is None
+
+
+async def test_last_reported_will_remove_releases_unsubs() -> None:
+    sensor = _last_reported_sensor()
+    unsub_a, unsub_b = MagicMock(), MagicMock()
+    sensor._unsubs = [unsub_a, unsub_b]
+
+    await sensor.async_will_remove_from_hass()
+
+    unsub_a.assert_called_once()
+    unsub_b.assert_called_once()
+    assert sensor._unsubs == []

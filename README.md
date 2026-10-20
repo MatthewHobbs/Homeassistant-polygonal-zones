@@ -108,6 +108,28 @@ The mirror entity always exposes `source_entity`, `last_load_result`, and `last_
 
 The companion `sensor.polygonal_zones_*` publishes the same matched zone name (or `away`) as a plain string, resolved independently of the mirror `device_tracker`. It exists so automations have a stable place to read the zone name from that isn't `device_tracker.*`'s `state` — see the deprecation notice below.
 
+### Detecting a silent tracker
+
+Phones report less often when they are stationary, so a quiet tracker looks the same as a dead one. Each tracked entity also has a **`sensor.polygonal_zones_<name>_last_reported`** diagnostic sensor: a timestamp of the last time the source tracker reported, counting a report that repeated an unchanged position. It is **disabled by default** — enable it under **Settings → Devices & services → Polygonal Zones → entities** (use the filter to show disabled entities).
+
+The sensor only holds the timestamp; you decide what "too long" means. For example, to ask a Companion-app phone for a fresh location after ten minutes of silence:
+
+```yaml
+automation:
+  - alias: "Ask Alice's phone for a location after 10 minutes of silence"
+    triggers:
+      - trigger: template
+        value_template: >-
+          {% set s = 'sensor.polygonal_zones_alice_phone_last_reported' %}
+          {{ has_value(s) and now() - states(s) | as_datetime > timedelta(minutes=10) }}
+    actions:
+      - action: notify.mobile_app_alice_phone
+        data:
+          message: request_location_update
+```
+
+Use the notify service of your own device. `request_location_update` is a Home Assistant Companion app command: it is [documented as unreliable on iOS](https://companion.home-assistant.io/docs/notifications/notification-commands/) and not recommended on a tight schedule because of battery use, and other tracker sources do not support it. The sensor works for any source; the request is the part that depends on your device.
+
 > **⚠️ Deprecation notice: `device_tracker` `state`/`location_name` is going away**
 >
 > Home Assistant has deprecated the `location_name` property this integration uses to publish the zone name as the mirror `device_tracker`'s `state` (a warning is logged on every setup, and the integration also raises a persistent repair issue in **Settings → Repairs**). HA will stop supporting it entirely in **2027.7**.
