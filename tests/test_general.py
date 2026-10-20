@@ -263,14 +263,26 @@ def test_redact_uri_fallback_survives_a_malformed_password() -> None:
     assert "u:p" not in redact_uri("http://u:p/x@h:bad/")
 
 
-def test_redact_uri_hostless_forms_without_double_slash() -> None:
-    """urlparse reads http:u:p@h and https:/u:p@h as host-less; both used to come back raw."""
-    for raw in ("http:u:p@h?t=S", "https:/u:p@h/z?t=S"):
-        out = redact_uri(raw)
-        assert "u:p" not in out
-        assert "t=S" not in out
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        # urlparse reads these as host-less; they used to come back raw.
+        ("http:u:p@h?t=S", "http:h"),
+        ("https:/u:p@h/z?t=S", "https:/h/z"),
+        ("http:///u:p@h/z", "http://h/z"),
+        ("http://@@h", "http://h"),
+        ("http://u:p@h@h2/x?t=1", "http://h2/x"),
+        # A malformed port sends the URI through the same fallback.
+        ("http://u:p@host:bad/x?token=T#frag", "http://host:bad/x"),
+    ],
+)
+def test_redact_uri_fallback_exact_output(raw: str, expected: str) -> None:
+    out = redact_uri(raw)
+    assert out == expected
+    assert "u:p" not in out
+    assert "S" not in out.replace("host", "")  # no token letters left either
 
 
 def test_redact_text_userinfo_pass_does_not_cross_a_query() -> None:
     """An @ in a query value is not userinfo: it must not eat the host and leak the token."""
-    assert "token" not in redact_text("https://h?e=me@x.io&token=S")
+    assert redact_text("https://h?e=me@x.io&token=S") == "https://h"
