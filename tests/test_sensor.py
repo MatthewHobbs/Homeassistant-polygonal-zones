@@ -5,7 +5,12 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant.components.sensor import SensorDeviceClass
-from homeassistant.const import CONF_ENTITIES, EVENT_STATE_CHANGED, EntityCategory
+from homeassistant.const import (
+    CONF_ENTITIES,
+    EVENT_STATE_CHANGED,
+    EVENT_STATE_REPORTED,
+    EntityCategory,
+)
 from shapely.geometry import Polygon
 
 from custom_components.polygonal_zones.sensor import (
@@ -393,6 +398,17 @@ async def test_last_reported_ignores_a_sources_first_write_and_restored_placehol
 
     assert sensor.native_value == _T1
     sensor.async_write_ha_state.assert_not_called()
+
+
+async def test_last_reported_counts_every_state_reported_event() -> None:
+    """state_reported carries no old_state and is always a genuine report."""
+    sensor = _last_reported_sensor(_T1)
+    sensor._refresh()
+    sensor.hass.states.get.return_value = SimpleNamespace(state="home", last_reported=_T2)
+
+    sensor._handle_event(SimpleNamespace(event_type=EVENT_STATE_REPORTED, data={}))
+
+    assert sensor.native_value == _T2
 
 
 async def test_last_reported_accepts_a_state_changed_with_a_real_previous_state() -> None:

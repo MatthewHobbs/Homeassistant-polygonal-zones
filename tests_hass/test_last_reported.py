@@ -231,6 +231,15 @@ async def test_sources_first_write_after_restart_does_not_overwrite_the_restore(
     await hass.async_block_till_done()
     assert hass.states.get(_SENSOR).state == when.isoformat()
 
+    # The placeholder HA writes for a registered entity at start (or when its
+    # integration reloads), then the first real write over it.
+    hass.states.async_remove(_SOURCE)
+    hass.states.async_set(_SOURCE, "unavailable", {"restored": True})
+    freezer.tick(timedelta(minutes=5))
+    hass.states.async_set(_SOURCE, "not_home", _ATTRS)
+    await hass.async_block_till_done()
+    assert hass.states.get(_SENSOR).state == when.isoformat()
+
     freezer.tick(timedelta(minutes=5))
     hass.states.async_set(_SOURCE, "not_home", {**_ATTRS, "latitude": 51.5126})  # a real report
     await hass.async_block_till_done()

@@ -251,11 +251,13 @@ class PolygonalZoneLastReportedSensor(RestoreSensor):
 
     @callback
     def _handle_event(self, event: Any) -> None:
-        # A source's first write after a restart (no previous state, or the
-        # "restored" placeholder HA writes at start) is its restored position
-        # being re-published, stamped with the restart time. Taking it as a
-        # report would overwrite the restored value and hide a tracker that died
-        # while HA was down. state_reported events are always genuine.
+        # A source's first write after HA starts or after the source reloads (no
+        # previous state, or the "restored" placeholder HA writes) is not counted
+        # as a report. For a source that restores its state that write is its old
+        # position re-published with the restart time, and counting it would
+        # overwrite the restored value and hide a tracker that died while HA was
+        # down. A polling source's genuine first write is dropped too; the next
+        # report corrects it. state_reported events are always genuine.
         if event.event_type == EVENT_STATE_CHANGED:
             old_state = event.data.get("old_state")
             if old_state is None or old_state.attributes.get("restored"):

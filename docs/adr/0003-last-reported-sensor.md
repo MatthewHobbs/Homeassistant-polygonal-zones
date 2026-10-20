@@ -62,11 +62,15 @@ did not choose are in the RFC.
 **Watch**
 
 - After a restart the source's own `last_reported` is the restart time, so the
-  sensor prefers its restored value, which is older and truer. The source's first
-  write after a restart (no previous state, or Home Assistant's `restored`
-  placeholder) is not counted as a report either; otherwise a tracker that died
-  while Home Assistant was down would look freshly reported. The cost is that a
-  brand-new tracker's very first write is ignored.
+  sensor prefers its restored value, which is older and truer. For the same
+  reason a source's first write after Home Assistant starts, or after that source
+  reloads or retries its setup (no previous state, or Home Assistant's `restored`
+  placeholder), is not counted as a report. For a source that restores its state
+  that write is the old position re-published, and counting it would hide a
+  tracker that died while Home Assistant was down. The cost: for any other source,
+  including a polling one, and for a brand-new tracker, that first genuine report
+  is ignored and the next one corrects it, which can raise one avoidable stale
+  alert.
 - A report made between start and the sensor being added is missed until the
   next one, which can raise one avoidable stale alert.
 - Home Assistant keeps a removed entity's last value for 7 days. Disabling and
