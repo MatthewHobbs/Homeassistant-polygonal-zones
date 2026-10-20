@@ -17,7 +17,7 @@ from __future__ import annotations
 from collections.abc import Callable, Coroutine
 from typing import Any
 
-from homeassistant.components.sensor import RestoreSensor, SensorDeviceClass, SensorEntity
+from homeassistant.components.sensor import RestoreSensor, SensorDeviceClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ENTITIES, STATE_UNAVAILABLE, STATE_UNKNOWN, EntityCategory
 from homeassistant.core import HomeAssistant, callback
@@ -67,6 +67,7 @@ async def async_setup_entry(
                 generate_entity_id(
                     "sensor.polygonal_zones_{}_last_reported", entity_id.split(".")[-1], hass=hass
                 ),
+                source.entry_id,
             )
             for entity_id in entry.data.get(CONF_ENTITIES, [])
         ]
@@ -188,12 +189,16 @@ class PolygonalZoneSensor(RestoreSensor):
         }
 
 
-class PolygonalZoneLastReportedSensor(SensorEntity):
+class PolygonalZoneLastReportedSensor(RestoreSensor):
     """When the source tracker last reported, so automations can detect a silent one.
 
     Staleness is ``now() - states(<this sensor>)``; keeping the timestamp here, not
     a ticking "seconds since" value, means the entity only writes state when the
     tracker actually reports. Disabled by default: the user opts in per device.
+
+    Restored across restarts, so a tracker that died while HA was down is still
+    flagged. Known limit: after a restart the source's own ``last_reported`` is the
+    restart time, so the restored value (older, truer) deliberately wins.
 
     Must follow both ``state_changed`` and ``state_reported``: a phone that
     re-reports an unchanged position fires only the latter, and listening to
@@ -205,19 +210,27 @@ class PolygonalZoneLastReportedSensor(SensorEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_entity_registry_enabled_default = False
 
-    def __init__(self, tracked_entity_id: str, own_id: str) -> None:
+    def __init__(self, tracked_entity_id: str, own_id: str, entry_id: str) -> None:
         """Initialize the sensor."""
         self._entity_id = tracked_entity_id
         self._unsubs: list[Callable[[], None]] = []
 
         self.entity_id = own_id
-        self._attr_unique_id = own_id
-        self._attr_name = f"{tracked_entity_id.split('.')[-1]} last reported"
+        self._entry_id = entry_id
+        # Not own_id: generate_entity_id suffixes "_2" when the id is already in
+        # the state machine (e.g. a setup retry after start), which would mint a
+        # new, disabled registry entry and silently drop the user's opt-in.
+        self._attr_unique_id = f"{entry_id}_{tracked_entity_id}_last_reported"
+        self._attr_name = f"{tracked_entity_id.split('.')[-1].replace('_', ' ')} last reported"
         self._attr_extra_state_attributes = {"source_entity": tracked_entity_id}
 
     async def async_added_to_hass(self) -> None:
-        """Seed from the source's current state and follow its reports."""
-        self._refresh()
+        """Restore the prior value (else seed from the source) and follow its reports."""
+        last_data = await self.async_get_last_sensor_data()
+        if last_data is not None and last_data.native_value is not None:
+            self._attr_native_value = last_data.native_value
+        else:
+            self._refresh()
         self._unsubs = [
             async_track_state_change_event(self.hass, [self._entity_id], self._handle_event),
             async_track_state_report_event(self.hass, [self._entity_id], self._handle_event),
@@ -242,3 +255,13 @@ class PolygonalZoneLastReportedSensor(SensorEntity):
         state = self.hass.states.get(self._entity_id)
         if state is not None and state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             self._attr_native_value = state.last_reported
+
+    @property
+    def device_info(self) -> DeviceInfo | None:
+        """Share the config entry's device, as the other platforms' entities do."""
+        return {
+            "identifiers": {("polygonal_zones", self._entry_id)},
+            "name": "Polygonal Zones",
+            "manufacturer": "Polygonal Zones Community",
+            "entry_type": DeviceEntryType.SERVICE,
+        }

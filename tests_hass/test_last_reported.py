@@ -5,15 +5,18 @@ The case that matters is a phone re-reporting an unchanged position: HA fires
 cannot tell the two apart, so this runs the real state machine.
 """
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 import json
 from pathlib import Path
 
 from homeassistant.const import EntityCategory
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers import entity_registry as er
 from homeassistant.setup import async_setup_component
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    mock_restore_cache_with_extra_data,
+)
 
 from custom_components.polygonal_zones.const import DOMAIN
 
@@ -49,10 +52,17 @@ def _iso(state) -> str:
     return state.last_reported.replace(microsecond=0).isoformat()
 
 
-async def _setup(hass: HomeAssistant, *, enable_sensor: bool) -> MockConfigEntry:
+async def _setup(
+    hass: HomeAssistant,
+    *,
+    enable_sensor: bool,
+    source_state: str = "not_home",
+    placeholder: bool = False,
+    restore_value: datetime | None = None,
+) -> MockConfigEntry:
     path = hass.config.path("polygonal_zones_last_reported.geojson")
     await hass.async_add_executor_job(Path(path).write_text, json.dumps(_ZONES), "utf-8")
-    hass.states.async_set(_SOURCE, "not_home", _ATTRS)
+    hass.states.async_set(_SOURCE, source_state, _ATTRS if source_state == "not_home" else None)
 
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -71,10 +81,30 @@ async def _setup(hass: HomeAssistant, *, enable_sensor: bool) -> MockConfigEntry
         er.async_get(hass).async_get_or_create(
             "sensor",
             DOMAIN,
-            _SENSOR,
+            f"{entry.entry_id}_{_SOURCE}_last_reported",
             config_entry=entry,
             suggested_object_id="polygonal_zones_silent_phone_last_reported",
             disabled_by=None,
+        )
+    if placeholder:
+        # What HA writes for an enabled registry entry at start, before its
+        # platform has set up (a setup retry lands after this).
+        hass.states.async_set(_SENSOR, "unavailable", {"restored": True})
+    if restore_value is not None:
+        mock_restore_cache_with_extra_data(
+            hass,
+            [
+                (
+                    State(_SENSOR, restore_value.isoformat()),
+                    {
+                        "native_value": {
+                            "__type": "<class 'datetime.datetime'>",
+                            "isoformat": restore_value.isoformat(),
+                        },
+                        "native_unit_of_measurement": None,
+                    },
+                )
+            ],
         )
     assert await async_setup_component(hass, DOMAIN, {})
     await hass.async_block_till_done(wait_background_tasks=True)
@@ -159,3 +189,27 @@ async def test_readme_template_flips_after_ten_minutes_of_silence(
     hass.states.async_set(_SOURCE, "not_home", _ATTRS)  # tracker speaks again
     await hass.async_block_till_done()
     assert render() is False
+
+
+async def test_unique_id_survives_a_taken_entity_id(hass: HomeAssistant) -> None:
+    """A placeholder state on the entity_id must not re-key (and so disable) the sensor."""
+    entry = await _setup(hass, enable_sensor=True, placeholder=True)
+
+    registry = er.async_get(hass)
+    entries = [
+        e for e in registry.entities.values() if e.platform == DOMAIN and e.domain == "sensor"
+    ]
+    ours = [e for e in entries if e.unique_id.endswith("_last_reported")]
+    assert len(ours) == 1
+    assert ours[0].entity_id == _SENSOR
+    assert ours[0].unique_id == f"{entry.entry_id}_{_SOURCE}_last_reported"
+    assert ours[0].disabled_by is None
+    assert hass.states.get(_SENSOR).state != "unavailable"
+
+
+async def test_value_is_restored_when_the_source_is_unavailable(hass: HomeAssistant) -> None:
+    """A tracker that died across a restart must still show when it last spoke."""
+    when = datetime(2026, 10, 20, 8, 0, tzinfo=UTC)
+    await _setup(hass, enable_sensor=True, source_state="unavailable", restore_value=when)
+
+    assert hass.states.get(_SENSOR).state == when.isoformat()
