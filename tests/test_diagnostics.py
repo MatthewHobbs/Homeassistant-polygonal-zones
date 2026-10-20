@@ -147,3 +147,19 @@ def test_scrub_uri_from_error_helper() -> None:
     cleaned = _scrub_uri_from_error(err, uri, "<X>")
     assert uri not in cleaned
     assert cleaned == "Refusing redirect from '<X>' (status 302)"
+
+
+async def test_home_zone_id_is_redacted() -> None:
+    """The home zone key is usually a place name such as "Alice flat"."""
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        title="Polygonal Zones",
+        version=1,
+        runtime_data=PolygonalZonesData(entities=[]),
+        data={"zone_urls": [], "entities": [], "home_zone_id": "Alice flat"},
+    )
+
+    result = await async_get_config_entry_diagnostics(SimpleNamespace(), entry)
+
+    assert "Alice flat" not in repr(result)
+    assert result["entry"]["data"]["home_zone_id"] == "<redacted>"

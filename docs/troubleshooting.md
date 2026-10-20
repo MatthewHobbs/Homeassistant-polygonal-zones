@@ -76,7 +76,7 @@ The add-on loads map tiles from third-party providers (OpenStreetMap, CARTO, Esr
 
 ## Increasing log verbosity
 
-Set the integration's logger to `DEBUG` to see GPS coordinates, zone resolution results, and full lifecycle events:
+Set the integration's logger to `DEBUG` to see zone resolution results and full lifecycle events:
 
 ```yaml
 logger:
@@ -85,7 +85,7 @@ logger:
     custom_components.polygonal_zones: debug
 ```
 
-Add this to `configuration.yaml` and restart HA. GPS coordinates and zone names are only emitted at `DEBUG` level — see [Privacy](privacy.md) before shipping logs to an external service.
+Add this to `configuration.yaml` and restart HA. Zone names and match details are only emitted at `DEBUG` level (coordinates are never logged) — see [Privacy](privacy.md) before shipping logs to an external service.
 
 For the add-on, set `log_level: debug` under **Settings → Add-ons → Polygonal Zones → Configuration** and restart the add-on.
 
@@ -96,7 +96,7 @@ For the add-on, set `log_level: debug` under **Settings → Add-ons → Polygona
 If the above doesn't resolve your problem, open an issue with:
 
 - HA version and integration version (shown in HACS or **Settings → Devices & Services → Polygonal Zones**)
-- The relevant log lines from `custom_components.polygonal_zones` (at `DEBUG` level if possible — but redact any personal coordinates before pasting)
+- The relevant log lines from `custom_components.polygonal_zones` (at `DEBUG` level if possible — they contain zone names and distances, so check them before pasting)
 - Whether you're using the add-on or a self-hosted `zones.json`
 
 Integration issues: [github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues)

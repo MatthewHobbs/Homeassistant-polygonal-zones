@@ -11,6 +11,7 @@ from shapely.geometry import Point, Polygon
 from custom_components.polygonal_zones.utils.zones import (
     UnsupportedSchemaVersion,
     ZoneFileCorrupt,
+    _parse_zone_document,
     get_distance_to_centroid,
     get_distance_to_exterior_points,
     get_zones,
@@ -429,3 +430,58 @@ async def test_load_zones_unsupported_schema_propagates_as_hard_error() -> None:
         pytest.raises(UnsupportedSchemaVersion),
     ):
         await load_zones(["http://x"], _make_hass(), False)
+
+
+_SECRET_URI = "https://user:pa55@zones.example.com/z.json?token=s3cr3t"
+
+
+async def test_failed_load_logs_and_records_only_the_redacted_uri(caplog) -> None:
+    """Credentials and query tokens in a zone URL must not reach the log or the failure record."""
+
+    async def fake_load(uri: str, _hass, **_kwargs) -> str:
+        raise RuntimeError(f"boom while fetching {uri}")
+
+    with (
+        caplog.at_level("DEBUG"),
+        patch("custom_components.polygonal_zones.utils.zones.load_data", side_effect=fake_load),
+    ):
+        result = await load_zones([_SECRET_URI], _make_hass(), False)
+
+    everything = caplog.text + repr(result.failures)
+    assert "pa55" not in everything
+    assert "s3cr3t" not in everything
+    assert result.failures == [
+        (
+            "https://zones.example.com/z.json",
+            "boom while fetching https://zones.example.com/z.json",
+        )
+    ]
+    # No traceback: it would repeat the raw exception text.
+    assert all(r.exc_info is None for r in caplog.records)
+
+
+async def test_get_zones_all_failed_message_is_redacted() -> None:
+    async def fake_load(uri: str, _hass, **_kwargs) -> str:
+        raise RuntimeError(f"nope {uri}")
+
+    with (
+        patch("custom_components.polygonal_zones.utils.zones.load_data", side_effect=fake_load),
+        pytest.raises(ZoneFileCorrupt) as err,
+    ):
+        await get_zones([_SECRET_URI], _make_hass(), False)
+
+    assert "pa55" not in str(err.value)
+    assert "s3cr3t" not in str(err.value)
+
+
+def test_unsupported_schema_version_message_is_redacted() -> None:
+    data = {
+        "type": "FeatureCollection",
+        "polygonal_zones": {"schema_version": 999},
+        "features": [],
+    }
+    with pytest.raises(UnsupportedSchemaVersion) as err:
+        _parse_zone_document(json.dumps(data), 0, False, _SECRET_URI)
+
+    assert "pa55" not in str(err.value)
+    assert "s3cr3t" not in str(err.value)

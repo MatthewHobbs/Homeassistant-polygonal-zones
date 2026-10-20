@@ -14,7 +14,7 @@ from shapely.geometry import Point, shape
 from shapely.geometry.polygon import Polygon
 
 from ..const import MAX_SUPPORTED_SCHEMA_VERSION
-from .general import load_data
+from .general import load_data, redact_uri
 from .geometry import (
     get_distance_to_centroid,
     get_distance_to_exterior_points,
@@ -180,7 +180,7 @@ def _parse_zone_document(raw: str, idx: int, prioritize: bool, uri: str) -> list
         declared_version = pz.get("schema_version", 1)
         if isinstance(declared_version, int) and declared_version > MAX_SUPPORTED_SCHEMA_VERSION:
             raise UnsupportedSchemaVersion(
-                f"Zone file {uri!r} declares schema_version={declared_version}; "
+                f"Zone file {redact_uri(uri)!r} declares schema_version={declared_version}; "
                 f"this integration supports up to {MAX_SUPPORTED_SCHEMA_VERSION}. "
                 "See docs/ZONES_FORMAT.md."
             )
@@ -240,7 +240,7 @@ async def load_zones(
     """Load every URI independently; return successes plus per-URI failure records.
 
     Partial-success semantics: one flaky URI no longer kills the whole load.
-    Each URI's failure is logged at WARNING with a stacktrace and recorded on the
+    Each URI's failure is logged at WARNING (redacted URI, no stacktrace) and recorded on the
     returned result, so the entity can still resolve zones from healthy sources
     and the failing sources can be surfaced in diagnostics.
 
@@ -268,8 +268,16 @@ async def load_zones(
             # instead of silently skipping the file.
             raise
         except Exception as err:
-            _LOGGER.warning("Failed to load zones from %s: %s", uri, err, exc_info=True)
-            result.failures.append((uri, str(err)))
+            # Log and record only the redacted URI. The raw one, and an error
+            # string that embeds it, can carry credentials or a query token that
+            # would end up in the HA log, in repair text and in pasted bug
+            # reports. No traceback: it would print the raw exception text again.
+            safe_uri = redact_uri(uri)
+            message = str(err).replace(uri, safe_uri)
+            _LOGGER.warning(
+                "Failed to load zones from %s: %s: %s", safe_uri, type(err).__name__, message
+            )
+            result.failures.append((safe_uri, message))
     return result
 
 
