@@ -55,7 +55,7 @@ async def test_delete_existing_zone(tmp_path) -> None:
     call = SimpleNamespace(data={"device_id": "fake-device-id", "zone_name": "Home"})
 
     with patch(
-        "custom_components.polygonal_zones.services.delete_zone.get_entities_from_device_id",
+        "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
         return_value=[fake_entity],
     ):
         await action(call)
@@ -81,7 +81,7 @@ async def test_delete_missing_zone_raises(tmp_path) -> None:
 
     with (
         patch(
-            "custom_components.polygonal_zones.services.delete_zone.get_entities_from_device_id",
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
             return_value=[fake_entity],
         ),
         pytest.raises(ZoneDoesNotExists),
@@ -103,7 +103,7 @@ async def test_delete_missing_zone_name_raises(tmp_path) -> None:
 
     with (
         patch(
-            "custom_components.polygonal_zones.services.delete_zone.get_entities_from_device_id",
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
             return_value=[fake_entity],
         ),
         pytest.raises(ZoneDoesNotExists),
@@ -121,7 +121,7 @@ async def test_delete_non_editable_raises(tmp_path) -> None:
 
     with (
         patch(
-            "custom_components.polygonal_zones.services.delete_zone.get_entities_from_device_id",
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
             return_value=[fake_entity],
         ),
         pytest.raises(ZoneFileNotEditable),
@@ -139,7 +139,7 @@ async def test_delete_path_traversal_wrapped(tmp_path) -> None:
 
     with (
         patch(
-            "custom_components.polygonal_zones.services.delete_zone.get_entities_from_device_id",
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
             return_value=[fake_entity],
         ),
         pytest.raises(InvalidZoneData),

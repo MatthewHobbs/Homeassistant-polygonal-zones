@@ -15,50 +15,34 @@ from .zones import Zone, get_zones
 
 _FILE_LOCKS: dict[str, asyncio.Lock] = {}
 
-# Default seconds to wait on the per-file lock before a mutation service
-# aborts. Override at runtime by exporting
-# ``POLYGONAL_ZONES_LOCK_ACQUIRE_TIMEOUT`` in the HA process environment
-# (useful for NFS-mounted /config / SD-card Raspberry Pi setups where a
-# single flush can push past the default).
-LOCK_ACQUIRE_TIMEOUT = int(os.environ.get("POLYGONAL_ZONES_LOCK_ACQUIRE_TIMEOUT", "15"))
+
+def _lock_timeout() -> int:
+    """Seconds to wait on the per-file lock before a mutation service aborts.
+
+    ``POLYGONAL_ZONES_LOCK_ACQUIRE_TIMEOUT`` in the HA process environment
+    overrides the default 15 (useful for NFS-mounted /config or SD-card
+    Raspberry Pi setups where a single flush can push past it). A value that is
+    not a positive integer falls back to the default instead of failing the
+    import of the whole integration.
+    """
+    try:
+        value = int(os.environ.get("POLYGONAL_ZONES_LOCK_ACQUIRE_TIMEOUT", "15"))
+    except ValueError:
+        return 15
+    return value if value > 0 else 15
+
+
+LOCK_ACQUIRE_TIMEOUT = _lock_timeout()
 
 
 def get_file_lock(path: Path) -> asyncio.Lock:
-    """Return a shared ``asyncio.Lock`` keyed by the absolute path.
+    """Return the shared ``asyncio.Lock`` for ``path``, creating it on first use.
 
-    Used to serialize read-modify-write service calls against the same
-    zone file so two concurrent callers can't lose each other's changes.
-
-    Fast path: a bare ``dict.get`` avoids allocating a Lock when one is
-    already cached. Slow path: ``setdefault`` atomically publishes the new
-    lock, so a race between two coroutines hitting the slow path at the
-    same time can't install two different Lock objects for one key.
+    Serializes read-modify-write service calls against one zone file so two
+    concurrent callers cannot lose each other's changes. One idle Lock per file
+    path is kept for the life of the process, which is a few bytes.
     """
-    key = str(path)
-    lock = _FILE_LOCKS.get(key)
-    if lock is None:
-        lock = _FILE_LOCKS.setdefault(key, asyncio.Lock())
-    return lock
-
-
-def release_file_lock(path: Path) -> None:
-    """Drop the cached ``asyncio.Lock`` for ``path`` if one exists and is idle.
-
-    Called from ``async_unload_entry`` so locks don't accumulate forever across
-    config-entry reloads in long-running HA instances.
-
-    Refuses to drop a lock that is currently held: a config-entry reload can race
-    a mutation mid-write, and dropping the lock then would hand the next caller a
-    brand-new ``Lock`` object for the same path — defeating mutual exclusion and
-    allowing two concurrent writers. A held lock is left in place; a later unload
-    with no in-flight holder reclaims it. Worst case is one stale idle Lock per
-    path until the next clean unload, which is harmless.
-    """
-    key = str(path)
-    lock = _FILE_LOCKS.get(key)
-    if lock is None or lock.locked():
-        return
-    _FILE_LOCKS.pop(key, None)
+    return _FILE_LOCKS.setdefault(str(path), asyncio.Lock())
 
 
 def dump_feature_collection(

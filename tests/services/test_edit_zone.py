@@ -57,7 +57,7 @@ async def test_edit_existing_zone_replaces_geometry(tmp_path) -> None:
     )
 
     with patch(
-        "custom_components.polygonal_zones.services.edit_zone.get_entities_from_device_id",
+        "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
         return_value=[fake_entity],
     ):
         await action(call)
@@ -100,7 +100,7 @@ async def test_edit_preserves_feature_order(tmp_path) -> None:
     )
 
     with patch(
-        "custom_components.polygonal_zones.services.edit_zone.get_entities_from_device_id",
+        "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
         return_value=[fake_entity],
     ):
         await action(call)
@@ -135,7 +135,7 @@ async def test_edit_missing_zone_raises(tmp_path) -> None:
 
     with (
         patch(
-            "custom_components.polygonal_zones.services.edit_zone.get_entities_from_device_id",
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
             return_value=[fake_entity],
         ),
         pytest.raises(ZoneDoesNotExists),
@@ -159,7 +159,7 @@ async def test_edit_missing_zone_name_raises(tmp_path) -> None:
 
     with (
         patch(
-            "custom_components.polygonal_zones.services.edit_zone.get_entities_from_device_id",
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
             return_value=[fake_entity],
         ),
         pytest.raises(ZoneDoesNotExists),
@@ -183,7 +183,7 @@ async def test_edit_non_editable_raises(tmp_path) -> None:
 
     with (
         patch(
-            "custom_components.polygonal_zones.services.edit_zone.get_entities_from_device_id",
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
             return_value=[fake_entity],
         ),
         pytest.raises(ZoneFileNotEditable),

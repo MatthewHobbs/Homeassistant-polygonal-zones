@@ -1,15 +1,20 @@
 """Helper functions for the services for the polygonal zones integration."""
 
+import asyncio
+from collections.abc import Callable, Iterator
+import contextlib
 import json
 import logging
 import time
 from typing import Any
 
+import aiohttp
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import device_registry as dr
 
 from ..const import DOMAIN
 from ..device_tracker import PolygonalZoneEntity
+from ..utils.general import load_data, safe_config_path
 from ..utils.limits import (
     MAX_FEATURES_PER_COLLECTION,
     MAX_TOTAL_VERTICES_PER_COLLECTION,
@@ -18,7 +23,13 @@ from ..utils.limits import (
 from ..utils.limits import (
     count_geometry_vertices as _count_geometry_vertices,
 )
-from .errors import InvalidZoneData, RateLimited
+from ..utils.local_zones import (
+    LOCK_ACQUIRE_TIMEOUT,
+    dump_feature_collection,
+    get_file_lock,
+    save_zones,
+)
+from .errors import InvalidZoneData, RateLimited, ZoneFileNotEditable
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -241,3 +252,57 @@ def get_entities_from_device_id(device_id: str, hass: HomeAssistant) -> list[Pol
     if entry is None or entry.domain != DOMAIN or not hasattr(entry, "runtime_data"):
         raise InvalidZoneData(f"Device '{device_id}' is not registered to polygonal_zones")
     return entry.runtime_data.entities
+
+
+def resolve_mutation_target(
+    hass: HomeAssistant, call: ServiceCall, service_name: str
+) -> tuple[list[PolygonalZoneEntity], PolygonalZoneEntity]:
+    """Run the checks every zone-file mutation shares, in their fixed order.
+
+    Device lookup, audit log, rate limit, then "is the file editable". Returns the
+    entry's entities and the first one, whose source holds the zone file path.
+    """
+    entities = get_entities_from_device_id(require_device_id(call.data), hass)
+    entity = entities[0]
+    audit_mutation_call(call, service_name, entity._config_entry_id)
+    enforce_mutation_rate_limit(entity._config_entry_id)
+    if not entity.editable_file:
+        raise ZoneFileNotEditable("Zone files of entity are not editable")
+    return entities, entity
+
+
+@contextlib.contextmanager
+def zone_file_errors(value_error: str = "Zone file content or path is invalid") -> Iterator[None]:
+    """Turn the failures of reading or writing a zone file into ``InvalidZoneData``."""
+    try:
+        yield
+    except TimeoutError as err:
+        raise InvalidZoneData(
+            "Timed out waiting for zone file lock; another operation may be in progress"
+        ) from err
+    except aiohttp.ClientError as err:
+        raise InvalidZoneData("Failed to fetch zone file") from err
+    except OSError as err:
+        raise InvalidZoneData("Failed to access zone file") from err
+    except ValueError as err:
+        raise InvalidZoneData(value_error) from err
+
+
+async def modify_zone_file(
+    hass: HomeAssistant,
+    entities: list[PolygonalZoneEntity],
+    entity: PolygonalZoneEntity,
+    mutate: Callable[[dict[str, Any]], None],
+) -> None:
+    """Read the zone file under its lock, apply ``mutate`` in place, save, then reload."""
+    filename = entity.zone_urls[0]
+    with zone_file_errors():
+        filepath = safe_config_path(hass.config.config_dir, filename)
+        async with asyncio.timeout(LOCK_ACQUIRE_TIMEOUT), get_file_lock(filepath):
+            existing_zones = json.loads(await load_data(filename, hass))
+            mutate(existing_zones)
+            new_content = dump_feature_collection(
+                existing_zones["features"], existing=existing_zones
+            )
+            await save_zones(new_content, filepath, hass)
+            await sync_entities_after_write(entities)

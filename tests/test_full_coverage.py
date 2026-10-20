@@ -59,7 +59,7 @@ async def test_add_zone_non_editable_raises(tmp_path) -> None:
     )
     with (
         patch(
-            "custom_components.polygonal_zones.services.add_new_zone.get_entities_from_device_id",
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
             return_value=[fake_entity],
         ),
         pytest.raises(ZoneFileNotEditable),
