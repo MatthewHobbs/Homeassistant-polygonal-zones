@@ -118,7 +118,7 @@ def is_local_add_on_host(uri: str) -> bool:
     """Return True if ``uri``'s host looks like a LAN-installed companion add-on.
 
     Used to pick a staleness-safe ``download_zones`` default for new installs
-    (BACKLOG.md: "download_zones defaults to true, silently freezing
+    (a P1 bug: "download_zones defaults to true, silently freezing
     add-on-authored zones"). Only classifies what's cheap to check
     synchronously — a private/loopback/link-local IP literal, ``localhost``,
     or an mDNS ``.local`` name — since resolving a real DNS hostname just to

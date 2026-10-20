@@ -98,8 +98,8 @@ jobs:
     # class of regression that drove v1.8.0's runtime_data migration.
     #
     # The floor is hacs.json's "homeassistant" field — the same value HACS
-    # itself enforces at install time (CLAUDE.md: "Home Assistant: test
-    # against current stable" — declare the oldest HA supported and test
+    # itself enforces at install time (project policy: test against
+    # current stable — declare the oldest HA supported and test
     # against it). Read from there rather than a second hard-coded copy, so
     # bumping the declared floor can't silently stop being tested.
     name: Pytest (HA floor)
@@ -117,8 +117,8 @@ jobs:
       - run: pip install "homeassistant==$(jq -r .homeassistant hacs.json)"
       - run: pytest --cov=custom_components/polygonal_zones --cov-report=term --cov-fail-under=98
 
-  # Real-hass suite (tests_hass/) — Release A of the location_name migration
-  # (BACKLOG.md / the linked RFC). Its own job, own install, own venv-equivalent:
+  # Real-hass suite (tests_hass/) — Release A of the location_name migration.
+  # Its own job, own install, own venv-equivalent:
   # pytest-homeassistant-custom-component hard-pins one EXACT homeassistant
   # version per release, which would fight both Pytest's "latest in range" and
   # Pytest (HA floor)'s exact-floor installs if it ever shared their venv. Not
@@ -154,7 +154,7 @@ jobs:
       - run: pip install -r requirements_test.txt
       - run: mypy
 
-  # CLAUDE.md "Home Assistant: test against current stable" (set 2026-09-25):
+  # Project policy "test against current stable" (set 2026-09-25):
   # the declared floor must never be newer than the .1 release of the month
   # before current stable, because current stable moves every month and a
   # floor that was compliant silently stops being — so this runs on every
@@ -195,7 +195,7 @@ jobs:
           if floor > bound:
               raise SystemExit(
                   f"hacs.json's declared floor {floor} is newer than the allowed bound {bound} "
-                  f"(current stable {current}) - CLAUDE.md 'Home Assistant: test against current stable'"
+                  f"(current stable {current}) - project policy: test against current stable"
               )
           PY
 

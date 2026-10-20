@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-09-26
-- RFC: [RFC 0006 — Homeassistant-polygonal-zones: nightly HA beta testing](https://claude.ai/artifact/P53H7DpiqckHyk4L2YpnyU) (`claude-config` `docs/rfc/README.md`)
+- RFC: Nightly HA beta testing (design note, not published)
 
 ## Context
 

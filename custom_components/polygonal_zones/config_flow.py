@@ -56,7 +56,7 @@ def _default_download_zones_off_for_add_on_hosts(user_input: dict[str, Any]) -> 
     wrong default when every zone URL is the LAN-installed companion editor
     add-on: the snapshot is only re-fetched when missing (never on reload),
     so an edit made in the add-on after setup is silently invisible
-    (BACKLOG.md, P1). Only overrides the form's True fallback for a new
+    (a P1 bug). Only overrides the form's True fallback for a new
     entry whose sources are *all* add-on-like; a mix of add-on + public URLs,
     or an explicit choice made later via the options flow, is left alone.
     """

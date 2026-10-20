@@ -48,7 +48,7 @@ jobs:
       # visibly so the nightly signal isn't lost.
       continue_on_error: ${{ github.event_name == 'pull_request' }}
 
-  # BACKLOG.md: "Playwright config-flow smoke fails on HA 2026.7.4" (2026-07-27)
+  # A past failure ("Playwright config-flow smoke fails on HA 2026.7.4", 2026-07-27)
   # found the dialog timing out against radio_frequency/infrared setup errors
   # specific to that HA version, but nothing since has re-tested the *floor*
   # HA version specifically — config-flow above always installs the latest

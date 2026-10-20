@@ -1,7 +1,6 @@
 """Companion zone-name sensor for the polygonal_zones integration.
 
-Release A, PR A4 of the location_name migration (see BACKLOG.md / the linked
-RFC): the matched zone's name as a plain string — the exact value
+Release A, PR A4 of the location_name migration: the matched zone's name as a plain string — the exact value
 ``device_tracker``'s ``location_name`` publishes today — living on its own
 entity that survives Release B's removal of ``location_name``. Additive:
 nothing about ``device_tracker.py`` changes here.
