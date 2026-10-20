@@ -8,7 +8,7 @@ HA integration that resolves any `device_tracker` into the polygonal zone it cur
 
 ## Gates
 
-- **Validate is the required check** (`.github/workflows/validate.yml`); coverage floor **≥98%**.
+- **Validate is the required check** (`.github/workflows/validate.yml`; the exact required list is in `.claude/CLAUDE.md`); coverage floor **≥98%**.
 - No container boot — this is an integration, not an add-on, so the global container-verify rule does not apply here. HACS/hassfest validation must stay green.
 
 ## HA cadence (source of truth = the HA blogs, not memory)
