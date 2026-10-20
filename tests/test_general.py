@@ -225,3 +225,39 @@ def test_source_unavailable_triggers_despite_missing_gps_attrs() -> None:
 def test_source_unknown_triggers_despite_missing_gps_attrs() -> None:
     event = _event("device_tracker.me", REQUIRED, {}, new_state=STATE_UNKNOWN)
     assert event_should_trigger(event, "device_tracker.me") is True
+
+
+def test_redact_text_survives_a_raw_quote_in_the_query() -> None:
+    """yarl keeps a raw ' in the query, so Python's repr of the aiohttp error switches
+    to "..." quoting: a URL pattern that stops at the first ' left the token behind."""
+    import aiohttp
+    from yarl import URL
+
+    raw = "https://h.example/z?n=o'b&token=SECRET"
+    info = aiohttp.RequestInfo(url=URL(raw), method="GET", headers={}, real_url=URL(raw))
+    err = aiohttp.ClientResponseError(info, (), status=404, message="Not Found")
+
+    assert "SECRET" in str(err)  # the premise: the raw error does leak
+    assert "SECRET" not in redact_text(str(err))
+    assert "SECRET" not in redact_text(f"Connection timeout to host {raw}")
+
+
+def test_redact_text_leaves_a_clean_message_readable() -> None:
+    msg = "Response from 'https://h/z.json' too large: 99 bytes"
+    assert redact_text(msg) == msg
+
+
+def test_redact_text_strips_userinfo_of_a_url_nested_in_a_path() -> None:
+    assert "u:p" not in redact_text("https://proxy/f/https://u:p@x/")
+
+
+def test_redact_uri_without_a_host_does_not_fail_open() -> None:
+    out = redact_uri("http://u:p@/x?t=1")
+    assert "u:p" not in out
+    assert "t=1" not in out
+
+
+def test_redact_uri_fallback_survives_a_malformed_password() -> None:
+    """A password holding ? or / is invalid, but old entries may still carry one."""
+    assert "u:p" not in redact_uri("http://u:p?x@h/")
+    assert "u:p" not in redact_uri("http://u:p/x@h:bad/")

@@ -22,15 +22,23 @@ MAX_RESPONSE_BYTES = 5 * 1024 * 1024
 FETCH_TIMEOUT = aiohttp.ClientTimeout(total=10, connect=5, sock_read=8)
 
 
-_URL_IN_TEXT = re.compile(r"https?://[^\s'\"<>]+", re.IGNORECASE)
+# A URL in free text runs to the next whitespace. Do not stop at a quote: yarl
+# leaves a raw ``'`` in a query, Python then switches the error repr to ``"…"``
+# quoting, and a pattern that ends at the first ``'`` would leave the token.
+_URL_IN_TEXT = re.compile(r"https?://\S+", re.IGNORECASE)
+_USERINFO = re.compile(r"(https?://)[^/\s@]*@", re.IGNORECASE)
 
 
 def _strip_credentials_and_query(uri: str) -> str:
-    """Last-resort redaction for a URI ``urlparse`` cannot take apart (bad port)."""
-    base = re.split(r"[?#]", uri, maxsplit=1)[0]
-    scheme, sep, rest = base.partition("://")
-    authority, slash, path = rest.partition("/")
-    return f"{scheme}{sep}{authority.rpartition('@')[2]}{slash}{path}"
+    """Redaction for a URI ``urlparse`` cannot take apart (bad port, no host).
+
+    Deliberately blunt: everything up to the last ``@`` is treated as userinfo,
+    even when a malformed password holds ``/``, ``?`` or ``#``, then the query and
+    fragment go. It may drop a real ``@`` from a path; it never keeps a credential.
+    """
+    scheme, sep, rest = uri.partition("://")
+    rest = rest.rpartition("@")[2]
+    return f"{scheme}{sep}{re.split(r'[?#]', rest, maxsplit=1)[0]}"
 
 
 def redact_uri(uri: str) -> str:
@@ -38,16 +46,17 @@ def redact_uri(uri: str) -> str:
 
     Strips ``user:pass@`` credentials and the query string / fragment (which can
     carry access tokens), keeping ``scheme://host[:port]/path``. Non-HTTP URIs
-    (e.g. ``/config`` file paths) and URIs with no hostname are returned
-    unchanged — they carry no credential component to leak. A URI that cannot be
-    parsed (a malformed port) is stripped by hand rather than returned raw, since
-    the config validator used to accept it and it is exactly the kind of string
-    that carries credentials.
+    (e.g. ``/config`` file paths) carry no credential component and are returned
+    unchanged. An HTTP(S) URI that cannot be parsed (a malformed port, no host)
+    is stripped by hand rather than returned raw: the config validator used to
+    accept such strings and they are exactly what carries credentials.
     """
     try:
         parsed = urlparse(uri)
-        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        if parsed.scheme not in ("http", "https"):
             return uri
+        if not parsed.hostname:
+            return _strip_credentials_and_query(uri)
         port = parsed.port
     except ValueError:
         return _strip_credentials_and_query(uri)
@@ -61,8 +70,11 @@ def redact_text(text: str) -> str:
 
     aiohttp builds its error text from a URL it has already rewritten (it drops
     ``user:pass@`` but keeps the query), so the configured string is not in the
-    message and a literal replace misses it. Match URLs by shape instead.
+    message and a literal replace misses it. Match URLs by shape instead, and
+    drop userinfo everywhere first so a URL nested in another URL's path is
+    covered too.
     """
+    text = _USERINFO.sub(r"\1", text)
     return _URL_IN_TEXT.sub(lambda m: redact_uri(m.group(0)), text)
 
 
