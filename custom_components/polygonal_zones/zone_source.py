@@ -11,6 +11,7 @@ re-resolves its state when the shared zones (re)load.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 from datetime import datetime
 import logging
@@ -23,10 +24,12 @@ from homeassistant.helpers.start import async_at_started
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
-from .utils.zones import Zone, ZoneFileCorrupt, load_zones, zone_key
+from .utils.zones import Zone, ZoneFileCorrupt, get_locations_zone, load_zones, zone_key
 
 _LOGGER = logging.getLogger(__name__)
 
+# Distinct positions kept per source before the cache is dropped and refilled.
+_RESOLVE_CACHE_MAX = 256
 _MAX_LOAD_ATTEMPTS = 5
 _BASE_RETRY_DELAY = 30  # seconds; doubles on each attempt, capped at 10 min
 
@@ -56,7 +59,11 @@ class ZoneSource:
         # in_zones — blank/unset means no zone is home.
         self.home_zone_id = home_zone_id
 
-        self.zones: list[Zone] = []
+        self._zones: list[Zone] = []
+        # Resolved zone per (lat, lon, accuracy), shared by every entity that
+        # follows this source: the mirror and the zone sensor for one tracker
+        # ask the same question on every update. Dropped whenever zones change.
+        self._resolved: dict[tuple[float, float, float | None], asyncio.Future[dict | None]] = {}
         self.last_load_failures: list[tuple[str, str]] = []
         # Observability: outcome of the most recent attempt + when the last
         # successful load completed. Surfaced in diagnostics and entity attrs.
@@ -68,6 +75,51 @@ class ZoneSource:
         self._listeners: list[Callable[[], None]] = []
         self._unsub_at_started: Callable[[], None] | None = None
         self._unsub_retry: Callable[[], None] | None = None
+
+    @property
+    def zones(self) -> list[Zone]:
+        """The loaded zones. Assigning new ones drops every cached resolution."""
+        return self._zones
+
+    @zones.setter
+    def zones(self, value: list[Zone]) -> None:
+        self._zones = value
+        self._resolved.clear()
+
+    async def async_resolve(
+        self,
+        hass: HomeAssistant,
+        latitude: float,
+        longitude: float,
+        gps_accuracy: float | None,
+    ) -> dict | None:
+        """Return the zone for a position, computing each distinct one only once.
+
+        The geometry work is sync and CPU-bound, so it runs in the executor.
+        Concurrent callers for the same position share one run, and a failed run
+        is not cached. The caller gets its own copy, so changing it cannot affect
+        another entity.
+        """
+        key = (latitude, longitude, gps_accuracy)
+        pending = self._resolved.get(key)
+        if pending is None:
+            if len(self._resolved) >= _RESOLVE_CACHE_MAX:
+                self._resolved.clear()
+            pending = asyncio.ensure_future(
+                hass.async_add_executor_job(
+                    get_locations_zone, latitude, longitude, gps_accuracy, self._zones
+                )
+            )
+            self._resolved[key] = pending
+        try:
+            zone = await pending
+        except Exception:
+            if self._resolved.get(key) is pending:
+                del self._resolved[key]
+            raise
+        if zone is None:
+            return None
+        return {**zone, "matched_zones": list(zone["matched_zones"])}
 
     @property
     def issue_id(self) -> str:

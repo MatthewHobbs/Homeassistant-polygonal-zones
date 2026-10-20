@@ -1,5 +1,6 @@
 """Tests for the entry-scoped ZoneSource — load lifecycle, retry, listeners."""
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -260,3 +261,92 @@ def test_async_shutdown_cancels_pending_callbacks() -> None:
     unsub_retry.assert_called_once()
     assert src._unsub_at_started is None
     assert src._unsub_retry is None
+
+
+def _executor_hass() -> SimpleNamespace:
+    async def run(func, *args):
+        await asyncio.sleep(0)  # a real executor hop, so concurrent callers overlap
+        return func(*args)
+
+    return SimpleNamespace(async_add_executor_job=run)
+
+
+_GET = "custom_components.polygonal_zones.zone_source.get_locations_zone"
+
+
+async def test_resolve_runs_the_geometry_once_for_concurrent_callers() -> None:
+    """The mirror and the zone sensor ask the same question for one position."""
+    src = _source()
+    src.zones = _ZONES
+    calls = []
+
+    def fake(lat, lon, acc, zones):
+        calls.append((lat, lon, acc))
+        return {"name": "Home", "zone_key": "Home", "matched_zones": ["Home"]}
+
+    with patch(_GET, side_effect=fake):
+        a, b = await asyncio.gather(
+            src.async_resolve(_executor_hass(), 0.5, 0.5, 10),
+            src.async_resolve(_executor_hass(), 0.5, 0.5, 10),
+        )
+        again = await src.async_resolve(_executor_hass(), 0.5, 0.5, 10)
+
+    assert len(calls) == 1
+    assert a == b == again
+    assert a["name"] == "Home"
+
+
+async def test_resolve_hands_each_caller_its_own_copy() -> None:
+    src = _source()
+    src.zones = _ZONES
+
+    with patch(_GET, return_value={"name": "Home", "zone_key": "Home", "matched_zones": ["Home"]}):
+        first = await src.async_resolve(_executor_hass(), 0.5, 0.5, 10)
+        first["matched_zones"].append("changed")
+        second = await src.async_resolve(_executor_hass(), 0.5, 0.5, 10)
+
+    assert second["matched_zones"] == ["Home"]
+
+
+async def test_resolve_recomputes_after_the_zones_change() -> None:
+    """A cached answer for the old zones must never be served for the new ones."""
+    src = _source()
+    src.zones = _ZONES
+    results = iter([{"name": "Old", "zone_key": "Old", "matched_zones": []}, None])
+
+    with patch(_GET, side_effect=lambda *_a: next(results)):
+        assert (await src.async_resolve(_executor_hass(), 0.5, 0.5, 10))["name"] == "Old"
+        src.zones = []  # e.g. a reload that dropped the zone
+        assert await src.async_resolve(_executor_hass(), 0.5, 0.5, 10) is None
+
+
+async def test_resolve_does_not_cache_a_failure() -> None:
+    src = _source()
+    src.zones = _ZONES
+    outcomes = iter(
+        [RuntimeError("boom"), {"name": "Home", "zone_key": "Home", "matched_zones": []}]
+    )
+
+    def fake(*_a):
+        out = next(outcomes)
+        if isinstance(out, Exception):
+            raise out
+        return out
+
+    with patch(_GET, side_effect=fake):
+        with pytest.raises(RuntimeError):
+            await src.async_resolve(_executor_hass(), 0.5, 0.5, 10)
+        assert (await src.async_resolve(_executor_hass(), 0.5, 0.5, 10))["name"] == "Home"
+
+
+async def test_resolve_cache_is_bounded() -> None:
+    from custom_components.polygonal_zones import zone_source as zs
+
+    src = _source()
+    src.zones = _ZONES
+
+    with patch(_GET, return_value=None):
+        for i in range(zs._RESOLVE_CACHE_MAX + 5):
+            await src.async_resolve(_executor_hass(), float(i), 0.0, 1)
+
+    assert len(src._resolved) <= zs._RESOLVE_CACHE_MAX

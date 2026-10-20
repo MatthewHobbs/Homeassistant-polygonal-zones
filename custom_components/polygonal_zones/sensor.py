@@ -36,7 +36,7 @@ from homeassistant.helpers.event import (
 )
 
 from .const import CONF_EXPOSE_COORDINATES
-from .utils import event_should_trigger, get_locations_zone
+from .utils import event_should_trigger
 from .zone_source import ZoneSource
 
 PARALLEL_UPDATES = 0
@@ -166,9 +166,7 @@ class PolygonalZoneSensor(RestoreSensor):
 
     async def update_location(self, latitude: float, longitude: float, gps_accuracy: float) -> None:
         """Resolve the location to a zone and publish it as this sensor's value."""
-        zone = await self.hass.async_add_executor_job(
-            get_locations_zone, latitude, longitude, gps_accuracy, self._source.zones
-        )
+        zone = await self._source.async_resolve(self.hass, latitude, longitude, gps_accuracy)
         self._attr_native_value = zone["name"] if zone is not None else "away"
         attributes: dict[str, Any] = {"source_entity": self._entity_id}
         if self._expose_coordinates:
