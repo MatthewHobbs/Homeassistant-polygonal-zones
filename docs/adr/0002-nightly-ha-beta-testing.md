@@ -1,6 +1,6 @@
 # ADR 0002: Nightly HA beta testing (Option A)
 
-- Status: Accepted
+- Status: Accepted (the Playwright leg was superseded by [ADR 0004](0004-drop-browser-and-arm-smoke-jobs.md))
 - Date: 2026-09-26
 - RFC: Nightly HA beta testing (design note, not published)
 
