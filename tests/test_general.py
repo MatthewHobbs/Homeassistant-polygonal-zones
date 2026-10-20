@@ -261,3 +261,16 @@ def test_redact_uri_fallback_survives_a_malformed_password() -> None:
     """A password holding ? or / is invalid, but old entries may still carry one."""
     assert "u:p" not in redact_uri("http://u:p?x@h/")
     assert "u:p" not in redact_uri("http://u:p/x@h:bad/")
+
+
+def test_redact_uri_hostless_forms_without_double_slash() -> None:
+    """urlparse reads http:u:p@h and https:/u:p@h as host-less; both used to come back raw."""
+    for raw in ("http:u:p@h?t=S", "https:/u:p@h/z?t=S"):
+        out = redact_uri(raw)
+        assert "u:p" not in out
+        assert "t=S" not in out
+
+
+def test_redact_text_userinfo_pass_does_not_cross_a_query() -> None:
+    """An @ in a query value is not userinfo: it must not eat the host and leak the token."""
+    assert "token" not in redact_text("https://h?e=me@x.io&token=S")
