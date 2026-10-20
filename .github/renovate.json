@@ -7,7 +7,6 @@
   ],
   "extends": [
     "config:recommended",
-    ":dependencyDashboard",
     ":semanticCommitTypeAll(build)"
   ],
   "timezone": "Europe/London",
