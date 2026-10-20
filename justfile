@@ -3,8 +3,7 @@
 # `just ci` mirrors the static gates in .github/workflows/validate.yml, including the same
 # dependency install - mypy must run against the pinned homeassistant in requirements_test.txt
 # or it reports false errors on HA's metaclass machinery.
-# NOT covered locally, and remaining remote-only gates: Hassfest, HACS, Prettier and the
-# Playwright config-flow test.
+# NOT covered locally, and remaining remote-only gates: Hassfest, HACS and Prettier.
 
 # Local CI gate - the same commands remote CI runs, for the checks it covers.
 ci: lint test

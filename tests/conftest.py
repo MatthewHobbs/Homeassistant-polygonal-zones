@@ -18,7 +18,7 @@ def _stub_state_change_tracker():
     unit tests build ``SimpleNamespace`` hass stubs and never deliver real
     events (they invoke the entity's ``_update_state`` / captured callbacks
     directly), so a no-op unsub keeps ``async_added_to_hass`` working without a
-    full hass. Real event routing is covered by the Playwright/e2e smoke.
+    full hass. Real event routing is covered by tests_hass/ (real Home Assistant).
     """
     with patch(
         "custom_components.polygonal_zones.device_tracker.async_track_state_change_event",
