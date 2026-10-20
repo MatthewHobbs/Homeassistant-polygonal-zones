@@ -70,9 +70,8 @@ async def test_async_setup_entry_builds_source_before_forwarding_platforms() -> 
     awaited — async_forward_entry_setups starts every platform concurrently, so
     a platform that reads entry.runtime_data.source at the start of its own
     async_setup_entry (not just device_tracker's) must never race its creation.
-    Regression test for the race PR A2 fixed (source used to be built inside
-    device_tracker's own async_setup_entry, after forwarding had already
-    started)."""
+    Regression test for a race: the source used to be built inside
+    device_tracker's own async_setup_entry, after forwarding had already started."""
     source_at_forward_time = None
 
     async def _capture_source_and_forward(entry, _platforms):
