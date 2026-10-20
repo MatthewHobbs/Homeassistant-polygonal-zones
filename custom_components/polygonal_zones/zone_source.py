@@ -53,7 +53,7 @@ class ZoneSource:
         self.allow_private_urls = allow_private_urls
         self.token = token
         # The polygon whose zone_key() equals this counts as "home" for
-        # in_zones (Release A, PR A3) — blank/unset means no zone is home.
+        # in_zones — blank/unset means no zone is home.
         self.home_zone_id = home_zone_id
 
         self.zones: list[Zone] = []
@@ -178,7 +178,7 @@ class ZoneSource:
         Checked on every (re)load, not just once at setup: an edit made in the
         add-on (a rename with no ``id``, or a deleted zone) can invalidate a
         previously-valid ``home_zone_id`` at any time, silently — no error,
-        ``in_zones`` just never matches it again (Release A, PR A3).
+        ``in_zones`` just never matches it again.
         """
         if not self.home_zone_id:
             ir.async_delete_issue(hass, DOMAIN, self.home_zone_missing_issue_id)

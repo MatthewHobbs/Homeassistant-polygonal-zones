@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-09-24
-- RFC: [polygonal-zones integration setup retry (#84)](https://claude.ai/code/artifact/0857e19c-9710-4c8d-aecd-b9b5929d8012) (draft, unnumbered/unindexed — see Data class below)
+- RFC: polygonal-zones integration setup retry (#84) (design note, not published)
 
 ## Context
 
@@ -63,13 +63,3 @@ carries the message.
   that harness is a separate, larger change and is not part of this ADR.
 - Not established by this change: why the original reporter's download
   failed. That remains open on #84 pending their debug log.
-
-## Data class
-
-This repo had no data class recorded yet at RFC draft time (ADR 0003 row 17
-in `claude-config`), so the RFC was drafted unnumbered and unindexed,
-treated as Restricted by default. It is a public GitHub repo with no
-non-public personal data, so it classifies as **Public** ("content already
-public") under the global data-class policy — recorded here as the
-decision for this repo; the corresponding `claude-config` ADR 0003 row is a
-separate, cross-repo edit and is not made from this session.

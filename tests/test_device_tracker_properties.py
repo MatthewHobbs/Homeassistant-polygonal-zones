@@ -195,7 +195,7 @@ async def test_async_setup_entry_wires_zone_source_token(hass_with_setup) -> Non
 
 
 async def test_async_setup_entry_raises_location_name_removal_coming(hass_with_setup) -> None:
-    """Release A, PR A5: every entry gets the deprecation notice unconditionally,
+    """Every entry gets the deprecation notice unconditionally,
     regardless of any config value — every install is affected eventually."""
     hass, platform = hass_with_setup
     entry = _entry_with_source(

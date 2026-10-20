@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-09-26
-- RFC: [RFC 0006 — Homeassistant-polygonal-zones: nightly HA beta testing](https://claude.ai/artifact/P53H7DpiqckHyk4L2YpnyU) (`claude-config` `docs/rfc/README.md`)
+- RFC: Nightly HA beta testing (design note, not published)
 
 ## Context
 
@@ -42,12 +42,11 @@ runs keep failing visibly") rather than the RFC's original
   issue. This repo has no existing issue-automation infra; revisit if
   red-in-Actions proves too easy to miss.
 
-Owner's decision, verbatim: "rfc006 answer option A, nightly cadence, start
-simple."
+I chose option A, a nightly cadence, and to start simple.
 
 ## Alternatives
 
-From RFC 0006:
+From the design note:
 
 | Option                                 | What changes                                                                                                                                                                                                                                                                                                             | Cost                                                                         | Risk                                                                                                                                                                                                                                                                                                                    |
 | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -72,8 +71,8 @@ into the one that decides whether a release can ship.
 - No auto-opened issue on failure (start simple, per the decision above); if
   a failure goes unnoticed in practice, revisit failure handling rather than
   treating this as settled forever.
-- **Corrected during review, before implementation:** RFC 0006's option A
-  wording (see Alternatives) said `continue-on-error: true`. Caught in dual
+- **Corrected during review, before implementation:** The design note's
+  option A wording (see Alternatives) said `continue-on-error: true`. Caught in
   review and verified against this repo's own `playwright.yml` precedent:
   `continue-on-error` makes GitHub report the overall run as a success even
   when the job fails, which would silently defeat "red in Actions only" as

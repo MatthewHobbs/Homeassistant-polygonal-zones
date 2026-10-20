@@ -221,7 +221,7 @@ async def test_config_flow_local_add_on_source_overrides_download_zones_to_false
 ) -> None:
     """A brand-new entry whose only zone source is a LAN add-on must not silently
     freeze it at setup — download_zones is overridden to False even though the
-    form's own fallback default is True (BACKLOG.md, P1)."""
+    form's own fallback default is True."""
     flow = ConfigFlow()
     flow.hass = _hass(tmp_path)
     flow.async_show_form = MagicMock(return_value={"type": "form"})

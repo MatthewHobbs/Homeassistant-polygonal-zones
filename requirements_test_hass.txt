@@ -1,6 +1,5 @@
-# Real-hass test harness (PR A1 of the location_name migration's Release A —
-# see BACKLOG.md / the linked RFC). Kept in its own requirements file and its
-# own CI job (never the main "Pytest"/"Pytest (HA floor)" jobs) because
+# Real-hass test harness for the location_name migration. Kept in its own
+# requirements file and its own CI job (never the main "Pytest"/"Pytest (HA floor)" jobs) because
 # pytest-homeassistant-custom-component hard-pins one EXACT homeassistant
 # version per release (its own dependency metadata says `homeassistant==X`,
 # never a range) — that would fight both this repo's "latest in range" and

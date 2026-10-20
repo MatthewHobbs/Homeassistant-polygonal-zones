@@ -1,12 +1,11 @@
-"""Real-hass baseline for the location_name migration (Release A, PR A1).
+"""Real-hass baseline for the location_name migration.
 
 Boots a real Home Assistant instance, loads polygonal_zones via an actual
 config entry (exercising the real async_forward_entry_setups path the pure
 pytest-stub suite in tests/ can't reach), and asserts on real entity state.
-This is the harness Release A's later PRs build on: PR A2 fixes a real
-platform-forwarding race that only shows up when a second platform is
-forwarded, and PR A4 needs to assert on real in_zones/state derivation, both
-of which need genuine HA state-machine behaviour, not a stub.
+It covers the platform-forwarding race that only shows up when a second
+platform is forwarded, and in_zones/state derivation, both of which need
+genuine HA state-machine behaviour, not a stub.
 
 This test itself documents TODAY's baseline (state == the matched zone's
 name via location_name) before anything in the migration changes it.
@@ -47,8 +46,8 @@ _ZONE_GEOJSON = {
 
 async def test_mirror_reflects_matched_zone_name_via_real_hass(hass: HomeAssistant) -> None:
     """Baseline: today, a source tracker inside the polygon shows the zone's name
-    as its mirror's state — the exact behaviour Release A must not break while it's
-    additive, and Release B will deliberately change."""
+    as its mirror's state — the exact behaviour the additive migration steps must not
+    break, and the final step will deliberately change."""
     zones_path = hass.config.path("polygonal_zones_test.geojson")
     await hass.async_add_executor_job(
         Path(zones_path).write_text, json.dumps(_ZONE_GEOJSON), "utf-8"
@@ -85,10 +84,10 @@ async def test_mirror_reflects_matched_zone_name_via_real_hass(hass: HomeAssista
 
 
 async def test_companion_sensor_reflects_same_zone_via_real_hass(hass: HomeAssistant) -> None:
-    """Release A, PR A4: the companion sensor resolves independently of the
+    """The companion sensor resolves independently of the
     device_tracker mirror and agrees with it — proving the two platforms,
     forwarded concurrently by async_forward_entry_setups, both see the shared
-    ZoneSource correctly (the exact scenario PR A2's race fix protects)."""
+    ZoneSource correctly (the exact scenario the platform-forwarding race fix protects)."""
     zones_path = hass.config.path("polygonal_zones_test_sensor.geojson")
     await hass.async_add_executor_job(
         Path(zones_path).write_text, json.dumps(_ZONE_GEOJSON), "utf-8"
