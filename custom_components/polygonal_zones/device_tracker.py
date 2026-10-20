@@ -20,7 +20,7 @@ from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import CONF_EXPOSE_COORDINATES, DOMAIN
-from .utils import event_should_trigger, get_locations_zone
+from .utils import event_should_trigger
 from .utils.general import redact_uri
 from .utils.geometry import exterior_coords
 from .utils.zones import Zone
@@ -279,12 +279,10 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         shapely geometry math doesn't block the event loop. Should only
         be called when latitude, longitude, or gps_accuracy actually changes.
         """
-        zone = await self.hass.async_add_executor_job(
-            get_locations_zone, latitude, longitude, gps_accuracy, self._source.zones
-        )
+        zone = await self._source.async_resolve(self.hass, latitude, longitude, gps_accuracy)
         _LOGGER.debug("State of entity '%s' changed. new zone: %s", self._attr_unique_id, zone)
         self._attr_location_name = zone["name"] if zone is not None else "away"
-        # Additive, non-breaking in_zones doesn't affect
+        # Additive, non-breaking: in_zones doesn't affect
         # `state` while location_name is still set (location_name wins), but
         # publishing it now means HA's own zone occupancy count and any
         # automation already reading in_zones benefit immediately, and it's
