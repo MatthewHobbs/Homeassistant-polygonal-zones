@@ -40,14 +40,27 @@ jobs:
         with:
           fetch-depth: 1
 
+      # The action's marketplace URL must end in `.git` and cannot carry a ref,
+      # so pin the plugin source by checking it out at a commit and passing a
+      # local path.
+      - name: Checkout plugin marketplace
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: anthropics/claude-code
+          ref: a6e289a2e772a17b3614a9ef43303003de5cd887
+          path: .claude-plugin-marketplace
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: Run Claude Code Review
         id: claude-review
-        uses: anthropics/claude-code-action@756cc22e19660d20e8cc9496b4f242475a7f7790 # v1
+        uses: anthropics/claude-code-action@5eb090f3c3afd701a0672cd32981197ca27688f6 # v1.0.253
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
+          plugin_marketplaces: './.claude-plugin-marketplace'
           plugins: 'code-review@claude-code-plugins'
           prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
+          claude_args: '--model opus'
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://code.claude.com/docs/en/cli-reference for available options
 
