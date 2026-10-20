@@ -15,11 +15,18 @@ platform's entity existing or its setup order.
 from __future__ import annotations
 
 from collections.abc import Callable, Coroutine
+from datetime import datetime
 from typing import Any
 
 from homeassistant.components.sensor import RestoreSensor, SensorDeviceClass
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_ENTITIES, STATE_UNAVAILABLE, STATE_UNKNOWN, EntityCategory
+from homeassistant.const import (
+    CONF_ENTITIES,
+    EVENT_STATE_CHANGED,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+    EntityCategory,
+)
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity import generate_entity_id
@@ -227,7 +234,7 @@ class PolygonalZoneLastReportedSensor(RestoreSensor):
     async def async_added_to_hass(self) -> None:
         """Restore the prior value (else seed from the source) and follow its reports."""
         last_data = await self.async_get_last_sensor_data()
-        if last_data is not None and last_data.native_value is not None:
+        if last_data is not None and isinstance(last_data.native_value, datetime):
             self._attr_native_value = last_data.native_value
         else:
             self._refresh()
@@ -244,6 +251,15 @@ class PolygonalZoneLastReportedSensor(RestoreSensor):
 
     @callback
     def _handle_event(self, event: Any) -> None:
+        # A source's first write after a restart (no previous state, or the
+        # "restored" placeholder HA writes at start) is its restored position
+        # being re-published, stamped with the restart time. Taking it as a
+        # report would overwrite the restored value and hide a tracker that died
+        # while HA was down. state_reported events are always genuine.
+        if event.event_type == EVENT_STATE_CHANGED:
+            old_state = event.data.get("old_state")
+            if old_state is None or old_state.attributes.get("restored"):
+                return
         self._refresh()
         self.async_write_ha_state()
 

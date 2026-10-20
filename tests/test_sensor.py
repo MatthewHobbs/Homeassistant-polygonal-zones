@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant.components.sensor import SensorDeviceClass
-from homeassistant.const import CONF_ENTITIES, EntityCategory
+from homeassistant.const import CONF_ENTITIES, EVENT_STATE_CHANGED, EntityCategory
 from shapely.geometry import Polygon
 
 from custom_components.polygonal_zones.sensor import (
@@ -360,6 +360,49 @@ async def test_last_reported_restores_when_source_is_unavailable() -> None:
         await sensor.async_added_to_hass()
 
     assert sensor.native_value == _T1
+
+
+async def test_last_reported_non_datetime_restore_falls_back_to_the_seed() -> None:
+    """Only a datetime is restorable into a TIMESTAMP sensor (a str would raise on write)."""
+    for restored in (None, "Home"):
+        sensor = _last_reported_sensor(_T2)
+        sensor.async_get_last_sensor_data = AsyncMock(
+            return_value=SimpleNamespace(native_value=restored)
+        )
+
+        with (
+            patch("custom_components.polygonal_zones.sensor.async_track_state_change_event"),
+            patch("custom_components.polygonal_zones.sensor.async_track_state_report_event"),
+        ):
+            await sensor.async_added_to_hass()
+
+        assert sensor.native_value == _T2
+
+
+def _state_changed(old_state):
+    return SimpleNamespace(event_type=EVENT_STATE_CHANGED, data={"old_state": old_state})
+
+
+async def test_last_reported_ignores_a_sources_first_write_and_restored_placeholder() -> None:
+    sensor = _last_reported_sensor(_T1)
+    sensor._refresh()
+    sensor.hass.states.get.return_value = SimpleNamespace(state="home", last_reported=_T2)
+
+    for old_state in (None, SimpleNamespace(attributes={"restored": True})):
+        sensor._handle_event(_state_changed(old_state))
+
+    assert sensor.native_value == _T1
+    sensor.async_write_ha_state.assert_not_called()
+
+
+async def test_last_reported_accepts_a_state_changed_with_a_real_previous_state() -> None:
+    sensor = _last_reported_sensor(_T1)
+    sensor._refresh()
+    sensor.hass.states.get.return_value = SimpleNamespace(state="home", last_reported=_T2)
+
+    sensor._handle_event(_state_changed(SimpleNamespace(attributes={})))
+
+    assert sensor.native_value == _T2
 
 
 async def test_last_reported_event_updates_value_and_writes_state() -> None:

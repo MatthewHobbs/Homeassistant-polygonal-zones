@@ -37,7 +37,7 @@ That command is documented as "hit or miss" on iOS, works only while the app is
 running, and is advised against on a schedule because of battery use. It works
 only for Companion-app trackers, and this integration mirrors any
 `device_tracker`. So the sensor works for every source, and the request stays
-the user's choice. I chose B and that it be disabled by default. The options I
+the user's choice. I chose the sensor-plus-recipe option, disabled by default. The options I
 did not choose are in the RFC.
 
 ## Consequences
@@ -62,9 +62,16 @@ did not choose are in the RFC.
 **Watch**
 
 - After a restart the source's own `last_reported` is the restart time, so the
-  sensor deliberately prefers its restored value, which is older and truer. A
-  report made between start and the sensor being added is missed until the next
-  one, which can raise one avoidable stale alert.
+  sensor prefers its restored value, which is older and truer. The source's first
+  write after a restart (no previous state, or Home Assistant's `restored`
+  placeholder) is not counted as a report either; otherwise a tracker that died
+  while Home Assistant was down would look freshly reported. The cost is that a
+  brand-new tracker's very first write is ignored.
+- A report made between start and the sensor being added is missed until the
+  next one, which can raise one avoidable stale alert.
+- Home Assistant keeps a removed entity's last value for 7 days. Disabling and
+  re-enabling the sensor, or removing and re-adding a tracker, inside that window
+  restores an old timestamp until the tracker next reports.
 
 ## Verification (2026-10-20)
 
@@ -73,13 +80,17 @@ did not choose are in the RFC.
   not tell the two events apart, so this runs the real state machine.
 - Advancing on `unavailable` fails
   `test_source_going_unavailable_keeps_the_last_timestamp`.
+- Letting a source's first post-restart write count as a report fails
+  `test_sources_first_write_after_restart_does_not_overwrite_the_restore`.
 - Deriving the unique id from the entity id fails
   `test_unique_id_survives_a_taken_entity_id`; skipping restore fails
   `test_value_is_restored_when_the_source_is_unavailable`.
 - The README template is rendered against the real sensor in
   `test_readme_template_flips_after_ten_minutes_of_silence`.
-- Not checked: behaviour on a real Companion-app device, and the
-  `Pytest (HA floor)` job's result is the evidence for the HA 2026.7.1 floor.
+- The `Pytest (HA floor)` job is the evidence that the sensor works on the HA
+  2026.7.1 floor.
+- Not checked: behaviour on a real Companion-app device, and the real bootstrap
+  order of a source integration against this one.
 
 ## References
 

@@ -56,13 +56,14 @@ async def _setup(
     hass: HomeAssistant,
     *,
     enable_sensor: bool,
-    source_state: str = "not_home",
+    source_state: str | None = "not_home",
     placeholder: bool = False,
     restore_value: datetime | None = None,
 ) -> MockConfigEntry:
     path = hass.config.path("polygonal_zones_last_reported.geojson")
     await hass.async_add_executor_job(Path(path).write_text, json.dumps(_ZONES), "utf-8")
-    hass.states.async_set(_SOURCE, source_state, _ATTRS if source_state == "not_home" else None)
+    if source_state is not None:
+        hass.states.async_set(_SOURCE, source_state, _ATTRS if source_state == "not_home" else None)
 
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -213,3 +214,24 @@ async def test_value_is_restored_when_the_source_is_unavailable(hass: HomeAssist
     await _setup(hass, enable_sensor=True, source_state="unavailable", restore_value=when)
 
     assert hass.states.get(_SENSOR).state == when.isoformat()
+
+
+async def test_sources_first_write_after_restart_does_not_overwrite_the_restore(
+    hass: HomeAssistant, freezer
+) -> None:
+    """A source integration that loads after ours re-publishes its restored position
+    stamped with the restart time. That is not a report: a tracker that died while
+    HA was down must keep its old timestamp."""
+    when = datetime(2026, 10, 20, 8, 0, tzinfo=UTC)
+    await _setup(hass, enable_sensor=True, source_state=None, restore_value=when)
+    assert hass.states.get(_SENSOR).state == when.isoformat()
+
+    freezer.tick(timedelta(minutes=5))
+    hass.states.async_set(_SOURCE, "not_home", _ATTRS)  # first write: old_state is None
+    await hass.async_block_till_done()
+    assert hass.states.get(_SENSOR).state == when.isoformat()
+
+    freezer.tick(timedelta(minutes=5))
+    hass.states.async_set(_SOURCE, "not_home", {**_ATTRS, "latitude": 51.5126})  # a real report
+    await hass.async_block_till_done()
+    assert hass.states.get(_SENSOR).state != when.isoformat()
