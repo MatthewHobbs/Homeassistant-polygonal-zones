@@ -72,7 +72,7 @@ async def test_update_location_outside_zones_marks_away() -> None:
 
 
 async def test_update_location_matches_home_zone_sets_in_zones() -> None:
-    """Additive (Release A, PR A3): matching the configured home zone publishes
+    """Additive: matching the configured home zone publishes
     in_zones without touching location_name/state, which still wins today."""
     entity = _make_entity(zones=[_HOME], home_zone_id="Home")
     entity.hass = _make_hass()

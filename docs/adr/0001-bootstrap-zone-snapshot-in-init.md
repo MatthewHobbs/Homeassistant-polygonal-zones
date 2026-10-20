@@ -63,8 +63,3 @@ carries the message.
   that harness is a separate, larger change and is not part of this ADR.
 - Not established by this change: why the original reporter's download
   failed. That remains open on #84 pending their debug log.
-
-## Data class
-
-This is a public GitHub repo with no non-public personal data, so it classifies as
-**Public** (content already public).

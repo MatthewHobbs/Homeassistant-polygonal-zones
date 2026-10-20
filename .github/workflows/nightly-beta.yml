@@ -1,6 +1,6 @@
 name: Nightly HA beta
 
-# ADR 0002 / RFC 0006 (Option A): HA typically ships a beta about a week
+# ADR 0002 (Option A): HA typically ships a beta about a week
 # before the matching final release. A breaking API change lands in that
 # beta, but nothing else in this repo's CI catches it until the final release
 # ships - at which point users already have it. This job resolves the latest

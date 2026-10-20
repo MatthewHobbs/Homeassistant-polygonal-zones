@@ -20,6 +20,9 @@ concurrency:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
+permissions:
+  contents: read
+
 jobs:
   # On schedule/dispatch, decide whether upstream (latest in-range HA + shapely)
   # has changed since the last passing nightly. push/PR never gate — code changes
@@ -117,7 +120,7 @@ jobs:
       - run: pip install "homeassistant==$(jq -r .homeassistant hacs.json)"
       - run: pytest --cov=custom_components/polygonal_zones --cov-report=term --cov-fail-under=98
 
-  # Real-hass suite (tests_hass/) — Release A of the location_name migration.
+  # Real-hass suite (tests_hass/) for the location_name migration.
   # Its own job, own install, own venv-equivalent:
   # pytest-homeassistant-custom-component hard-pins one EXACT homeassistant
   # version per release, which would fight both Pytest's "latest in range" and
