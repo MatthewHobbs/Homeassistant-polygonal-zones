@@ -282,13 +282,10 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         zone = await self._source.async_resolve(self.hass, latitude, longitude, gps_accuracy)
         _LOGGER.debug("State of entity '%s' changed. new zone: %s", self._attr_unique_id, zone)
         self._attr_location_name = zone["name"] if zone is not None else "away"
-        # Additive, non-breaking: in_zones doesn't affect
-        # `state` while location_name is still set (location_name wins), but
-        # publishing it now means HA's own zone occupancy count and any
-        # automation already reading in_zones benefit immediately, and it's
-        # the exact mechanism Release B's state migration needs already in
-        # place. Only ever the configured home zone — no real zone.* entity
-        # exists for our other (polygon) zones to reference. See the RFC.
+        # in_zones does not affect `state` while location_name is set, but it
+        # already feeds HA's zone occupancy and is what the later state
+        # migration needs. Only the configured home zone: no real zone.* entity
+        # exists for our other (polygon) zones to reference.
         self._attr_in_zones = (
             [ENTITY_ID_HOME]
             if (
