@@ -3,6 +3,8 @@
 import asyncio
 import contextlib
 import json
+import logging
+import math
 import os
 from pathlib import Path
 from typing import Any
@@ -13,23 +15,34 @@ from shapely import to_geojson
 from ..const import SCHEMA_VERSION
 from .zones import Zone, get_zones
 
+_LOGGER = logging.getLogger(__name__)
+
 _FILE_LOCKS: dict[str, asyncio.Lock] = {}
 
 
-def _lock_timeout() -> int:
+def _lock_timeout() -> float:
     """Seconds to wait on the per-file lock before a mutation service aborts.
 
     ``POLYGONAL_ZONES_LOCK_ACQUIRE_TIMEOUT`` in the HA process environment
     overrides the default 15 (useful for NFS-mounted /config or SD-card
     Raspberry Pi setups where a single flush can push past it). A value that is
-    not a positive integer falls back to the default instead of failing the
+    not a positive number is ignored with a warning instead of failing the
     import of the whole integration.
     """
-    try:
-        value = int(os.environ.get("POLYGONAL_ZONES_LOCK_ACQUIRE_TIMEOUT", "15"))
-    except ValueError:
+    raw = os.environ.get("POLYGONAL_ZONES_LOCK_ACQUIRE_TIMEOUT")
+    if raw is None:
         return 15
-    return value if value > 0 else 15
+    try:
+        value = float(raw)
+    except ValueError:
+        value = 0.0
+    if not (math.isfinite(value) and value > 0):
+        _LOGGER.warning(
+            "Ignoring POLYGONAL_ZONES_LOCK_ACQUIRE_TIMEOUT=%r: not a positive number; using 15",
+            raw,
+        )
+        return 15
+    return value
 
 
 LOCK_ACQUIRE_TIMEOUT = _lock_timeout()

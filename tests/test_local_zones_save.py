@@ -244,13 +244,29 @@ async def test_concurrent_writes_to_same_path_serialize(tmp_path) -> None:
     assert final in ('{"writer": "A"}', '{"writer": "B"}')
 
 
-def test_lock_timeout_falls_back_to_default_on_a_bad_value(monkeypatch) -> None:
-    """A typo in the override must not stop the integration importing."""
+@pytest.mark.parametrize("raw", ["fifteen", "-3", "0", "", "nan", "inf", "30s"])
+def test_lock_timeout_ignores_a_bad_value_with_a_warning(monkeypatch, caplog, raw) -> None:
+    """A typo in the override must not stop the integration importing, or silently
+    turn into a zero timeout that fails every mutation."""
     from custom_components.polygonal_zones.utils.local_zones import _lock_timeout
 
-    monkeypatch.setenv("POLYGONAL_ZONES_LOCK_ACQUIRE_TIMEOUT", "fifteen")
+    monkeypatch.setenv("POLYGONAL_ZONES_LOCK_ACQUIRE_TIMEOUT", raw)
     assert _lock_timeout() == 15
-    monkeypatch.setenv("POLYGONAL_ZONES_LOCK_ACQUIRE_TIMEOUT", "-3")
+    assert "POLYGONAL_ZONES_LOCK_ACQUIRE_TIMEOUT" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"), [("40", 40), ("2.5", 2.5), ("60.0", 60.0), (" 15 ", 15)]
+)
+def test_lock_timeout_accepts_a_positive_number(monkeypatch, raw, expected) -> None:
+    from custom_components.polygonal_zones.utils.local_zones import _lock_timeout
+
+    monkeypatch.setenv("POLYGONAL_ZONES_LOCK_ACQUIRE_TIMEOUT", raw)
+    assert _lock_timeout() == expected
+
+
+def test_lock_timeout_defaults_to_15_when_unset(monkeypatch) -> None:
+    from custom_components.polygonal_zones.utils.local_zones import _lock_timeout
+
+    monkeypatch.delenv("POLYGONAL_ZONES_LOCK_ACQUIRE_TIMEOUT", raising=False)
     assert _lock_timeout() == 15
-    monkeypatch.setenv("POLYGONAL_ZONES_LOCK_ACQUIRE_TIMEOUT", "40")
-    assert _lock_timeout() == 40
