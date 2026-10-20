@@ -2,7 +2,7 @@
 
 Part of the location_name migration: the matched zone's name as a plain string — the exact value
 ``device_tracker``'s ``location_name`` publishes today — living on its own
-entity that survives Release B's removal of ``location_name``. Additive:
+entity that survives the removal of ``location_name``. Additive:
 nothing about ``device_tracker.py`` changes here.
 
 Deliberately a separate resolution, not a listener chained off the
@@ -48,7 +48,7 @@ async def async_setup_entry(
     """Set up one zone-name sensor per tracked device_tracker.
 
     ``__init__.async_setup_entry`` builds the shared ``ZoneSource`` on
-    ``entry.runtime_data.source`` before this platform is forwarded (PR A2) —
+    ``entry.runtime_data.source`` before this platform is forwarded —
     this just builds a thin sensor per tracked ``device_tracker`` that reads
     from it, mirroring ``device_tracker.py``'s own entity construction.
     """

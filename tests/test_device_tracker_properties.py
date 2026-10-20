@@ -15,7 +15,7 @@ from tests.helpers import make_entity as _make_entity
 
 def _entry_with_source(**data_overrides) -> SimpleNamespace:
     """Build a stub config entry with runtime_data.source already set, mirroring
-    what __init__.async_setup_entry does before forwarding a platform (PR A2)."""
+    what __init__.async_setup_entry does before forwarding a platform."""
     entry = SimpleNamespace(
         entry_id=data_overrides.pop("entry_id", "entry-1"),
         title=data_overrides.pop("title", "Polygonal Zones"),
