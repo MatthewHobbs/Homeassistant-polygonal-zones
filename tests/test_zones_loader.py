@@ -460,6 +460,32 @@ async def test_failed_load_logs_and_records_only_the_redacted_uri(caplog) -> Non
     assert all(r.exc_info is None for r in caplog.records)
 
 
+async def test_real_aiohttp_error_does_not_leak_the_query_token(caplog) -> None:
+    """aiohttp drops user:pass@ but keeps the query in its own message, so the
+    configured string never appears in it: the case a literal replace cannot catch."""
+    import aiohttp
+    from yarl import URL
+
+    async def fake_load(uri: str, _hass, **_kwargs) -> str:
+        info = aiohttp.RequestInfo(
+            url=URL(uri), method="GET", headers={}, real_url=URL(uri).with_user(None)
+        )
+        raise aiohttp.ClientResponseError(info, (), status=401, message="Unauthorized")
+
+    with (
+        caplog.at_level("DEBUG"),
+        patch("custom_components.polygonal_zones.utils.zones.load_data", side_effect=fake_load),
+    ):
+        result = await load_zones([_SECRET_URI], _make_hass(), False)
+        with pytest.raises(ZoneFileCorrupt) as all_failed:
+            await get_zones([_SECRET_URI], _make_hass(), False)
+
+    everything = caplog.text + repr(result.failures) + str(all_failed.value)
+    assert "s3cr3t" not in everything
+    assert "pa55" not in everything
+    assert "401" in everything  # still useful to the person debugging
+
+
 async def test_get_zones_all_failed_message_is_redacted() -> None:
     async def fake_load(uri: str, _hass, **_kwargs) -> str:
         raise RuntimeError(f"nope {uri}")

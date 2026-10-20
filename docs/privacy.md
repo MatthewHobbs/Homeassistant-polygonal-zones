@@ -75,6 +75,8 @@ When `zone_urls` points at an `http(s)://` URL, the integration fetches it from 
 
 Zone names, the zones a position matches and distances are logged at `DEBUG` level; coordinates are never logged. `WARNING`-level log lines (raised when a zone file can't be fetched) include the zone URL with any credentials and query string removed, the error type and the config entry id. If you forward HA logs to an external aggregator, consider redacting those lines.
 
+Do not put a secret in a zone URL (`user:pass@` or `?token=`): use the add-on token field instead. Releases before 1.15.1 wrote the full URL, credentials and query string included, to the log, to the `zone_uris` attribute and so to the recorder history and backups. If any of your zone URLs carried a credential or token, rotate it and treat old logs and history as sensitive.
+
 ---
 
 ## Add-on: map tiles and zone file

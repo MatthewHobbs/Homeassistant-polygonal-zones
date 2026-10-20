@@ -29,6 +29,13 @@ def test_http_url_with_no_hostname_rejected(tmp_path) -> None:
     assert errors == {"zone_urls": "invalid_url"}
 
 
+def test_malformed_port_rejected(tmp_path) -> None:
+    """urlparse accepts the host but not the port; aiohttp would later echo the raw string."""
+    hass = _hass(tmp_path)
+    errors = _run(validate_zone_urls(["http://u:p@host:bad/z.json?token=T"], hass))
+    assert errors == {"zone_urls": "invalid_url"}
+
+
 def test_unsupported_scheme_rejected(tmp_path) -> None:
     """Schemes other than http/https are refused."""
     hass = _hass(tmp_path)

@@ -8,6 +8,7 @@ import pytest
 from custom_components.polygonal_zones.utils.general import (
     event_should_trigger,
     is_local_add_on_host,
+    redact_text,
     redact_uri,
     safe_config_path,
 )
@@ -34,6 +35,37 @@ def test_redact_uri_malformed_port_does_not_raise() -> None:
     """A non-numeric port makes urlparse.port raise ValueError; redact must degrade
     to the raw string rather than crash a diagnostics dump."""
     assert redact_uri("http://example.com:bad/zones.json") == "http://example.com:bad/zones.json"
+
+
+def test_redact_uri_malformed_port_still_strips_credentials_and_query() -> None:
+    """A URI urlparse cannot take apart must not be returned raw."""
+    out = redact_uri("http://u:p@host:bad/x?token=T#frag")
+    assert out == "http://host:bad/x"
+
+
+def test_redact_uri_keeps_ipv6_brackets() -> None:
+    assert redact_uri("http://[fd00::1]:8000/z?t=1") == "http://[fd00::1]:8000/z"
+    assert redact_uri("https://[::1]/z") == "https://[::1]/z"
+
+
+def test_redact_text_cleans_urls_inside_an_aiohttp_error() -> None:
+    """aiohttp's own message holds a URL it already rewrote (credentials dropped,
+    query kept), which a literal replace of the configured string cannot match."""
+    import aiohttp
+    from yarl import URL
+
+    raw = "https://user:pa55@zones.example.com/z.json?token=s3cr3t"
+    info = aiohttp.RequestInfo(
+        url=URL(raw), method="GET", headers={}, real_url=URL(raw).with_user(None)
+    )
+    err = aiohttp.ClientResponseError(info, (), status=401, message="Unauthorized")
+
+    assert "s3cr3t" in str(err)  # the premise: the raw error does leak
+    cleaned = redact_text(str(err))
+
+    assert "s3cr3t" not in cleaned
+    assert "pa55" not in cleaned
+    assert "https://zones.example.com/z.json" in cleaned
 
 
 def test_is_local_add_on_host_private_ipv4() -> None:

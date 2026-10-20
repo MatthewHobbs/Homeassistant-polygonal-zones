@@ -14,7 +14,7 @@ from shapely.geometry import Point, shape
 from shapely.geometry.polygon import Polygon
 
 from ..const import MAX_SUPPORTED_SCHEMA_VERSION
-from .general import load_data, redact_uri
+from .general import load_data, redact_text, redact_uri
 from .geometry import (
     get_distance_to_centroid,
     get_distance_to_exterior_points,
@@ -273,7 +273,7 @@ async def load_zones(
             # would end up in the HA log, in repair text and in pasted bug
             # reports. No traceback: it would print the raw exception text again.
             safe_uri = redact_uri(uri)
-            message = str(err).replace(uri, safe_uri)
+            message = redact_text(str(err))
             _LOGGER.warning(
                 "Failed to load zones from %s: %s: %s", safe_uri, type(err).__name__, message
             )

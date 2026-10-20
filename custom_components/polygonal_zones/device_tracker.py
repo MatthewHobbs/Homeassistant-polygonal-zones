@@ -230,6 +230,10 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
                     "matched_zones",
                 ):
                     restored.pop(gated, None)
+            # State saved by an older release may hold raw URLs (credentials,
+            # query tokens); never re-publish them.
+            if isinstance(restored.get("zone_uris"), list):
+                restored["zone_uris"] = [redact_uri(str(u)) for u in restored["zone_uris"]]
             self._attr_extra_state_attributes = restored
 
         self._unsub_source = self._source.add_listener(self._handle_source_reloaded)
