@@ -256,10 +256,27 @@ async def test_public_only_resolver_skips_non_ip_addresses() -> None:
     assert infos == [{"host": "8.8.8.8"}]
 
 
+async def test_public_only_resolver_keeps_only_the_public_address_of_a_mixed_answer() -> None:
+    """One hostname answering with both a public and a private address must not
+    leave the private one connectable (DNS-rebinding style SSRF)."""
+    resolver = _PublicOnlyResolver()
+    mixed = [{"host": "8.8.8.8"}, {"host": "10.0.0.1"}, {"host": "169.254.169.254"}]
+    with patch("aiohttp.resolver.DefaultResolver.resolve", new=AsyncMock(return_value=mixed)):
+        infos = await resolver.resolve("mixed.example", 443)
+    assert infos == [{"host": "8.8.8.8"}]
+
+
 async def test_load_data_rejects_a_body_that_outgrows_the_limit_mid_stream(tmp_path) -> None:
-    """No Content-Length to check up front, so the size cap has to bite while streaming."""
-    response = _FakeResponse(body=b"x" * (7 * 1024 * 1024))
+    """No Content-Length to check up front, so the cap has to bite while streaming,
+    across several chunks: no single chunk is over the limit."""
+    response = _FakeResponse()
     response.content_length = None
+
+    async def seven_mebibytes(_chunk_size: int):
+        for _ in range(7):
+            yield b"x" * (1024 * 1024)
+
+    response.content = SimpleNamespace(iter_chunked=seven_mebibytes)
     with (
         patch(
             "custom_components.polygonal_zones.utils.general.aiohttp.TCPConnector",
