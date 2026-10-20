@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import logging
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from homeassistant.config_entries import ConfigEntry
@@ -24,7 +23,7 @@ from .const import (
 )
 from .services import register_services
 from .utils.general import download_zone_relative_path, safe_config_path
-from .utils.local_zones import download_zones, release_file_lock
+from .utils.local_zones import download_zones
 from .utils.zones import UnsupportedSchemaVersion
 from .zone_source import ZoneSource
 
@@ -175,14 +174,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: PolygonalZonesConfigEnt
         data = getattr(entry, "runtime_data", None)
         if data is not None and data.source is not None:
             data.source.async_shutdown()
-        # Drop the per-file lock so it doesn't accumulate across reloads.
-        # If download_zones was never enabled, this is a harmless no-op.
-        relative = download_zone_relative_path(entry.entry_id)
-        try:
-            download_path = safe_config_path(hass.config.config_dir, relative)
-        except ValueError:
-            download_path = Path(hass.config.config_dir) / relative
-        release_file_lock(download_path)
     return unload_ok
 
 

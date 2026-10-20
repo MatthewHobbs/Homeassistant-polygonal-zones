@@ -57,11 +57,11 @@ async def test_add_zone_timeout_wrapped(tmp_path) -> None:
     call = SimpleNamespace(data={"device_id": "x", "zone": json.dumps(_polygon_feature("Home"))})
     with (
         patch(
-            "custom_components.polygonal_zones.services.add_new_zone.get_entities_from_device_id",
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
             return_value=[_entity_stub()],
         ),
         patch(
-            "custom_components.polygonal_zones.services.add_new_zone.load_data",
+            "custom_components.polygonal_zones.services.helpers.load_data",
             new=AsyncMock(side_effect=TimeoutError),
         ),
         pytest.raises(InvalidZoneData),
@@ -77,11 +77,11 @@ async def test_delete_zone_timeout_wrapped(tmp_path) -> None:
     call = SimpleNamespace(data={"device_id": "x", "zone_name": "Home"})
     with (
         patch(
-            "custom_components.polygonal_zones.services.delete_zone.get_entities_from_device_id",
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
             return_value=[_entity_stub()],
         ),
         patch(
-            "custom_components.polygonal_zones.services.delete_zone.load_data",
+            "custom_components.polygonal_zones.services.helpers.load_data",
             new=AsyncMock(side_effect=TimeoutError),
         ),
         pytest.raises(InvalidZoneData),
@@ -103,11 +103,11 @@ async def test_edit_zone_timeout_wrapped(tmp_path) -> None:
     )
     with (
         patch(
-            "custom_components.polygonal_zones.services.edit_zone.get_entities_from_device_id",
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
             return_value=[_entity_stub()],
         ),
         patch(
-            "custom_components.polygonal_zones.services.edit_zone.load_data",
+            "custom_components.polygonal_zones.services.helpers.load_data",
             new=AsyncMock(side_effect=TimeoutError),
         ),
         pytest.raises(InvalidZoneData),
@@ -125,7 +125,7 @@ async def test_replace_all_timeout_wrapped(tmp_path) -> None:
     )
     with (
         patch(
-            "custom_components.polygonal_zones.services.replace_all_zones.get_entities_from_device_id",
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
             return_value=[_entity_stub()],
         ),
         patch(

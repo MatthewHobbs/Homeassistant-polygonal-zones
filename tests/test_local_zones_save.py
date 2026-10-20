@@ -1,4 +1,4 @@
-"""Coverage for utils.local_zones save_zones, download_zones, release_file_lock."""
+"""Coverage for utils.local_zones save_zones and download_zones."""
 
 import asyncio
 import json
@@ -14,7 +14,6 @@ from custom_components.polygonal_zones.utils.local_zones import (
     download_zones,
     dump_feature_collection,
     get_file_lock,
-    release_file_lock,
     save_zones,
     zones_to_geojson,
 )
@@ -185,11 +184,6 @@ async def test_download_zones_writes_to_destination(tmp_path) -> None:
     assert parsed["features"][0]["properties"]["name"] == "Home"
 
 
-def test_release_file_lock_on_unknown_path_is_noop(tmp_path) -> None:
-    """Releasing a path that was never locked must not raise."""
-    release_file_lock(tmp_path / "never-locked.json")
-
-
 def test_get_file_lock_returns_same_instance() -> None:
     """Repeat calls for the same path return the same Lock object."""
 
@@ -198,25 +192,6 @@ def test_get_file_lock_returns_same_instance() -> None:
         a = get_file_lock(path)
         b = get_file_lock(path)
         assert a is b
-
-    asyncio.run(_go())
-
-
-def test_release_file_lock_refuses_to_drop_held_lock() -> None:
-    """A lock held by an in-flight writer must NOT be dropped on unload — otherwise
-    the next caller gets a fresh Lock for the same path and mutual exclusion breaks.
-    Once released, the same path hands back the identical Lock object."""
-
-    async def _go():
-        path = Path("/tmp/test-held-lock.json")
-        lock = get_file_lock(path)
-        async with lock:  # simulate a mutation mid-write during a reload
-            release_file_lock(path)
-            # Still cached and identical while held.
-            assert get_file_lock(path) is lock
-        # Now idle → a subsequent release actually drops it.
-        release_file_lock(path)
-        assert get_file_lock(path) is not lock
 
     asyncio.run(_go())
 
@@ -267,3 +242,31 @@ async def test_concurrent_writes_to_same_path_serialize(tmp_path) -> None:
     # Last writer wins
     final = target.read_text()
     assert final in ('{"writer": "A"}', '{"writer": "B"}')
+
+
+@pytest.mark.parametrize("raw", ["fifteen", "-3", "0", "", "nan", "inf", "30s"])
+def test_lock_timeout_ignores_a_bad_value_with_a_warning(monkeypatch, caplog, raw) -> None:
+    """A typo in the override must not stop the integration importing, or silently
+    turn into a zero timeout that fails every mutation."""
+    from custom_components.polygonal_zones.utils.local_zones import _lock_timeout
+
+    monkeypatch.setenv("POLYGONAL_ZONES_LOCK_ACQUIRE_TIMEOUT", raw)
+    assert _lock_timeout() == 15
+    assert "POLYGONAL_ZONES_LOCK_ACQUIRE_TIMEOUT" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"), [("40", 40), ("2.5", 2.5), ("60.0", 60.0), (" 15 ", 15)]
+)
+def test_lock_timeout_accepts_a_positive_number(monkeypatch, raw, expected) -> None:
+    from custom_components.polygonal_zones.utils.local_zones import _lock_timeout
+
+    monkeypatch.setenv("POLYGONAL_ZONES_LOCK_ACQUIRE_TIMEOUT", raw)
+    assert _lock_timeout() == expected
+
+
+def test_lock_timeout_defaults_to_15_when_unset(monkeypatch) -> None:
+    from custom_components.polygonal_zones.utils.local_zones import _lock_timeout
+
+    monkeypatch.delenv("POLYGONAL_ZONES_LOCK_ACQUIRE_TIMEOUT", raising=False)
+    assert _lock_timeout() == 15

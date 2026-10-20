@@ -54,7 +54,7 @@ async def test_replace_writes_full_collection(tmp_path) -> None:
     call = SimpleNamespace(data={"device_id": "fake-device-id", "zone": json.dumps(new_collection)})
 
     with patch(
-        "custom_components.polygonal_zones.services.replace_all_zones.get_entities_from_device_id",
+        "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
         return_value=[fake_entity],
     ):
         await action(call)
@@ -79,7 +79,7 @@ async def test_replace_invalid_payload_raises(tmp_path) -> None:
 
     with (
         patch(
-            "custom_components.polygonal_zones.services.replace_all_zones.get_entities_from_device_id",
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
             return_value=[fake_entity],
         ),
         pytest.raises(InvalidZoneData),
@@ -102,7 +102,7 @@ async def test_replace_non_editable_raises(tmp_path) -> None:
 
     with (
         patch(
-            "custom_components.polygonal_zones.services.replace_all_zones.get_entities_from_device_id",
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
             return_value=[fake_entity],
         ),
         pytest.raises(ZoneFileNotEditable),

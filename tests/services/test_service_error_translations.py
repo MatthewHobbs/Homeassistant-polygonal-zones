@@ -67,11 +67,11 @@ async def test_add_zone_aiohttp_error_wrapped(tmp_path) -> None:
     action = add_builder(_hass(tmp_path))
     with (
         patch(
-            "custom_components.polygonal_zones.services.add_new_zone.get_entities_from_device_id",
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
             return_value=[_entity()],
         ),
         patch(
-            "custom_components.polygonal_zones.services.add_new_zone.load_data",
+            "custom_components.polygonal_zones.services.helpers.load_data",
             new=AsyncMock(side_effect=aiohttp.ClientError("network down")),
         ),
         pytest.raises(InvalidZoneData),
@@ -84,11 +84,11 @@ async def test_add_zone_oserror_wrapped(tmp_path) -> None:
     action = add_builder(_hass(tmp_path))
     with (
         patch(
-            "custom_components.polygonal_zones.services.add_new_zone.get_entities_from_device_id",
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
             return_value=[_entity()],
         ),
         patch(
-            "custom_components.polygonal_zones.services.add_new_zone.save_zones",
+            "custom_components.polygonal_zones.services.helpers.save_zones",
             new=AsyncMock(side_effect=OSError("disk full")),
         ),
         pytest.raises(InvalidZoneData),
@@ -101,7 +101,7 @@ async def test_add_zone_valueerror_wrapped(tmp_path) -> None:
     action = add_builder(_hass(tmp_path))
     with (
         patch(
-            "custom_components.polygonal_zones.services.add_new_zone.get_entities_from_device_id",
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
             return_value=[_entity()],
         ),
         pytest.raises(InvalidZoneData),
@@ -117,11 +117,11 @@ async def test_delete_zone_aiohttp_error_wrapped(tmp_path) -> None:
     call = SimpleNamespace(data={"device_id": "x", "zone_name": "Home"})
     with (
         patch(
-            "custom_components.polygonal_zones.services.delete_zone.get_entities_from_device_id",
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
             return_value=[_entity()],
         ),
         patch(
-            "custom_components.polygonal_zones.services.delete_zone.load_data",
+            "custom_components.polygonal_zones.services.helpers.load_data",
             new=AsyncMock(side_effect=aiohttp.ClientError("nope")),
         ),
         pytest.raises(InvalidZoneData),
@@ -137,11 +137,11 @@ async def test_delete_zone_oserror_wrapped(tmp_path) -> None:
     call = SimpleNamespace(data={"device_id": "x", "zone_name": "Home"})
     with (
         patch(
-            "custom_components.polygonal_zones.services.delete_zone.get_entities_from_device_id",
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
             return_value=[_entity()],
         ),
         patch(
-            "custom_components.polygonal_zones.services.delete_zone.save_zones",
+            "custom_components.polygonal_zones.services.helpers.save_zones",
             new=AsyncMock(side_effect=OSError("disk full")),
         ),
         pytest.raises(InvalidZoneData),
@@ -155,7 +155,7 @@ async def test_delete_zone_corrupt_json_wrapped(tmp_path) -> None:
     call = SimpleNamespace(data={"device_id": "x", "zone_name": "Home"})
     with (
         patch(
-            "custom_components.polygonal_zones.services.delete_zone.get_entities_from_device_id",
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
             return_value=[_entity()],
         ),
         pytest.raises(InvalidZoneData),
@@ -177,11 +177,11 @@ async def test_edit_zone_aiohttp_error_wrapped(tmp_path) -> None:
     )
     with (
         patch(
-            "custom_components.polygonal_zones.services.edit_zone.get_entities_from_device_id",
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
             return_value=[_entity()],
         ),
         patch(
-            "custom_components.polygonal_zones.services.edit_zone.load_data",
+            "custom_components.polygonal_zones.services.helpers.load_data",
             new=AsyncMock(side_effect=aiohttp.ClientError("nope")),
         ),
         pytest.raises(InvalidZoneData),
@@ -203,11 +203,11 @@ async def test_edit_zone_oserror_wrapped(tmp_path) -> None:
     )
     with (
         patch(
-            "custom_components.polygonal_zones.services.edit_zone.get_entities_from_device_id",
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
             return_value=[_entity()],
         ),
         patch(
-            "custom_components.polygonal_zones.services.edit_zone.save_zones",
+            "custom_components.polygonal_zones.services.helpers.save_zones",
             new=AsyncMock(side_effect=OSError("disk full")),
         ),
         pytest.raises(InvalidZoneData),
@@ -227,7 +227,7 @@ async def test_edit_zone_corrupt_json_wrapped(tmp_path) -> None:
     )
     with (
         patch(
-            "custom_components.polygonal_zones.services.edit_zone.get_entities_from_device_id",
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
             return_value=[_entity()],
         ),
         pytest.raises(InvalidZoneData),
@@ -245,7 +245,7 @@ async def test_replace_all_oserror_wrapped(tmp_path) -> None:
     )
     with (
         patch(
-            "custom_components.polygonal_zones.services.replace_all_zones.get_entities_from_device_id",
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
             return_value=[_entity()],
         ),
         patch(
@@ -270,7 +270,7 @@ async def test_replace_all_path_traversal_wrapped(tmp_path) -> None:
     )
     with (
         patch(
-            "custom_components.polygonal_zones.services.replace_all_zones.get_entities_from_device_id",
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
             return_value=[bad_entity],
         ),
         pytest.raises(InvalidZoneData),
