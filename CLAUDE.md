@@ -19,3 +19,11 @@ Floor: **HA 2026.7.1 / Python 3.14**. Track breaking changes via the developer b
 
 - **SSRF protection:** private/LAN zone URLs are blocked by default; the "Allow private-network URLs (LAN)" advanced option opts in. Don't weaken this silently.
 - The config flow won't continue without the location-tracking consent tick — keep that gate.
+
+## In CI
+
+When Claude runs from `claude.yml` or `claude-code-review.yml` (not a local session):
+
+- Commit messages are Conventional Commits 1.0.0, imperative, ≤72 chars.
+- Never push to `main`; work on a branch and open a PR.
+- No attribution line (`Co-Authored-By`, "Generated with Claude Code") in commits or PR text.
