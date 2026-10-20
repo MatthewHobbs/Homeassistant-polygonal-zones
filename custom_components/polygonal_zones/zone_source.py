@@ -118,15 +118,18 @@ class ZoneSource:
         try:
             zone = await asyncio.shield(pending)
         except BaseException:
-            # The caller resumes before the done-callback below has run, so evict
-            # here too or a call in that gap would re-raise the same failure.
+            # Observed (test_resolve_does_not_cache_a_failure): the caller can resume
+            # before the done-callback below has evicted the failed run, so a call
+            # right after would re-raise the same failure. Evict here as well.
             self._drop_if_unusable(key, pending)
             raise
         if zone is None:
             return None
         return {**zone, "matched_zones": list(zone["matched_zones"])}
 
-    def _drop_if_unusable(self, key: tuple, fut: asyncio.Future) -> None:
+    def _drop_if_unusable(
+        self, key: tuple[float, float, float | None], fut: asyncio.Future[dict | None]
+    ) -> None:
         """Forget a run that failed or was cancelled so the next caller retries it.
 
         A done-callback, not an except block: a cancellation is a BaseException,

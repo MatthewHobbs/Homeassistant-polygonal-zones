@@ -388,6 +388,7 @@ async def test_cancelling_one_caller_does_not_cancel_the_run_another_waits_on() 
 async def test_a_run_nobody_awaits_any_more_is_still_evicted_when_it_fails() -> None:
     """Only the done-callback can do this: the one caller was cancelled while the run
     was still going, so no await is left on the failure path to evict it."""
+    import contextlib
     import threading
 
     src = _source()
@@ -401,10 +402,14 @@ async def test_a_run_nobody_awaits_any_more_is_still_evicted_when_it_fails() -> 
     with patch(_GET, side_effect=boom):
         caller = asyncio.ensure_future(src.async_resolve(_executor_hass(), 0.5, 0.5, 10))
         await asyncio.sleep(0.05)  # the run is in flight, blocked in the executor
+        (run,) = src._resolved.values()
         caller.cancel()
         await asyncio.sleep(0)
         assert len(src._resolved) == 1  # still shared: only the caller was cancelled
         release.set()
-        await asyncio.sleep(0.1)
+        # Wait for the run itself, not a fixed delay, so a slow runner cannot flake.
+        with contextlib.suppress(RuntimeError):
+            await run
+        await asyncio.sleep(0)  # let its done-callbacks run
 
     assert src._resolved == {}
