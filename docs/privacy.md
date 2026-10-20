@@ -25,6 +25,7 @@ The integration continuously monitors the GPS position of every `device_tracker`
 | Latitude, longitude, GPS accuracy | Entity attributes — only if **Expose GPS coordinates** is enabled                                                          |
 | Home-zone membership (`in_zones`) | Entity attribute — published whenever a **Home zone** is configured, regardless of **Expose GPS coordinates**              |
 | Zone history                      | Home Assistant's recorder database (HA's `home-assistant_v2.db`)                                                           |
+| Last-reported timestamp           | `sensor.polygonal_zones_<name>_last_reported` — only if you enable it (off by default); see below                          |
 | Downloaded zone file              | `<config>/polygonal_zones/<entry_id>.json` (mode 0600, directory 0700) — only if **Download the GeoJSON files** is enabled |
 | GPS coordinates in logs           | Only at `DEBUG` log level — never written at default (`INFO`) level                                                        |
 
@@ -50,9 +51,14 @@ recorder:
   exclude:
     entity_globs:
       - device_tracker.polygonal_zones_*
+      - sensor.polygonal_zones_*
 ```
 
 Restart Home Assistant after adding it.
+
+### Last-reported sensor
+
+Each tracked entity has an optional `sensor.polygonal_zones_<name>_last_reported` that holds the time the tracker last reported (for spotting a silent device). It is **disabled by default** and carries no coordinates, so **Expose GPS coordinates** does not affect it. But its value changes on every report, so while it is enabled the recorder stores a row per report: an activity log of when each tracked person's device checked in. If you do not want that history, leave it disabled or exclude it as above.
 
 ### Tracking other people
 
@@ -96,11 +102,13 @@ Your `zones.json` file contains the precise polygon coordinates of every place y
 
 If a tracked person asks for their location data to be removed:
 
-1. **Remove the entity from the integration.** Settings → Devices & Services → Polygonal Zones → ⋮ → Reconfigure → untick their entity → Save. The mirror entity is deleted automatically.
+1. **Remove the entity from the integration.** Settings → Devices & Services → Polygonal Zones → ⋮ → Reconfigure → untick their entity → Save. Then delete the person's leftover entities under Settings → Devices & Services → Entities if any remain listed (the mirror, the zone-name sensor and the last-reported sensor). Home Assistant also keeps each entity's last value in `.storage/core.restore_state`, and so in backups, for up to 7 days after removal.
 2. **Purge recorder history.** Developer Tools → Actions → `recorder.purge_entities`:
    ```yaml
    entity_id:
      - device_tracker.polygonal_zones_<original>
+     - sensor.polygonal_zones_<original>
+     - sensor.polygonal_zones_<original>_last_reported
      - device_tracker.<original>
    ```
    With `keep_days: 0` (the default), this removes all past state rows immediately.
