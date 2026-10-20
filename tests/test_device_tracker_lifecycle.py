@@ -358,3 +358,31 @@ async def test_zone_uris_attribute_strips_credentials_and_query() -> None:
     assert uris == ["https://zones.example.com/z.json", "/config/zones.json"]
     assert "pa55" not in repr(uris)
     assert "s3cr3t" not in repr(uris)
+
+
+async def test_handle_state_change_builder_invokes_update_on_match() -> None:
+    entity = _make_entity()
+    entity._update_state = AsyncMock()
+    old = SimpleNamespace(attributes={"latitude": 1, "longitude": 2, "gps_accuracy": 5})
+    new = SimpleNamespace(
+        attributes={"latitude": 99, "longitude": 2, "gps_accuracy": 5}, state="not_home"
+    )
+    event = SimpleNamespace(
+        data={"entity_id": "device_tracker.phone", "old_state": old, "new_state": new}
+    )
+
+    await entity._handle_state_change_builder()(event)
+
+    entity._update_state.assert_awaited_once()
+
+
+async def test_handle_state_change_builder_skips_other_entity() -> None:
+    entity = _make_entity()
+    entity._update_state = AsyncMock()
+    event = SimpleNamespace(
+        data={"entity_id": "device_tracker.someone_else", "old_state": None, "new_state": None}
+    )
+
+    await entity._handle_state_change_builder()(event)
+
+    entity._update_state.assert_not_awaited()

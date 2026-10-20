@@ -455,3 +455,7 @@ async def test_reconfigure_flow_editing_urls_needs_no_consent_and_keeps_timestam
     data = flow.async_update_reload_and_abort.call_args.kwargs["data"]
     # No new subject → the original attestation timestamp is carried forward.
     assert data["consent_confirmed_at"] == "2026-01-01T00:00:00+00:00"
+
+
+def test_async_get_options_flow_returns_handler() -> None:
+    assert isinstance(ConfigFlow.async_get_options_flow(SimpleNamespace()), OptionsFlowHandler)
