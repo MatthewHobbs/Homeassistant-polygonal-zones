@@ -64,7 +64,7 @@ async def test_add_zone_duplicate_name_raises(tmp_path) -> None:
 
     with (
         patch(
-            "custom_components.polygonal_zones.services.add_new_zone.get_entities_from_device_id",
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
             return_value=[fake_entity],
         ),
         pytest.raises(ZoneAlreadyExists),
@@ -107,7 +107,7 @@ async def test_add_zone_new_name_appends_to_file(tmp_path) -> None:
     )
 
     with patch(
-        "custom_components.polygonal_zones.services.add_new_zone.get_entities_from_device_id",
+        "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
         return_value=[fake_entity],
     ):
         await action(call)
@@ -146,7 +146,7 @@ async def test_add_zone_syncs_shared_source_once(tmp_path) -> None:
     call = SimpleNamespace(data={"device_id": "fake", "zone": json.dumps(_polygon_feature("Work"))})
 
     with patch(
-        "custom_components.polygonal_zones.services.add_new_zone.get_entities_from_device_id",
+        "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
         return_value=[entity_a, entity_b],
     ):
         await action(call)
@@ -175,7 +175,7 @@ async def test_add_zone_does_not_sync_when_write_fails(tmp_path) -> None:
 
     with (
         patch(
-            "custom_components.polygonal_zones.services.add_new_zone.get_entities_from_device_id",
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
             return_value=[fake_entity],
         ),
         pytest.raises(ZoneAlreadyExists),

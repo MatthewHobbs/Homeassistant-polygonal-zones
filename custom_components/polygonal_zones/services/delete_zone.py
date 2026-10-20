@@ -1,28 +1,12 @@
 """definition file for the delete zone action."""
 
-import asyncio
 from collections.abc import Awaitable, Callable
-import json
+from typing import Any
 
-import aiohttp
 from homeassistant.core import HomeAssistant, ServiceCall
 
-from ..utils.general import load_data, safe_config_path
-from ..utils.local_zones import (
-    LOCK_ACQUIRE_TIMEOUT,
-    dump_feature_collection,
-    get_file_lock,
-    save_zones,
-)
-from .errors import InvalidZoneData, ZoneDoesNotExists, ZoneFileNotEditable
-from .helpers import (
-    audit_mutation_call,
-    enforce_mutation_rate_limit,
-    get_entities_from_device_id,
-    get_zone_idx,
-    require_device_id,
-    sync_entities_after_write,
-)
+from .errors import ZoneDoesNotExists
+from .helpers import get_zone_idx, modify_zone_file, resolve_mutation_target
 
 
 def action_builder(hass: HomeAssistant) -> Callable[[ServiceCall], Awaitable[None]]:
@@ -30,45 +14,16 @@ def action_builder(hass: HomeAssistant) -> Callable[[ServiceCall], Awaitable[Non
 
     async def delete_new_zone(call: ServiceCall) -> None:
         """Handle the service action call."""
-        device_id = require_device_id(call.data)
-        entities = get_entities_from_device_id(device_id, hass)
-        entity = entities[0]
-
-        audit_mutation_call(call, "delete_zone", entity._config_entry_id)
-        enforce_mutation_rate_limit(entity._config_entry_id)
-
-        if not entity.editable_file:
-            raise ZoneFileNotEditable("Zone files of entity are not editable")
-
-        new_name: str = call.data.get("zone_name") or ""
-        if not new_name:
+        entities, entity = resolve_mutation_target(hass, call, "delete_zone")
+        zone_name: str = call.data.get("zone_name") or ""
+        if not zone_name:
             raise ZoneDoesNotExists("Service call is missing 'zone_name'")
 
-        filename = entity.zone_urls[0]
+        def delete(existing_zones: dict[str, Any]) -> None:
+            if (idx := get_zone_idx(zone_name, existing_zones)) is None:
+                raise ZoneDoesNotExists(f'The zone with name "{zone_name}" does not exist')
+            del existing_zones["features"][idx]
 
-        try:
-            filepath = safe_config_path(hass.config.config_dir, filename)
-            async with asyncio.timeout(LOCK_ACQUIRE_TIMEOUT), get_file_lock(filepath):
-                existing_zones = json.loads(await load_data(filename, hass))
-
-                if (idx := get_zone_idx(new_name, existing_zones)) is None:
-                    raise ZoneDoesNotExists(f'The zone with name "{new_name}" does not exists')
-
-                del existing_zones["features"][idx]
-                new_content = dump_feature_collection(
-                    existing_zones["features"], existing=existing_zones
-                )
-                await save_zones(new_content, filepath, hass)
-                await sync_entities_after_write(entities)
-        except TimeoutError as err:
-            raise InvalidZoneData(
-                "Timed out waiting for zone file lock; another operation may be in progress"
-            ) from err
-        except aiohttp.ClientError as err:
-            raise InvalidZoneData("Failed to fetch zone file") from err
-        except OSError as err:
-            raise InvalidZoneData("Failed to access zone file") from err
-        except ValueError as err:
-            raise InvalidZoneData("Zone file content or path is invalid") from err
+        await modify_zone_file(hass, entities, entity, delete)
 
     return delete_new_zone
