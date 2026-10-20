@@ -21,3 +21,6 @@ htmlcov/
 .eod-*
 .claude/worktrees/
 .adv-review/
+
+# Local working notes: never tracked or committed
+/BACKLOG.md
