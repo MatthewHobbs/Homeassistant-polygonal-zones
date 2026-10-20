@@ -2,7 +2,7 @@
 
 import logging
 from types import MappingProxyType
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.config_entries import (
     ConfigEntry,
@@ -17,7 +17,14 @@ from homeassistant.data_entry_flow import callback
 from homeassistant.helpers import selector
 from homeassistant.helpers.selector import TextSelectorType
 from homeassistant.util import dt as dt_util
-import voluptuous as vol
+
+if TYPE_CHECKING:
+    # HA >= 2026.9 types flow schemas as probatio, not voluptuous. Runtime keeps
+    # `voluptuous`, which HA aliases to probatio and the 2026.7 floor still ships.
+    # Use only names voluptuous also has: mypy checks probatio's wider surface.
+    import probatio as vol
+else:
+    import voluptuous as vol
 
 from .const import (
     CONF_CONSENT_CONFIRMED_AT,
