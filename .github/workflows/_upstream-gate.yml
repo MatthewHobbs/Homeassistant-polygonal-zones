@@ -100,8 +100,8 @@ jobs:
               return str(best)
 
 
-          # Only the homeassistant query ever considers prereleases (ADR 0002 /
-          # RFC 0006 Option A: "dropping the is_prerelease filter for this one
+          # Only the homeassistant query ever considers prereleases (ADR 0002
+          # Option A: "dropping the is_prerelease filter for this one
           # query") - shapely is never beta-tested here.
           include_prereleases = os.environ.get("INCLUDE_PRERELEASES") == "true"
           ha = latest("homeassistant", specs["homeassistant"], allow_prerelease=include_prereleases)

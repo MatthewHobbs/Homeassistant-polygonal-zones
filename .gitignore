@@ -17,8 +17,12 @@ htmlcov/
 # untracked in every working copy and eventually gets committed by accident.
 .DS_Store
 
-
-
-
-
-
+# Local secrets and editor state
+.env
+.env.*
+*.pem
+*.key
+secrets.yaml
+*.log
+node_modules/
+.vscode/

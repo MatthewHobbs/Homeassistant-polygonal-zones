@@ -2,7 +2,7 @@
 
 - **Repo:** Homeassistant-polygonal-zones
 - **Status:** Accepted (2026-10-20)
-- **Context:** [#110](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/110) asks the integration to request a location update from a tracker that has gone quiet; RFC 0001 weighed four ways to answer it.
+- **Context:** [#110](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/110) asks the integration to request a location update from a tracker that has gone quiet; RFC 0001 (`docs/rfc/README.md`) weighed four ways to answer it.
 - **North star:** A user can see from Home Assistant when a tracker has gone silent, and the integration never decides what to do about it.
 
 ## Decision

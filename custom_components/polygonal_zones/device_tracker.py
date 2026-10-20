@@ -49,7 +49,7 @@ async def async_setup_entry(
 
     ``__init__.async_setup_entry`` builds the shared :class:`ZoneSource` and
     stores it on ``entry.runtime_data.source`` before this platform is
-    forwarded (see PR A2 of the location_name migration's Release A) — this
+    forwarded — this
     just builds a thin mirror entity per tracked ``device_tracker`` that reads
     from it.
     """
@@ -80,11 +80,11 @@ async def async_setup_entry(
         # the warning doesn't persist after opt-out. No-op if none exists.
         ir.async_delete_issue(hass, DOMAIN, legacy_privacy_issue)
 
-    # Release A, PR A5: announce the coming Release B breaking change well
+    # Announce the coming breaking change (HA removing location_name) well
     # before it ships, not alongside it. Raised unconditionally — every entry
     # is affected once HA removes location_name, regardless of any config
-    # value. Not cleared here: Release B's own PR is responsible for deleting
-    # or rewording this once the state migration actually ships.
+    # value. Not cleared here: the PR that finishes the state migration is responsible
+    # for deleting or rewording this once the state migration actually ships.
     ir.async_create_issue(
         hass,
         DOMAIN,
@@ -279,7 +279,7 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         )
         _LOGGER.debug("State of entity '%s' changed. new zone: %s", self._attr_unique_id, zone)
         self._attr_location_name = zone["name"] if zone is not None else "away"
-        # Additive, non-breaking (Release A, PR A3): in_zones doesn't affect
+        # Additive, non-breaking in_zones doesn't affect
         # `state` while location_name is still set (location_name wins), but
         # publishing it now means HA's own zone occupancy count and any
         # automation already reading in_zones benefit immediately, and it's

@@ -1,4 +1,4 @@
-"""Tests for the companion zone-name sensor (Release A, PR A4)."""
+"""Tests for the companion zone-name sensor ."""
 
 from datetime import UTC, datetime
 from types import SimpleNamespace
