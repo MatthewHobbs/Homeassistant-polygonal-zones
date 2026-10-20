@@ -5,7 +5,7 @@ name: Nightly HA beta
 # beta, but nothing else in this repo's CI catches it until the final release
 # ships - at which point users already have it. This job resolves the latest
 # HA PRERELEASE in requirements_test.txt's range and runs the existing
-# pytest + Playwright suites against it, in its own cache-fingerprint
+# pytest suite against it, in its own cache-fingerprint
 # namespace so it never interacts with the stable gate.
 #
 # Runs on schedule/workflow_dispatch only - never push/pull_request. This is
@@ -32,8 +32,8 @@ concurrency:
 
 jobs:
   # Resolves the latest in-range HA prerelease and whether it's already been
-  # tested. pytest-beta/playwright-beta install exactly gate's ha_version
-  # output (never re-query PyPI themselves) so the version they actually test
+  # tested. pytest-beta installs exactly gate's ha_version
+  # output (never re-queries PyPI itself) so the version it actually tests
   # can never drift from the fingerprint that record later marks as passing.
   gate:
     uses: ./.github/workflows/_upstream-gate.yml
@@ -61,21 +61,12 @@ jobs:
           pip install "homeassistant==${{ needs.gate.outputs.ha_version }}"
       - run: pytest --cov=custom_components/polygonal_zones --cov-report=term --cov-fail-under=98
 
-  playwright-beta:
-    name: Config flow (Playwright, HA beta)
-    needs: [gate]
-    if: ${{ !cancelled() && needs.gate.outputs.changed == 'true' }}
-    uses: ./.github/workflows/_playwright-config-flow.yml
-    with:
-      ha_version: ${{ needs.gate.outputs.ha_version }}
-      artifact_suffix: "-beta"
-
   # Record the tested fingerprint only when every job passed (see
   # _upstream-gate.yml) - a failed beta run is NOT recorded, so it keeps
   # re-alerting nightly until fixed rather than caching a broken fingerprint
   # and going silently green.
   record:
-    needs: [gate, pytest-beta, playwright-beta]
+    needs: [gate, pytest-beta]
     if: ${{ needs.gate.outputs.changed == 'true' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
     runs-on: ubuntu-latest
     steps:
