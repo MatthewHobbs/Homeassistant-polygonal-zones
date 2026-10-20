@@ -32,6 +32,16 @@
       ]
     },
     {
+      "description": "python-version in the workflows follows the Python HA supports, not the newest release. 3.15 breaks the HA floor jobs (Pillow has no wheel for the floor's dependency set), so bump it by hand when HA moves.",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchDepNames": [
+        "python"
+      ],
+      "enabled": false
+    },
+    {
       "description": "One PR for the Python test/tooling dependencies.",
       "matchManagers": [
         "pep621",
