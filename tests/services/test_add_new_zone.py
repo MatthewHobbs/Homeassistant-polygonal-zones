@@ -7,7 +7,10 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from custom_components.polygonal_zones.services.add_new_zone import action_builder
-from custom_components.polygonal_zones.services.errors import ZoneAlreadyExists
+from custom_components.polygonal_zones.services.errors import (
+    ZoneAlreadyExists,
+    ZoneFileNotEditable,
+)
 
 
 def _polygon_feature(name: str) -> dict:
@@ -183,3 +186,18 @@ async def test_add_zone_does_not_sync_when_write_fails(tmp_path) -> None:
         await action(call)
 
     fake_entity._source.async_reload.assert_not_awaited()
+
+
+async def test_add_zone_non_editable_raises(tmp_path) -> None:
+    fake_entity = SimpleNamespace(
+        editable_file=False, zone_urls=["https://x"], _config_entry_id="entry-id"
+    )
+    call = SimpleNamespace(data={"device_id": "x", "zone": json.dumps(_polygon_feature("Home"))})
+    with (
+        patch(
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
+            return_value=[fake_entity],
+        ),
+        pytest.raises(ZoneFileNotEditable),
+    ):
+        await action_builder(_make_hass(tmp_path))(call)

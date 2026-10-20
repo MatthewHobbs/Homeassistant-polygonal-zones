@@ -245,3 +245,30 @@ async def test_load_data_no_token_sends_no_headers(tmp_path) -> None:
         )
 
     assert session.get_kwargs["headers"] is None
+
+
+async def test_public_only_resolver_skips_non_ip_addresses() -> None:
+    """A non-IP string in the resolver output is skipped, not raised on."""
+    resolver = _PublicOnlyResolver()
+    bad = [{"host": "not-an-ip"}, {"host": "8.8.8.8"}]
+    with patch("aiohttp.resolver.DefaultResolver.resolve", new=AsyncMock(return_value=bad)):
+        infos = await resolver.resolve("garbage.example", 443)
+    assert infos == [{"host": "8.8.8.8"}]
+
+
+async def test_load_data_rejects_a_body_that_outgrows_the_limit_mid_stream(tmp_path) -> None:
+    """No Content-Length to check up front, so the size cap has to bite while streaming."""
+    response = _FakeResponse(body=b"x" * (7 * 1024 * 1024))
+    response.content_length = None
+    with (
+        patch(
+            "custom_components.polygonal_zones.utils.general.aiohttp.TCPConnector",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "custom_components.polygonal_zones.utils.general.aiohttp.ClientSession",
+            return_value=_FakeSession(response),
+        ),
+        pytest.raises(ValueError, match="exceeded max size"),
+    ):
+        await load_data("https://example.com/zones.json", _hass(tmp_path))
