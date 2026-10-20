@@ -108,3 +108,24 @@ async def test_replace_non_editable_raises(tmp_path) -> None:
         pytest.raises(ZoneFileNotEditable),
     ):
         await action(call)
+
+
+async def test_replace_all_wraps_a_lock_timeout(tmp_path) -> None:
+    fake_entity = SimpleNamespace(
+        editable_file=True, zone_urls=["zones.json"], _config_entry_id="entry-id"
+    )
+    call = SimpleNamespace(
+        data={"device_id": "x", "zone": json.dumps({"type": "FeatureCollection", "features": []})}
+    )
+    with (
+        patch(
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
+            return_value=[fake_entity],
+        ),
+        patch(
+            "custom_components.polygonal_zones.services.replace_all_zones.save_zones",
+            new=AsyncMock(side_effect=TimeoutError),
+        ),
+        pytest.raises(InvalidZoneData),
+    ):
+        await action_builder(_make_hass(tmp_path))(call)
