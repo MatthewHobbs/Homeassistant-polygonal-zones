@@ -138,7 +138,7 @@ async def test_update_location_expose_coordinates_default_is_true() -> None:
     assert attrs["longitude"] == 0.5
     assert attrs["gps_accuracy"] == 10
     # With coordinates on, the location-revealing attributes are published too.
-    assert attrs["zone_uris"] == ["https://example.com/zones.json"]
+    assert attrs["zone_uris"] == ["https://example.com/zones.json"]  # nothing to strip here
     assert attrs["matched_zones"] == ["Home"]
 
 
@@ -342,3 +342,19 @@ async def test_update_location_exposes_load_observability_attributes() -> None:
     assert attrs["last_load_result"] == "ok"
     assert attrs["last_zones_loaded_at"] is not None
     assert "T" in attrs["last_zones_loaded_at"]
+
+
+async def test_zone_uris_attribute_strips_credentials_and_query() -> None:
+    """The attribute is persisted by the recorder and pasted into bug reports."""
+    entity = _make_entity(
+        zones=[_HOME],
+        zone_urls=["https://user:pa55@zones.example.com/z.json?token=s3cr3t", "/config/zones.json"],
+    )
+    entity.hass = _make_hass()
+
+    await entity.update_location(latitude=0.5, longitude=0.5, gps_accuracy=10)
+
+    uris = entity._attr_extra_state_attributes["zone_uris"]
+    assert uris == ["https://zones.example.com/z.json", "/config/zones.json"]
+    assert "pa55" not in repr(uris)
+    assert "s3cr3t" not in repr(uris)

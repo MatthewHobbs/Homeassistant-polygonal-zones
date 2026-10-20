@@ -205,3 +205,20 @@ async def test_update_state_recovers_available_when_source_returns() -> None:
 
     assert entity._attr_available is True
     assert entity._attr_location_name == "Home"
+
+
+async def test_restored_zone_uris_are_redacted() -> None:
+    """State saved by an older release may hold raw URLs; never re-publish them."""
+    entity = _make_entity()
+    entity.hass = _make_hass()
+    entity.async_get_last_state = AsyncMock(
+        return_value=SimpleNamespace(
+            state="Home",
+            attributes={"zone_uris": ["https://u:pa55@zones.example.com/z.json?token=s3cr3t"]},
+        )
+    )
+
+    await entity.async_added_to_hass()
+
+    uris = entity._attr_extra_state_attributes["zone_uris"]
+    assert uris == ["https://zones.example.com/z.json"]

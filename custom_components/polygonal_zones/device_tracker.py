@@ -21,6 +21,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import CONF_EXPOSE_COORDINATES, DOMAIN
 from .utils import event_should_trigger, get_locations_zone
+from .utils.general import redact_uri
 from .utils.geometry import exterior_coords
 from .utils.zones import Zone
 from .zone_source import ZoneSource
@@ -229,6 +230,10 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
                     "matched_zones",
                 ):
                     restored.pop(gated, None)
+            # State saved by an older release may hold raw URLs (credentials,
+            # query tokens); never re-publish them.
+            if isinstance(restored.get("zone_uris"), list):
+                restored["zone_uris"] = [redact_uri(str(u)) for u in restored["zone_uris"]]
             self._attr_extra_state_attributes = restored
 
         self._unsub_source = self._source.add_listener(self._handle_source_reloaded)
@@ -310,8 +315,10 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
             # `matched_zones` reveals fine-grained (overlapping) semantic location
             # and `zone_uris` can leak LAN hostnames/paths on a shared dashboard.
             # Both are gated with coordinates so "expose off" means only the zone
-            # name (plus load diagnostics) leaves the entity. See docs/privacy.md.
-            attributes["zone_uris"] = self._source.zone_urls
+            # name (plus load diagnostics) leaves the entity. The URIs are published
+            # without credentials or query strings, since attributes are persisted
+            # by the recorder and copied into bug reports. See docs/privacy.md.
+            attributes["zone_uris"] = [redact_uri(u) for u in self._source.zone_urls]
             # Every zone the buffered GPS point currently intersects, not just the
             # winning one — overlap-priority debugging in Developer Tools.
             attributes["matched_zones"] = zone["matched_zones"] if zone is not None else []
