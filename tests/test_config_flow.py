@@ -571,3 +571,21 @@ async def test_reconfigure_rejects_newly_added_own_entities_only(
     )
     assert result == {"type": "form"}
     assert flow.async_show_form.call_args.kwargs["errors"]["entities"] == "own_entities"
+
+
+async def test_config_flow_accepts_trackers_from_other_integrations(
+    tmp_path, _entity_registry
+) -> None:
+    """Only this integration's own platform is refused, not every registered tracker."""
+    _entity_registry.async_get.side_effect = {
+        "device_tracker.phone": SimpleNamespace(platform="mobile_app")
+    }.get
+    flow = ConfigFlow()
+    flow.hass = _hass(tmp_path)
+    flow.async_create_entry = MagicMock(return_value={"type": "create_entry"})
+
+    result = await flow.async_step_user(
+        {"zone_urls": ["https://x"], "entities": ["device_tracker.phone"], "consent": True}
+    )
+
+    assert result == {"type": "create_entry"}

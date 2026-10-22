@@ -6,7 +6,7 @@
       "private_url_blocked": "That looks like a private/LAN address (e.g. 192.168.x.x). Turn on 'Allow private-network URLs (LAN)' in the advanced options to use it, or reference a file under /config instead.",
       "unreachable_url": "One or more URLs cannot be reached",
       "consent_required": "Please confirm tracking consent to continue.",
-      "own_entities": "Pick your devices' own trackers. Entities created by this integration (device_tracker.polygonal_zones_*) cannot be tracked."
+      "own_entities": "Pick your devices' own trackers. Entities created by this integration cannot be tracked."
     },
     "step": {
       "reconfigure": {
