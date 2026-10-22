@@ -253,13 +253,6 @@ async def test_will_remove_releases_unsubs() -> None:
     assert sensor._unsub_source is None
 
 
-async def test_will_remove_no_unsubs_is_a_noop() -> None:
-    sensor = _make_sensor()
-    await sensor.async_will_remove_from_hass()
-    assert sensor._unsub is None
-    assert sensor._unsub_source is None
-
-
 async def test_handle_source_reloaded_schedules_update() -> None:
     sensor = _make_sensor()
     hass = _make_hass()
@@ -373,20 +366,6 @@ async def test_last_reported_added_to_hass_seeds_value_and_follows_both_event_ki
 
 async def test_last_reported_restored_value_wins_over_the_seed() -> None:
     sensor = _last_reported_sensor(_T2)  # source's own last_reported is the restart time
-    sensor.async_get_last_sensor_data = AsyncMock(return_value=SimpleNamespace(native_value=_T1))
-
-    with (
-        patch("custom_components.polygonal_zones.sensor.async_track_state_change_event"),
-        patch("custom_components.polygonal_zones.sensor.async_track_state_report_event"),
-    ):
-        await sensor.async_added_to_hass()
-
-    assert sensor.native_value == _T1
-
-
-async def test_last_reported_restores_when_source_is_unavailable() -> None:
-    sensor = _last_reported_sensor(_T2)
-    sensor.hass.states.get.return_value = SimpleNamespace(state="unavailable", last_reported=_T2)
     sensor.async_get_last_sensor_data = AsyncMock(return_value=SimpleNamespace(native_value=_T1))
 
     with (

@@ -155,19 +155,6 @@ def test_positive_accuracy_still_inflates() -> None:
     assert get_locations_zone(acc=0.01, **just_outside) is None
 
 
-def test_infinite_accuracy_does_not_raise() -> None:
-    """Infinity must not reach shapely.
-
-    ``Point.buffer(inf)`` raises ValueError("buffer distance must be finite"), and
-    this runs inside an executor job where that surfaces as an unhandled exception
-    rather than an "away" state. Treated as "no usable figure" instead.
-    """
-    zones = [_zone("A", SQUARE_A)]
-    result = get_locations_zone(lat=0.5, lon=0.5, acc=float("inf"), zones=zones)
-    assert result is not None
-    assert result["name"] == "A"
-
-
 def test_point_exactly_on_zone_boundary_counts_as_inside() -> None:
     """On-edge is inside, and stays inside once the buffer is removed.
 

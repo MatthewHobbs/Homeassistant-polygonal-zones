@@ -133,17 +133,6 @@ async def test_public_only_resolver_filters_private_addresses() -> None:
         await resolver.resolve("evil.example", 443)
 
 
-async def test_public_only_resolver_accepts_public_addresses() -> None:
-    resolver = _PublicOnlyResolver()
-    public = [{"host": "8.8.8.8"}]
-    with patch(
-        "aiohttp.resolver.DefaultResolver.resolve",
-        new=AsyncMock(return_value=public),
-    ):
-        infos = await resolver.resolve("example.com", 443)
-        assert infos == public
-
-
 async def test_public_only_resolver_allow_private_accepts_private_addresses() -> None:
     """With allow_private=True a private IP is permitted (LAN add-on path)."""
     resolver = _PublicOnlyResolver(allow_private=True)

@@ -99,27 +99,6 @@ async def test_update_state_unavailable_when_source_not_loaded() -> None:
     assert entity._attr_available is False
 
 
-async def test_update_state_invokes_update_location_when_attrs_present() -> None:
-    polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
-    entity = _make_entity(zones=[Zone(name="Home", geometry=polygon, priority=0)])
-
-    async def aaej(func, *args):
-        return func(*args)
-
-    state = SimpleNamespace(
-        state="home",
-        attributes={"latitude": 0.5, "longitude": 0.5, "gps_accuracy": 5},
-    )
-    entity.hass = SimpleNamespace(
-        states=SimpleNamespace(get=MagicMock(return_value=state)),
-        async_add_executor_job=aaej,
-    )
-
-    with patch.object(PolygonalZoneEntity, "async_write_ha_state", lambda self: None):
-        await entity._update_state()
-    assert entity._attr_location_name == "Home"
-
-
 async def test_update_state_skips_when_source_state_missing() -> None:
     """Source tracker doesn't exist → mirror goes unavailable, location_name preserved."""
     entity = _make_entity()

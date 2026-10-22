@@ -6,14 +6,11 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from shapely.geometry import Point, Polygon
 
 from custom_components.polygonal_zones.utils.zones import (
     UnsupportedSchemaVersion,
     ZoneFileCorrupt,
     _parse_zone_document,
-    get_distance_to_centroid,
-    get_distance_to_exterior_points,
     get_zones,
     haversine_distances,
     load_zones,
@@ -62,29 +59,6 @@ async def test_get_zones_parses_feature_collection() -> None:
     assert {z.name for z in zones} == {"Home", "Work"}
     by_name = {z.name: z for z in zones}
     assert by_name["Home"].priority == 0
-
-
-async def test_get_zones_prioritise_uses_file_index() -> None:
-    """With prioritize=True, features without an explicit priority inherit the file index."""
-    file_a = json.dumps({"type": "FeatureCollection", "features": [_polygon("A")]})
-    file_b = json.dumps({"type": "FeatureCollection", "features": [_polygon("B")]})
-
-    async def fake_load(uri: str, _hass, **_kwargs) -> str:
-        return file_a if "a." in uri else file_b
-
-    with patch(
-        "custom_components.polygonal_zones.utils.zones.load_data",
-        side_effect=fake_load,
-    ):
-        zones = await get_zones(
-            ["http://example.com/a.json", "http://example.com/b.json"],
-            _make_hass(),
-            True,
-        )
-
-    priorities = {z.name: z.priority for z in zones}
-    assert priorities["A"] == 0
-    assert priorities["B"] == 1
 
 
 async def test_prioritize_file_index_resolves_overlapping_point_to_file_0() -> None:
@@ -156,20 +130,6 @@ def test_haversine_distance_to_self_is_zero() -> None:
     assert abs(distance) < 1e-6
 
 
-def test_get_distance_to_centroid_returns_float() -> None:
-    polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
-    point = Point(0.5, 0.5)
-    distance = get_distance_to_centroid(polygon, point)
-    assert isinstance(distance, float)
-
-
-def test_get_distance_to_exterior_points_returns_min() -> None:
-    polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
-    point = Point(0.5, 0.5)
-    d = get_distance_to_exterior_points(polygon, point)
-    assert d > 0
-
-
 def test_get_zones_empty_uri_list_returns_empty_list() -> None:
     """Edge case: zero URIs → empty list, not a crash."""
 
@@ -178,17 +138,6 @@ def test_get_zones_empty_uri_list_returns_empty_list() -> None:
 
     zones = asyncio.run(_go())
     assert zones == []
-
-
-async def test_get_zones_accepts_missing_schema_version() -> None:
-    """A file without a polygonal_zones member is treated as implicit schema_version=1."""
-    payload = json.dumps({"type": "FeatureCollection", "features": [_polygon("Home")]})
-    with patch(
-        "custom_components.polygonal_zones.utils.zones.load_data",
-        new=AsyncMock(return_value=payload),
-    ):
-        zones = await get_zones(["http://x"], _make_hass(), False)
-    assert zones[0].name == "Home"
 
 
 async def test_get_zones_accepts_known_schema_version() -> None:

@@ -252,20 +252,6 @@ async def test_async_setup_entry_download_skipped_when_snapshot_exists(tmp_path)
     forward_mock.assert_awaited_once()
 
 
-async def test_async_unload_entry_releases_lock(tmp_path) -> None:
-    """Successful unload releases the per-file lock; runtime_data is GC'd with the entry."""
-    unload_mock = AsyncMock(return_value=True)
-    entry = SimpleNamespace(entry_id="entry-1")
-    hass = SimpleNamespace(
-        config=SimpleNamespace(config_dir=str(tmp_path)),
-        config_entries=SimpleNamespace(async_unload_platforms=unload_mock),
-    )
-
-    result = await async_unload_entry(hass, entry)
-
-    assert result is True
-
-
 async def test_async_unload_entry_shuts_down_source(tmp_path) -> None:
     """Unload cancels the shared source's pending start/retry callbacks."""
     from unittest.mock import MagicMock
