@@ -19,7 +19,7 @@ The integration is a HACS custom integration. It reads that file and creates a m
 
 Install the add-on, then point the integration at its `zones.json` URL.
 
-Requirements: Home Assistant 2026.7.1 or later.
+Requirements: Home Assistant 2026.7.4 or later.
 
 ---
 

@@ -9,7 +9,7 @@ permalink: /install/
 
 Install the **add-on first**, then the **integration**. The add-on draws your zones and serves `zones.json`; the integration reads that file. You need both.
 
-**Requirements:** Home Assistant 2026.7.1 or later.
+**Requirements:** Home Assistant 2026.7.4 or later.
 
 ---
 

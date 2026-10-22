@@ -38,7 +38,7 @@ Each tracked entity now has a mirror `device_tracker.polygonal_zones_*` whose st
 
 ## Installation
 
-Requires Home Assistant 2026.7.1 or later.
+Requires Home Assistant 2026.7.4 or later.
 
 [![Add to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=MatthewHobbs&repository=Homeassistant-polygonal-zones&category=integration)
 
