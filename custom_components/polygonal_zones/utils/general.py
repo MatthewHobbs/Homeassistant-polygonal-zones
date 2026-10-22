@@ -151,6 +151,21 @@ class _PublicOnlyResolver(DefaultResolver):  # type: ignore[misc, valid-type]
         return filtered
 
 
+def _refuse_non_public_literal(host: str, *, allow_private: bool) -> None:
+    """Apply the address policy to a host that is already an IP literal.
+
+    aiohttp does not call the resolver for a literal IP, so ``_PublicOnlyResolver``
+    never sees one. Without this a stored ``http://127.0.0.1:8123/`` or
+    ``http://169.254.169.254/`` was fetched regardless of the policy.
+    """
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return  # a name: the resolver checks what it resolves to
+    if not _is_public_ip(ip, allow_private=allow_private):
+        raise OSError(f"Refusing to connect to '{host}': no reachable addresses available")
+
+
 def is_local_add_on_host(uri: str) -> bool:
     """Return True if ``uri``'s host looks like a LAN-installed companion add-on.
 
@@ -199,6 +214,7 @@ async def load_data(
     if parsed.scheme in ("http", "https"):
         if not parsed.hostname:
             raise ValueError("URL has no hostname")
+        _refuse_non_public_literal(parsed.hostname, allow_private=allow_private_urls)
 
         connector = aiohttp.TCPConnector(
             resolver=_PublicOnlyResolver(allow_private=allow_private_urls)
