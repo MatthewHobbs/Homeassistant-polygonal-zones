@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import logging
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ENTITIES, Platform
@@ -123,6 +123,16 @@ def _migrate_zone_sensor_unique_ids(hass: HomeAssistant, entry: ConfigEntry) -> 
     )
 
 
+def _fetch_settings(entry: PolygonalZonesConfigEntry) -> tuple[list[str], dict[str, Any]]:
+    """The configured zone URIs and how to fetch them, as stored on the entry."""
+    zone_uris = [uri for uri in entry.data.get(CONF_ZONES_URL) or [] if uri]
+    return zone_uris, {
+        "prioritize": bool(entry.data.get(CONF_PRIORITIZE_ZONE_FILES)),
+        "allow_private_urls": bool(entry.data.get(CONF_ALLOW_PRIVATE_URLS, False)),
+        "token": entry.data.get(CONF_ZONE_SOURCE_TOKEN) or None,
+    }
+
+
 def _build_zone_source(entry: PolygonalZonesConfigEntry) -> ZoneSource:
     """Build the entry-scoped ``ZoneSource`` shared by every platform's entities.
 
@@ -130,11 +140,7 @@ def _build_zone_source(entry: PolygonalZonesConfigEntry) -> ZoneSource:
     for ``_async_bootstrap_zone_snapshot`` (already run by the time this is
     called); the source itself reads only the managed local snapshot file.
     """
-    zone_uris: list[str] = entry.data.get(CONF_ZONES_URL) or []
-    zone_uris = [zone_uri for zone_uri in zone_uris if zone_uri]
-    prioritize = bool(entry.data.get(CONF_PRIORITIZE_ZONE_FILES))
-    allow_private_urls = bool(entry.data.get(CONF_ALLOW_PRIVATE_URLS, False))
-    zone_source_token: str | None = entry.data.get(CONF_ZONE_SOURCE_TOKEN) or None
+    zone_uris, fetch = _fetch_settings(entry)
     home_zone_id: str | None = entry.data.get(CONF_HOME_ZONE_ID) or None
 
     editable_file = False
@@ -146,10 +152,10 @@ def _build_zone_source(entry: PolygonalZonesConfigEntry) -> ZoneSource:
     return ZoneSource(
         entry.entry_id,
         zone_uris,
-        prioritize,
+        fetch["prioritize"],
         editable_file,
-        allow_private_urls=allow_private_urls,
-        token=zone_source_token,
+        allow_private_urls=fetch["allow_private_urls"],
+        token=fetch["token"],
         home_zone_id=home_zone_id,
     )
 
@@ -166,11 +172,7 @@ async def _async_bootstrap_zone_snapshot(
     succeeds (or the snapshot already exists), the device_tracker platform's
     own ``exists`` check finds the file in place and does no further work.
     """
-    zone_uris: list[str] = entry.data.get(CONF_ZONES_URL) or []
-    zone_uris = [zone_uri for zone_uri in zone_uris if zone_uri]
-    prioritize = bool(entry.data.get(CONF_PRIORITIZE_ZONE_FILES))
-    allow_private_urls = bool(entry.data.get(CONF_ALLOW_PRIVATE_URLS, False))
-    zone_source_token: str | None = entry.data.get(CONF_ZONE_SOURCE_TOKEN) or None
+    zone_uris, fetch = _fetch_settings(entry)
 
     relative = download_zone_relative_path(entry.entry_id)
     download_path = safe_config_path(hass.config.config_dir, relative)
@@ -183,10 +185,10 @@ async def _async_bootstrap_zone_snapshot(
         await download_zones(
             zone_uris,
             download_path,
-            prioritize,
+            fetch["prioritize"],
             hass,
-            allow_private_urls=allow_private_urls,
-            token=zone_source_token,
+            allow_private_urls=fetch["allow_private_urls"],
+            token=fetch["token"],
         )
     except UnsupportedSchemaVersion as err:
         # The source file's format is newer than this integration understands.
@@ -226,26 +228,3 @@ async def async_reload_entry(hass: HomeAssistant, entry: PolygonalZonesConfigEnt
     list is rebuilt and add/remove in options flow takes effect without HA restart.
     """
     await hass.config_entries.async_reload(entry.entry_id)
-
-
-async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Migrate an older config entry to the current ``VERSION``.
-
-    The config flow's ``VERSION = 1`` is the only schema we've ever shipped, so
-    this function is a no-op stub today. It exists to document the contract and
-    keep the migration path obvious when the first real schema change lands
-    (e.g. splitting ``entry.data`` user-mutable fields into ``entry.options``,
-    or dropping a removed key).
-
-    Return True for versions we know how to handle (which is just ``1``); False
-    for future versions we can't downgrade.
-    """
-    if entry.version == 1:
-        return True
-    _LOGGER.error(
-        "Cannot migrate polygonal_zones entry=%s from schema version %d; "
-        "this integration supports up to version 1",
-        entry.entry_id,
-        entry.version,
-    )
-    return False
