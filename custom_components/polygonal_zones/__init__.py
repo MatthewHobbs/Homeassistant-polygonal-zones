@@ -109,10 +109,11 @@ def _migrate_zone_sensor_unique_ids(hass: HomeAssistant, entry: ConfigEntry) -> 
     kept: set[str] = set()
     for tracked in entry.data.get(CONF_ENTITIES, []):
         legacy = by_uid.get(f"sensor.polygonal_zones_{tracked.split('.')[-1]}_zone")
-        if legacy is not None:
-            registry.async_update_entity(
-                legacy.entity_id, new_unique_id=f"{entry.entry_id}_{tracked}_zone"
-            )
+        new_uid = f"{entry.entry_id}_{tracked}_zone"
+        # A downgrade to 1.15.x and back leaves both ids registered; re-keying onto
+        # an id already in use raises and would fail the whole entry's setup.
+        if legacy is not None and registry.async_get_entity_id("sensor", DOMAIN, new_uid) is None:
+            registry.async_update_entity(legacy.entity_id, new_unique_id=new_uid)
             kept.add(legacy.entity_id)
     for legacy in entries:
         if legacy.entity_id not in kept:

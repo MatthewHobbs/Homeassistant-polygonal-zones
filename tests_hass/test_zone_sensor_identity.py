@@ -8,6 +8,7 @@ real registry and state machine; a stubbed hass cannot reproduce it.
 import json
 from pathlib import Path
 
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.setup import async_setup_component
@@ -69,21 +70,43 @@ async def test_entities_have_per_tracker_names(hass: HomeAssistant) -> None:
     assert hass.states.get("device_tracker.polygonal_zones_phone").name == "Polygonal Zones phone"
 
 
+async def test_migration_survives_both_ids_registered(hass: HomeAssistant) -> None:
+    """A downgrade to 1.15.x and back must not fail the entry's setup."""
+    entry = await _entry(hass)
+    reg = er.async_get(hass)
+    new_uid = f"{entry.entry_id}_{_SRC}_zone"
+    for uid in (new_uid, "sensor.polygonal_zones_phone_zone"):
+        reg.async_get_or_create("sensor", DOMAIN, uid, config_entry=entry)
+
+    assert await async_setup_component(hass, DOMAIN, {})
+    await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert [s[1] for s in _sensors(hass) if s[1].endswith("_zone")] == [new_uid]
+
+
 async def test_1_15_1_registry_is_migrated(hass: HomeAssistant) -> None:
     """The first legacy sensor keeps its entity_id; the `_N` duplicates go."""
     entry = await _entry(hass)
     reg = er.async_get(hass)
+    original_ids = {}
     for suffix in ("", "_2", "_3"):
-        reg.async_get_or_create(
+        created = reg.async_get_or_create(
             "sensor",
             DOMAIN,
             f"sensor.polygonal_zones_phone{suffix}_zone",
             suggested_object_id=f"polygonal_zones_phone{suffix}",
             config_entry=entry,
         )
+        original_ids[suffix] = created.id
+    reg.async_update_entity("sensor.polygonal_zones_phone", name="My zone")
 
     assert await async_setup_component(hass, DOMAIN, {})
     await hass.async_block_till_done()
 
     zone_sensors = [s for s in _sensors(hass) if s[1].endswith("_zone")]
     assert zone_sensors == [("sensor.polygonal_zones_phone", f"{entry.entry_id}_{_SRC}_zone")]
+    # Re-keyed, not deleted and recreated: same registry row, customisation kept.
+    kept = reg.async_get("sensor.polygonal_zones_phone")
+    assert kept.id == original_ids[""]
+    assert kept.name == "My zone"
