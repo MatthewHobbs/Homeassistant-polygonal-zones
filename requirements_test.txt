@@ -14,7 +14,7 @@
 # shapely ranges used by _upstream-gate.yml, which reads it rather than duplicating the ranges — a
 # duplicated range is invisible to Renovate, so it would never see the cap
 # need widening either.
-homeassistant>=2026.7.1,<2027
+homeassistant>=2026.7.4,<2027
 mypy
 pytest
 pytest-asyncio
