@@ -9,6 +9,7 @@ import math
 from typing import Any
 
 from homeassistant.core import HomeAssistant
+from shapely.affinity import scale
 from shapely.errors import GEOSException
 from shapely.geometry import Point, shape
 from shapely.geometry.polygon import Polygon
@@ -308,6 +309,24 @@ async def get_zones(
     return result.zones
 
 
+_METRES_PER_DEGREE = 111320
+# Past this latitude the east-west stretch below would be absurd (and 1/cos blows up).
+_MIN_COS_LAT = 0.017
+
+
+def _accuracy_circle(point: Point, acc: float):
+    """The ``acc`` metre radius around ``point`` as a lat/lon polygon.
+
+    A degree of longitude is ``cos(latitude)`` as long as a degree of latitude, so a
+    buffer of ``acc`` metres in degrees on both axes is a circle only at the equator;
+    at 60 degrees north it covers half the east-west distance. Stretch it to match.
+    """
+    circle = point.buffer(acc / _METRES_PER_DEGREE)
+    # A non-finite latitude would raise in math.cos; it has no meaningful stretch.
+    cos_lat = max(math.cos(math.radians(point.y)), _MIN_COS_LAT) if math.isfinite(point.y) else 1.0
+    return scale(circle, xfact=1 / cos_lat, yfact=1, origin=point)
+
+
 def get_locations_zone(lat: float, lon: float, acc: float | None, zones: list[Zone]) -> dict | None:
     """Resolve the GPS position to the highest-priority enclosing zone.
 
@@ -346,7 +365,7 @@ def get_locations_zone(lat: float, lon: float, acc: float | None, zones: list[Zo
     # isfinite also screens out infinity, which would otherwise reach shapely and raise
     # ValueError("buffer distance must be finite") from inside the executor job.
     search_area = (
-        gps_point.buffer(acc / 111320)
+        _accuracy_circle(gps_point, acc)
         if acc is not None and math.isfinite(acc) and acc > 0
         else gps_point
     )

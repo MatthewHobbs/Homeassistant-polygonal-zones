@@ -1,5 +1,7 @@
 """Tests for utils.zones — pure-Python geospatial logic."""
 
+import math
+
 import pytest
 from shapely.geometry import Polygon
 
@@ -169,3 +171,34 @@ def test_point_exactly_on_zone_boundary_counts_as_inside() -> None:
         result = get_locations_zone(lat=0.5, lon=1.0, acc=acc, zones=zones)
         assert result is not None, f"boundary point must match with acc={acc}"
         assert result["name"] == "A"
+
+
+def _box_east_of(lat: float, lon: float, metres: float) -> Zone:
+    deg = metres / (111320 * math.cos(math.radians(lat)))
+    return Zone(
+        name="East",
+        geometry=Polygon(
+            [
+                (lon + deg, lat - 0.001),
+                (lon + deg + 0.001, lat - 0.001),
+                (lon + deg + 0.001, lat + 0.001),
+                (lon + deg, lat + 0.001),
+            ]
+        ),
+        priority=0,
+        properties={},
+    )
+
+
+def test_accuracy_radius_is_the_same_distance_east_west_as_north_south() -> None:
+    """At 60 N a degree of longitude is half a degree of latitude in metres."""
+    lat, lon = 60.0, 10.0
+    inside = _box_east_of(lat, lon, 80)  # 80 m east, within 100 m accuracy
+    outside = _box_east_of(lat, lon, 120)  # 120 m east, beyond it
+    assert get_locations_zone(lat, lon, 100, [inside])["name"] == "East"
+    assert get_locations_zone(lat, lon, 100, [outside]) is None
+
+
+def test_non_finite_latitude_does_not_raise() -> None:
+    zone = _zone("A", [(0, 0), (1, 0), (1, 1), (0, 1)])
+    assert get_locations_zone(float("inf"), 0.5, 10, [zone]) is None
