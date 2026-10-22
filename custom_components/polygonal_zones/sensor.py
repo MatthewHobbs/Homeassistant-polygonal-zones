@@ -42,6 +42,11 @@ from .zone_source import ZoneSource
 PARALLEL_UPDATES = 0
 
 
+def _slug(tracked_entity_id: str) -> str:
+    """Readable object id of the tracked entity, for entity names."""
+    return tracked_entity_id.split(".")[-1].replace("_", " ")
+
+
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
@@ -101,7 +106,11 @@ class PolygonalZoneSensor(RestoreSensor):
         self._unsub_source: Callable[[], None] | None = None
 
         self.entity_id = own_id
-        self._attr_unique_id = f"{own_id}_zone"
+        # Not own_id: generate_entity_id suffixes "_2" when the id is already in
+        # the state machine, so an own_id-derived id minted a new registry entry on
+        # every reload.
+        self._attr_unique_id = f"{source.entry_id}_{tracked_entity_id}_zone"
+        self._attr_name = f"{_slug(tracked_entity_id)} zone"
 
     async def async_added_to_hass(self) -> None:
         """Restore prior state, subscribe to the source tracker, and to reloads."""
@@ -229,7 +238,7 @@ class PolygonalZoneLastReportedSensor(RestoreSensor):
         # the state machine (e.g. a setup retry after start), which would mint a
         # new, disabled registry entry and silently drop the user's opt-in.
         self._attr_unique_id = f"{entry_id}_{tracked_entity_id}_last_reported"
-        self._attr_name = f"{tracked_entity_id.split('.')[-1].replace('_', ' ')} last reported"
+        self._attr_name = f"{_slug(tracked_entity_id)} last reported"
         self._attr_extra_state_attributes = {"source_entity": tracked_entity_id}
 
     async def async_added_to_hass(self) -> None:

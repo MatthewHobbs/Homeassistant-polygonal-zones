@@ -58,8 +58,8 @@ async def test_async_setup_entry_creates_one_sensor_per_entity() -> None:
         "sensor.polygonal_zones_bob",
     }
     assert {e.unique_id for e in entities} == {
-        "sensor.polygonal_zones_alice_zone",
-        "sensor.polygonal_zones_bob_zone",
+        "entry-id_device_tracker.alice_zone",
+        "entry-id_device_tracker.bob_zone",
     }
     last_reported = add_entities.call_args_list[1].args[0]
     assert {e.entity_id for e in last_reported} == {

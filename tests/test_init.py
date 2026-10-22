@@ -8,6 +8,7 @@ import pytest
 
 from custom_components.polygonal_zones import (
     PolygonalZonesData,
+    _migrate_zone_sensor_unique_ids,
     async_migrate_entry,
     async_reload_entry,
     async_setup,
@@ -15,6 +16,80 @@ from custom_components.polygonal_zones import (
     async_unload_entry,
 )
 from custom_components.polygonal_zones.utils.zones import UnsupportedSchemaVersion
+
+
+@pytest.fixture(autouse=True)
+def _no_registry_migration():
+    """The stub hass has no entity registry; the migration has its own tests below."""
+    with patch("custom_components.polygonal_zones._migrate_zone_sensor_unique_ids"):
+        yield
+
+
+def _legacy(entity_id: str, unique_id: str) -> SimpleNamespace:
+    return SimpleNamespace(domain="sensor", entity_id=entity_id, unique_id=unique_id)
+
+
+def test_migration_keeps_first_legacy_sensor_and_drops_duplicates() -> None:
+    entry = SimpleNamespace(entry_id="e1", data={"entities": ["device_tracker.phone"]})
+    registry = MagicMock()
+    registry.async_get_entity_id.return_value = None
+    legacy = [
+        _legacy("sensor.polygonal_zones_phone", "sensor.polygonal_zones_phone_zone"),
+        _legacy("sensor.polygonal_zones_phone_2", "sensor.polygonal_zones_phone_2_zone"),
+        _legacy("sensor.polygonal_zones_gone", "sensor.polygonal_zones_gone_zone"),
+        _legacy("sensor.polygonal_zones_phone_last_reported", "e1_device_tracker.phone_last"),
+        SimpleNamespace(domain="device_tracker", entity_id="x", unique_id="y_zone"),
+        _legacy("sensor.polygonal_zones_new", None),
+    ]
+    with (
+        patch("custom_components.polygonal_zones.er.async_get", return_value=registry),
+        patch(
+            "custom_components.polygonal_zones.er.async_entries_for_config_entry",
+            return_value=legacy,
+        ),
+    ):
+        _migrate_zone_sensor_unique_ids(MagicMock(), entry)
+
+    registry.async_update_entity.assert_called_once_with(
+        "sensor.polygonal_zones_phone", new_unique_id="e1_device_tracker.phone_zone"
+    )
+    removed = {c.args[0] for c in registry.async_remove.call_args_list}
+    assert removed == {"sensor.polygonal_zones_phone_2", "sensor.polygonal_zones_gone"}
+
+
+def test_migration_removes_legacy_sensor_when_new_id_already_registered() -> None:
+    entry = SimpleNamespace(entry_id="e1", data={"entities": ["device_tracker.phone"]})
+    registry = MagicMock()
+    registry.async_get_entity_id.return_value = "sensor.polygonal_zones_phone_9"
+    legacy = [_legacy("sensor.polygonal_zones_phone", "sensor.polygonal_zones_phone_zone")]
+    with (
+        patch("custom_components.polygonal_zones.er.async_get", return_value=registry),
+        patch(
+            "custom_components.polygonal_zones.er.async_entries_for_config_entry",
+            return_value=legacy,
+        ),
+    ):
+        _migrate_zone_sensor_unique_ids(MagicMock(), entry)
+
+    registry.async_update_entity.assert_not_called()
+    registry.async_remove.assert_called_once_with("sensor.polygonal_zones_phone")
+
+
+def test_migration_is_a_noop_without_legacy_entries() -> None:
+    entry = SimpleNamespace(entry_id="e1", data={"entities": ["device_tracker.phone"]})
+    registry = MagicMock()
+    current = [_legacy("sensor.polygonal_zones_phone", "e1_device_tracker.phone_zone")]
+    with (
+        patch("custom_components.polygonal_zones.er.async_get", return_value=registry),
+        patch(
+            "custom_components.polygonal_zones.er.async_entries_for_config_entry",
+            return_value=current,
+        ),
+    ):
+        _migrate_zone_sensor_unique_ids(MagicMock(), entry)
+
+    registry.async_update_entity.assert_not_called()
+    registry.async_remove.assert_not_called()
 
 
 async def test_async_setup_registers_services() -> None:
