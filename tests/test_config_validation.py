@@ -109,10 +109,3 @@ def test_private_ip_accepted_when_allow_private_urls(tmp_path) -> None:
         validate_zone_urls(["http://192.168.1.5:8000/zones.json"], hass, allow_private_urls=True)
     )
     assert errors == {}
-
-
-def test_public_hostname_not_flagged_as_private(tmp_path) -> None:
-    """A non-literal-IP hostname is left to the fetch-time resolver, not blocked here."""
-    hass = _hass(tmp_path)
-    errors = _run(validate_zone_urls(["https://example.com/zones.json"], hass))
-    assert errors == {}

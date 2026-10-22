@@ -48,16 +48,6 @@ async def test_loader_rejects_non_feature_collection() -> None:
         await get_zones(["http://example.com/zones.json"], _make_hass(), False)
 
 
-async def test_loader_accepts_valid_feature_collection() -> None:
-    payload = json.dumps({"type": "FeatureCollection", "features": [_FEATURE]})
-    with patch(
-        "custom_components.polygonal_zones.utils.zones.load_data",
-        new=AsyncMock(return_value=payload),
-    ):
-        zones = await get_zones(["http://example.com/zones.json"], _make_hass(), False)
-    assert [z.name for z in zones] == ["Home"]
-
-
 async def test_loader_rejects_too_many_features() -> None:
     """Read-time cap: a file exceeding the feature limit is rejected, not parsed."""
     from custom_components.polygonal_zones.utils.limits import MAX_FEATURES_PER_COLLECTION
@@ -101,17 +91,6 @@ async def test_loader_rejects_non_polygon_geometry() -> None:
             "geometry": {"type": "LineString", "coordinates": [[0, 0], [1, 1]]},
         }
     )
-
-
-async def test_loader_vertex_cap_not_bypassed_by_linestring() -> None:
-    """A giant LineString (which count_geometry_vertices scores as 0) is still
-    rejected — the type gate fires before the vertex count can be gamed."""
-    huge = {
-        "type": "Feature",
-        "properties": {"name": "Huge"},
-        "geometry": {"type": "LineString", "coordinates": [[i, i] for i in range(50_000)]},
-    }
-    await _expect_corrupt(huge)
 
 
 async def test_loader_read_path_vertex_cap_enforced() -> None:

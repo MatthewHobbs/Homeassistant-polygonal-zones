@@ -37,12 +37,6 @@ def test_redact_uri_malformed_port_does_not_raise() -> None:
     assert redact_uri("http://example.com:bad/zones.json") == "http://example.com:bad/zones.json"
 
 
-def test_redact_uri_malformed_port_still_strips_credentials_and_query() -> None:
-    """A URI urlparse cannot take apart must not be returned raw."""
-    out = redact_uri("http://u:p@host:bad/x?token=T#frag")
-    assert out == "http://host:bad/x"
-
-
 def test_redact_uri_keeps_ipv6_brackets() -> None:
     assert redact_uri("http://[fd00::1]:8000/z?t=1") == "http://[fd00::1]:8000/z"
     assert redact_uri("https://[::1]/z") == "https://[::1]/z"

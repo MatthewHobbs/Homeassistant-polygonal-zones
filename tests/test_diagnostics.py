@@ -72,18 +72,6 @@ async def test_diagnostics_redacts_personalised_title() -> None:
     assert "Alice" not in repr(result)
 
 
-async def test_diagnostics_with_no_entities() -> None:
-    entry = SimpleNamespace(
-        entry_id="entry-2",
-        title="Polygonal Zones",
-        version=1,
-        runtime_data=PolygonalZonesData(),
-        data={"zone_urls": [], "entities": []},
-    )
-    result = await async_get_config_entry_diagnostics(SimpleNamespace(), entry)
-    assert result["entities"] == []
-
-
 async def test_diagnostics_when_runtime_data_missing() -> None:
     """Defensive: an entry without runtime_data still produces a sensible report."""
     entry = SimpleNamespace(

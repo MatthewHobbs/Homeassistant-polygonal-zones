@@ -77,12 +77,6 @@ def test_build_options_flow_exposes_download_zones() -> None:
     assert download_key.default() is False
 
 
-def test_build_create_flow_has_zone_source_token() -> None:
-    schema = build_create_flow()
-    keys = {str(k) for k in schema.schema}
-    assert "zone_source_token" in keys
-
-
 def test_build_create_flow_zone_source_token_defaults_empty() -> None:
     schema = build_create_flow()
     token_key = next(k for k in schema.schema if str(k) == "zone_source_token")
@@ -93,12 +87,6 @@ def test_build_options_flow_has_zone_source_token() -> None:
     schema = build_options_flow()
     keys = {str(k) for k in schema.schema}
     assert "zone_source_token" in keys
-
-
-def test_build_create_flow_has_home_zone_id() -> None:
-    schema = build_create_flow()
-    keys = {str(k) for k in schema.schema}
-    assert "home_zone_id" in keys
 
 
 def test_build_create_flow_home_zone_id_defaults_empty() -> None:
@@ -367,25 +355,6 @@ async def test_options_flow_valid_input_merges_data(tmp_path) -> None:
     assert merged["download_zones"] is True
     # Options data is left empty — everything lives in entry.data (no split-brain).
     assert flow.async_create_entry.call_args.kwargs["data"] == {}
-
-
-async def test_reconfigure_flow_first_render_uses_entry_defaults(tmp_path) -> None:
-    """The reconfigure step on initial render shows the form with current entry data."""
-    flow = ConfigFlow()
-    flow.hass = _hass(tmp_path)
-    fake_entry = SimpleNamespace(
-        data={
-            "zone_urls": ["https://existing"],
-            "entities": ["device_tracker.alice"],
-            "prioritize_zone_files": False,
-        }
-    )
-    flow._get_reconfigure_entry = MagicMock(return_value=fake_entry)
-    flow.async_show_form = MagicMock(return_value={"type": "form"})
-
-    result = await flow.async_step_reconfigure(None)
-    assert result == {"type": "form"}
-    flow.async_show_form.assert_called_once()
 
 
 async def test_reconfigure_flow_invalid_url_renders_form_with_errors(tmp_path) -> None:

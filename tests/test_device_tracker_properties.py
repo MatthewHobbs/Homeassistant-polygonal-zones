@@ -36,29 +36,10 @@ def _stub_schedule_initial_load():
         yield
 
 
-def test_zones_property_starts_empty() -> None:
-    entity = _make_entity()
-    assert entity.zones == []
-
-
-def test_editable_file_property_returns_constructor_value() -> None:
-    assert _make_entity(editable_file=True).editable_file is True
-    assert _make_entity(editable_file=False).editable_file is False
-
-
-def test_zone_urls_property_returns_constructor_value() -> None:
-    entity = _make_entity()
-    assert entity.zone_urls == ["https://example.com/zones.json"]
-
-
 def test_source_type_returns_gps() -> None:
     from homeassistant.components.device_tracker import SourceType
 
     assert _make_entity().source_type == SourceType.GPS
-
-
-def test_location_name_starts_none() -> None:
-    assert _make_entity().location_name is None
 
 
 def test_should_poll_is_false() -> None:

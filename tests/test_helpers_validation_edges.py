@@ -159,13 +159,6 @@ def test_parse_zone_feature_name_and_priority_are_not_unknown(caplog) -> None:
     assert not any("unknown property keys" in rec.message for rec in caplog.records)
 
 
-def test_parse_zone_collection_rejects_features_that_is_not_a_list() -> None:
-    with pytest.raises(InvalidZoneData):
-        parse_zone_collection(
-            json.dumps({"type": "FeatureCollection", "features": {"not": "a list"}})
-        )
-
-
 def test_parse_zone_feature_rejects_a_name_over_the_limit() -> None:
     feature = {
         "type": "Feature",

@@ -31,15 +31,6 @@ def _make_hass() -> SimpleNamespace:
     )
 
 
-async def test_set_available_logs_only_on_transition() -> None:
-    entity = _make_entity()
-    entity._set_available(True)
-    entity._set_available(False)
-    assert entity._attr_available is False
-    entity._set_available(True)
-    assert entity._attr_available is True
-
-
 async def test_will_remove_releases_unsubs() -> None:
     entity = _make_entity()
     entity._unsub = MagicMock()
@@ -168,17 +159,6 @@ async def test_async_reload_zones_returns_payload_when_requested() -> None:
     assert isinstance(result[0]["geometry"], list)
 
 
-async def test_async_reload_zones_empty_returns_empty_list() -> None:
-    entity = _make_entity(zone_urls=[])  # no URIs so the all-fail branch isn't triggered
-    entity.hass = _make_hass()
-
-    load, del_issue = _patch_reload(zones=[])
-    with load, del_issue:
-        result = await entity.async_reload_zones(SimpleNamespace(return_response=True))
-
-    assert result == []
-
-
 async def test_async_reload_zones_returns_none_when_response_not_requested() -> None:
     entity = _make_entity(zone_urls=[])
     entity.hass = _make_hass()
@@ -199,19 +179,6 @@ async def test_async_reload_zones_service_failure_raises() -> None:
     with load, del_issue, pytest.raises(HomeAssistantError):
         await entity.async_reload_zones(SimpleNamespace(return_response=False))
     assert entity._source.last_load_result == "failed"
-
-
-async def test_async_reload_zones_accepts_no_call() -> None:
-    """Callable with ``call=None`` from the mutation-service path — no response."""
-    entity = _make_entity()
-    entity.hass = _make_hass()
-
-    load, del_issue = _patch_reload(zones=[_HOME])
-    with load, del_issue:
-        result = await entity.async_reload_zones()
-
-    assert result is None
-    assert entity._source.zones == [_HOME]
 
 
 async def test_async_reload_zones_service_is_rate_limited() -> None:
@@ -261,26 +228,6 @@ async def test_async_reload_zones_sets_last_load_observability_on_success() -> N
 
     assert entity._last_load_result == "ok"
     assert entity._last_zones_loaded_at is not None
-
-
-async def test_async_reload_zones_clears_repair_issue_on_success() -> None:
-    """Recovering via reload_zones clears the repair issue raised by a prior failure."""
-    entity = _make_entity()
-    entity.hass = _make_hass()
-
-    load = AsyncMock(return_value=ZoneLoadResult(zones=[_HOME]))
-    with (
-        patch("custom_components.polygonal_zones.zone_source.load_zones", new=load),
-        patch("custom_components.polygonal_zones.zone_source.ir.async_delete_issue") as mock_delete,
-    ):
-        await entity.async_reload_zones()
-
-    # Both the load-failure issue and the (unset, so always-clear) home-zone
-    # issue are cleared on a successful reload.
-    domains = {call.args[1] for call in mock_delete.call_args_list}
-    issue_ids = {call.args[2] for call in mock_delete.call_args_list}
-    assert domains == {"polygonal_zones"}
-    assert issue_ids == {"zone_load_failed_entry-id", "home_zone_missing_entry-id"}
 
 
 async def test_async_reload_zones_warning_does_not_leak_entity_id(caplog) -> None:

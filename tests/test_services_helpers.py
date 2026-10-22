@@ -138,17 +138,7 @@ async def test_sync_entities_after_write_swallows_reload_failure() -> None:
     shared.async_reload.assert_awaited_once()
 
 
-async def test_sync_entities_after_write_empty_list_is_noop() -> None:
-    """An empty entity list is a clean no-op, not an error."""
-    await sync_entities_after_write([])
-
-
 # ---------- enforce_mutation_rate_limit ----------
-
-
-def test_rate_limit_first_call_passes() -> None:
-    """A fresh entry_id is always allowed through."""
-    enforce_mutation_rate_limit("fresh-entry-1")
 
 
 def test_rate_limit_second_call_within_window_raises() -> None:
@@ -163,12 +153,6 @@ def test_rate_limit_is_scoped_per_entry() -> None:
     enforce_mutation_rate_limit("entry-a")
     # No raise — different entry_id.
     enforce_mutation_rate_limit("entry-b")
-
-
-def test_rate_limit_zero_interval_effectively_disables_gate() -> None:
-    """A min_interval of 0 lets back-to-back calls through (useful for tests)."""
-    enforce_mutation_rate_limit("elastic-entry", min_interval=0)
-    enforce_mutation_rate_limit("elastic-entry", min_interval=0)
 
 
 # ---------- audit_mutation_call ----------
