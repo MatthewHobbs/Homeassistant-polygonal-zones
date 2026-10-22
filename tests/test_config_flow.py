@@ -459,3 +459,26 @@ async def test_reconfigure_flow_editing_urls_needs_no_consent_and_keeps_timestam
 
 def test_async_get_options_flow_returns_handler() -> None:
     assert isinstance(ConfigFlow.async_get_options_flow(SimpleNamespace()), OptionsFlowHandler)
+
+
+def _translations() -> dict:
+    import json
+    from pathlib import Path
+
+    path = Path(__file__).parent.parent / "custom_components/polygonal_zones/translations/en.json"
+    return json.loads(path.read_text())
+
+
+def test_every_create_flow_field_has_a_label_and_description() -> None:
+    """A schema key with no translation renders as its raw key in the UI."""
+    steps = _translations()["config"]["step"]
+    for step in ("user", "reconfigure"):
+        for key in (str(k) for k in build_create_flow().schema):
+            assert key in steps[step]["data"], f"{step}: no label for {key}"
+            assert key in steps[step]["data_description"], f"{step}: no description for {key}"
+
+
+def test_every_options_flow_field_has_a_label() -> None:
+    step = _translations()["options"]["step"]["init"]
+    for key in (str(k) for k in build_options_flow().schema):
+        assert key in step["data"], f"options: no label for {key}"
