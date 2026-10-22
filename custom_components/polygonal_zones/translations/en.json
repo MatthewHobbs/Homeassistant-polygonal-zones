@@ -16,7 +16,7 @@
           "expose_coordinates": "Expose GPS coordinates as entity attributes",
           "home_zone_id": "Home zone",
           "prioritize_zone_files": "Prioritize order of zone files",
-          "registered_entities": "Entities",
+          "entities": "Entities",
           "zone_source_token": "Add-on save token",
           "zone_urls": "URLs of GeoJSON files"
         },
@@ -27,7 +27,7 @@
           "expose_coordinates": "When enabled, the mirror entity writes latitude, longitude, and gps_accuracy to its attributes on every update — Home Assistant's recorder then persists a full location history. Disable to publish only the zone name (privacy-first). New installs default to off.",
           "home_zone_id": "The zone's id (preferred, survives a rename) or exact name — see the zone file's `properties.id`/`properties.name`. Blank means no zone counts as home; state stays not_home for that case.",
           "prioritize_zone_files": "When a device is inside zones from more than one file, zones from the file higher in your list win by default. A zone can override this by setting its own priority value.",
-          "registered_entities": "Select the entities that you want to track in the zones.",
+          "entities": "Select the entities that you want to track in the zones.",
           "zone_source_token": "The add-on's save_token, if it has one configured. Sent as X-Save-Token only on requests to a local/LAN add-on URL above — never to a public https:// source.",
           "zone_urls": "Enter the URLs of the GeoJSON files that contain the zones you want to track. This supports both websites and files in the /config directory."
         },
@@ -42,7 +42,7 @@
           "expose_coordinates": "Expose GPS coordinates as entity attributes",
           "home_zone_id": "Home zone",
           "prioritize_zone_files": "Prioritize order of zone files",
-          "registered_entities": "Entities",
+          "entities": "Entities",
           "zone_source_token": "Add-on save token",
           "zone_urls": "URLs of GeoJSON files"
         },
@@ -53,7 +53,7 @@
           "expose_coordinates": "When enabled, the mirror entity writes latitude, longitude, and gps_accuracy to its attributes on every update — Home Assistant's recorder then persists a full location history. Disable to publish only the zone name (privacy-first). New installs default to off.",
           "home_zone_id": "The zone's id (preferred, survives a rename) or exact name — see the zone file's `properties.id`/`properties.name`. Blank means no zone counts as home; state stays not_home for that case.",
           "prioritize_zone_files": "When a device is inside zones from more than one file, zones from the file higher in your list win by default. A zone can override this by setting its own priority value.",
-          "registered_entities": "Select the entities that you want to track in the zones.",
+          "entities": "Select the entities that you want to track in the zones.",
           "zone_source_token": "The add-on's save_token, if it has one configured. Sent as X-Save-Token only on requests to a local/LAN add-on URL above — never to a public https:// source.",
           "zone_urls": "Enter the URLs of the GeoJSON files that contain the zones you want to track. This supports both websites and files in the /config directory."
         },

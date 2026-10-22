@@ -459,3 +459,37 @@ async def test_reconfigure_flow_editing_urls_needs_no_consent_and_keeps_timestam
 
 def test_async_get_options_flow_returns_handler() -> None:
     assert isinstance(ConfigFlow.async_get_options_flow(SimpleNamespace()), OptionsFlowHandler)
+
+
+def _label_files() -> dict:
+    import json
+    from pathlib import Path
+
+    base = Path(__file__).parent.parent / "custom_components/polygonal_zones"
+    return {
+        name: json.loads((base / name).read_text())
+        for name in ("strings.json", "translations/en.json")
+    }
+
+
+def test_every_create_flow_field_has_a_label_and_description() -> None:
+    """A schema key with no translation renders as its raw key in the UI."""
+    # consent is added to the schema by the step itself, after build_create_flow().
+    keys = [str(k) for k in build_create_flow().schema] + ["consent"]
+    for name, doc in _label_files().items():
+        for step in ("user", "reconfigure"):
+            data = doc["config"]["step"][step]
+            for key in keys:
+                assert key in data["data"], f"{name} {step}: no label for {key}"
+            for key in keys:
+                if key != "consent":
+                    assert key in data["data_description"], (
+                        f"{name} {step}: no description for {key}"
+                    )
+
+
+def test_every_options_flow_field_has_a_label() -> None:
+    for name, doc in _label_files().items():
+        step = doc["options"]["step"]["init"]
+        for key in (str(k) for k in build_options_flow().schema):
+            assert key in step["data"], f"{name} options: no label for {key}"
