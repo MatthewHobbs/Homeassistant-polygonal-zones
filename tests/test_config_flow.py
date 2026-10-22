@@ -3,12 +3,28 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from custom_components.polygonal_zones.config_flow import (
     ConfigFlow,
     OptionsFlowHandler,
     build_create_flow,
     build_options_flow,
 )
+
+
+@pytest.fixture(autouse=True)
+def _entity_registry():
+    """The stub hass has no registry; by default no selected entity is registered."""
+    registry = MagicMock()
+    registry.async_get.return_value = None
+    with patch("custom_components.polygonal_zones.config_flow.er.async_get", return_value=registry):
+        yield registry
+
+
+def _own_mirror(registry, *entity_ids) -> None:
+    owned = {e: SimpleNamespace(platform="polygonal_zones") for e in entity_ids}
+    registry.async_get.side_effect = owned.get
 
 
 def _hass(tmp_path) -> SimpleNamespace:
@@ -493,3 +509,65 @@ def test_every_options_flow_field_has_a_label() -> None:
         step = doc["options"]["step"]["init"]
         for key in (str(k) for k in build_options_flow().schema):
             assert key in step["data"], f"{name} options: no label for {key}"
+
+
+async def test_config_flow_rejects_this_integrations_own_entities(
+    tmp_path, _entity_registry
+) -> None:
+    """Tracking a mirror builds a mirror of a mirror."""
+    _own_mirror(_entity_registry, "device_tracker.polygonal_zones_phone")
+    flow = ConfigFlow()
+    flow.hass = _hass(tmp_path)
+    flow.async_show_form = MagicMock(return_value={"type": "form"})
+    flow.async_create_entry = MagicMock()
+
+    result = await flow.async_step_user(
+        {
+            "zone_urls": ["https://x"],
+            "entities": ["device_tracker.phone", "device_tracker.polygonal_zones_phone"],
+            "consent": True,
+        }
+    )
+
+    assert result == {"type": "form"}
+    assert flow.async_show_form.call_args.kwargs["errors"] == {"entities": "own_entities"}
+    flow.async_create_entry.assert_not_called()
+
+
+async def test_reconfigure_rejects_newly_added_own_entities_only(
+    tmp_path, _entity_registry
+) -> None:
+    _own_mirror(_entity_registry, "device_tracker.polygonal_zones_phone")
+    flow = ConfigFlow()
+    flow.hass = _hass(tmp_path)
+    fake_entry = SimpleNamespace(
+        data={"zone_urls": ["https://x"], "entities": ["device_tracker.polygonal_zones_phone"]}
+    )
+    flow._get_reconfigure_entry = MagicMock(return_value=fake_entry)
+    flow.async_show_form = MagicMock(return_value={"type": "form"})
+    flow.async_update_reload_and_abort = MagicMock(return_value={"type": "reload"})
+
+    # Already tracked (set up before this check existed): not locked out.
+    result = await flow.async_step_reconfigure(
+        {"zone_urls": ["https://x"], "entities": ["device_tracker.polygonal_zones_phone"]}
+    )
+    assert result == {"type": "reload"}
+
+    # Newly added own entity is refused.
+    _own_mirror(
+        _entity_registry,
+        "device_tracker.polygonal_zones_phone",
+        "device_tracker.polygonal_zones_bob",
+    )
+    result = await flow.async_step_reconfigure(
+        {
+            "zone_urls": ["https://x"],
+            "entities": [
+                "device_tracker.polygonal_zones_phone",
+                "device_tracker.polygonal_zones_bob",
+            ],
+            "consent": True,
+        }
+    )
+    assert result == {"type": "form"}
+    assert flow.async_show_form.call_args.kwargs["errors"]["entities"] == "own_entities"
