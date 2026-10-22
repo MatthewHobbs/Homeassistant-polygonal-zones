@@ -278,3 +278,42 @@ async def test_load_data_rejects_a_body_that_outgrows_the_limit_mid_stream(tmp_p
         pytest.raises(ValueError, match="exceeded max size"),
     ):
         await load_data("https://example.com/zones.json", _hass(tmp_path))
+
+
+@pytest.mark.parametrize(
+    ("url", "allow_private", "refused"),
+    [
+        ("http://127.0.0.1:8123/zones.json", False, True),
+        ("http://127.0.0.1:8123/zones.json", True, True),
+        ("http://169.254.169.254/latest/meta-data", True, True),
+        ("http://[::1]:8123/zones.json", True, True),
+        ("http://[::ffff:127.0.0.1]/zones.json", True, True),
+        ("http://127.1/zones.json", True, True),
+        ("http://2130706433/zones.json", True, True),
+        ("http://192.168.1.50:8000/zones.json", False, True),
+        ("http://192.168.1.50:8000/zones.json", True, False),
+        ("http://8.8.8.8/zones.json", False, False),
+    ],
+)
+async def test_load_data_applies_the_address_policy_to_ip_literals(
+    tmp_path, url, allow_private, refused
+) -> None:
+    """aiohttp skips the resolver for a literal IP, so the policy is applied up front."""
+    session = _FakeSession(_FakeResponse())
+    with (
+        patch(
+            "custom_components.polygonal_zones.utils.general.aiohttp.TCPConnector",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "custom_components.polygonal_zones.utils.general.aiohttp.ClientSession",
+            return_value=session,
+        ),
+    ):
+        if refused:
+            with pytest.raises(OSError, match="Refusing to connect"):
+                await load_data(url, _hass(tmp_path), allow_private_urls=allow_private)
+            assert session.get_kwargs == {}
+        else:
+            await load_data(url, _hass(tmp_path), allow_private_urls=allow_private)
+            assert session.get_kwargs

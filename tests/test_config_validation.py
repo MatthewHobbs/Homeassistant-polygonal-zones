@@ -3,6 +3,8 @@
 import asyncio
 from types import SimpleNamespace
 
+import pytest
+
 from custom_components.polygonal_zones.utils.config_validation import (
     validate_zone_urls,
 )
@@ -99,7 +101,26 @@ def test_literal_private_ip_blocked_with_actionable_error(tmp_path) -> None:
 def test_literal_loopback_ip_blocked(tmp_path) -> None:
     hass = _hass(tmp_path)
     errors = _run(validate_zone_urls(["http://127.0.0.1:8000/zones.json"], hass))
-    assert errors == {"zone_urls": "private_url_blocked"}
+    assert errors == {"zone_urls": "blocked_address"}
+
+
+@pytest.mark.parametrize("allow_private", [False, True])
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://127.0.0.1:8000/zones.json",
+        "http://169.254.169.254/latest",
+        "http://[::1]:8000/zones.json",
+        "http://127.1/zones.json",
+        "http://2130706433/zones.json",
+    ],
+)
+def test_always_blocked_addresses_are_refused_even_with_the_lan_option(
+    tmp_path, url, allow_private
+) -> None:
+    """The form and the fetch apply one policy: loopback and friends are never allowed."""
+    errors = _run(validate_zone_urls([url], _hass(tmp_path), allow_private_urls=allow_private))
+    assert errors == {"zone_urls": "blocked_address"}
 
 
 def test_private_ip_accepted_when_allow_private_urls(tmp_path) -> None:
