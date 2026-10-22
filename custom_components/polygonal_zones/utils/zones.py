@@ -322,7 +322,8 @@ def _accuracy_circle(point: Point, acc: float):
     at 60 degrees north it covers half the east-west distance. Stretch it to match.
     """
     circle = point.buffer(acc / _METRES_PER_DEGREE)
-    cos_lat = max(math.cos(math.radians(point.y)), _MIN_COS_LAT)
+    # A non-finite latitude would raise in math.cos; it has no meaningful stretch.
+    cos_lat = max(math.cos(math.radians(point.y)), _MIN_COS_LAT) if math.isfinite(point.y) else 1.0
     return scale(circle, xfact=1 / cos_lat, yfact=1, origin=point)
 
 

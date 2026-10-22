@@ -197,3 +197,8 @@ def test_accuracy_radius_is_the_same_distance_east_west_as_north_south() -> None
     outside = _box_east_of(lat, lon, 120)  # 120 m east, beyond it
     assert get_locations_zone(lat, lon, 100, [inside])["name"] == "East"
     assert get_locations_zone(lat, lon, 100, [outside]) is None
+
+
+def test_non_finite_latitude_does_not_raise() -> None:
+    zone = _zone("A", [(0, 0), (1, 0), (1, 1), (0, 1)])
+    assert get_locations_zone(float("inf"), 0.5, 10, [zone]) is None
