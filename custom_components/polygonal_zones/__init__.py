@@ -4,13 +4,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import logging
+import re
 from typing import TYPE_CHECKING
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
+from homeassistant.const import CONF_ENTITIES, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import entity_registry as er
 
 from .const import (
     CONF_ALLOW_PRIVATE_URLS,
@@ -73,12 +75,51 @@ async def async_setup_entry(hass: HomeAssistant, entry: PolygonalZonesConfigEntr
     used to) would race a second platform that needs it too.
     """
     entry.runtime_data = PolygonalZonesData()
+    _migrate_zone_sensor_unique_ids(hass, entry)
     if entry.data.get(CONF_DOWNLOAD_ZONES):
         await _async_bootstrap_zone_snapshot(hass, entry)
     entry.runtime_data.source = _build_zone_source(entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
     return True
+
+
+# 1.15.0/1.15.1 built the zone sensor's unique_id from its entity_id.
+_LEGACY_ZONE_SENSOR_UID = re.compile(r"^sensor\.polygonal_zones_.+_zone$")
+
+
+def _migrate_zone_sensor_unique_ids(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Move 1.15.0/1.15.1 zone sensors onto stable ids and drop their duplicates.
+
+    Those versions derived the unique_id from ``generate_entity_id``, which adds
+    ``_2``, ``_3`` … whenever the id is already taken, so each reload registered
+    another sensor. The first one registered (``…_<slug>_zone``) keeps its
+    entity_id and history under the new id; every other legacy-format entry of
+    this entry is a duplicate or an orphan and is removed. Idempotent.
+    """
+    registry = er.async_get(hass)
+    entries = [
+        e
+        for e in er.async_entries_for_config_entry(registry, entry.entry_id)
+        if e.domain == "sensor" and e.unique_id and _LEGACY_ZONE_SENSOR_UID.match(e.unique_id)
+    ]
+    if not entries:
+        return
+    by_uid = {e.unique_id: e for e in entries}
+    kept: set[str] = set()
+    for tracked in entry.data.get(CONF_ENTITIES, []):
+        legacy = by_uid.get(f"sensor.polygonal_zones_{tracked.split('.')[-1]}_zone")
+        if legacy is not None:
+            registry.async_update_entity(
+                legacy.entity_id, new_unique_id=f"{entry.entry_id}_{tracked}_zone"
+            )
+            kept.add(legacy.entity_id)
+    for legacy in entries:
+        if legacy.entity_id not in kept:
+            registry.async_remove(legacy.entity_id)
+    _LOGGER.info(
+        "Migrated %d zone sensor(s), removed %d duplicate(s)", len(kept), len(entries) - len(kept)
+    )
 
 
 def _build_zone_source(entry: PolygonalZonesConfigEntry) -> ZoneSource:

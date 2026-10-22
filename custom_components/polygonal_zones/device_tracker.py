@@ -161,6 +161,9 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
 
         self.entity_id = own_id
         self._attr_unique_id = own_id
+        # Without a name HA shows the shared device name ("Polygonal Zones") for
+        # every tracker.
+        self._attr_name = tracked_entity_id.split(".")[-1].replace("_", " ")
         self._attr_source_type = SourceType.GPS
 
     # --- read interface delegating to the shared source ------------------------
