@@ -14,6 +14,7 @@ from homeassistant.config_entries import (
 )
 from homeassistant.const import CONF_ENTITIES
 from homeassistant.data_entry_flow import callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import selector
 from homeassistant.helpers.selector import TextSelectorType
 from homeassistant.util import dt as dt_util
@@ -46,6 +47,20 @@ _CONSENT_NOTICE = (
     "device_tracker entities you select. Please ensure everyone whose "
     "device is being tracked is aware of this."
 )
+
+
+def _own_entities(hass, entity_ids: list[str]) -> list[str]:
+    """Selected entities this integration created itself.
+
+    Tracking a mirror (``device_tracker.polygonal_zones_*``) builds a mirror of a
+    mirror and a stray ``sensor.polygonal_zones_polygonal_zones_*``.
+    """
+    registry = er.async_get(hass)
+    return [
+        entity_id
+        for entity_id in entity_ids
+        if (entry := registry.async_get(entity_id)) is not None and entry.platform == DOMAIN
+    ]
 
 
 def _default_download_zones_off_for_add_on_hosts(user_input: dict[str, Any]) -> None:
@@ -216,6 +231,8 @@ class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
             # passive notice. ``consent`` is a gate, not a stored setting.
             if not user_input.get("consent"):
                 errors["consent"] = "consent_required"
+            if _own_entities(self.hass, user_input.get(CONF_ENTITIES, [])):
+                errors[CONF_ENTITIES] = "own_entities"
             if not errors:
                 user_input.pop("consent", None)
                 _default_download_zones_off_for_add_on_hosts(user_input)
@@ -257,9 +274,13 @@ class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
                 self.hass,
                 allow_private_urls=user_input.get("allow_private_urls", False),
             )
-            adding_entities = bool(set(user_input.get(CONF_ENTITIES, [])) - stored_entities)
+            added_entities = set(user_input.get(CONF_ENTITIES, [])) - stored_entities
+            adding_entities = bool(added_entities)
             if adding_entities and not user_input.get("consent"):
                 errors["consent"] = "consent_required"
+            # Only new picks: an entry that already tracks one is not locked out.
+            if _own_entities(self.hass, sorted(added_entities)):
+                errors[CONF_ENTITIES] = "own_entities"
             if not errors:
                 data = {k: v for k, v in user_input.items() if k != "consent"}
                 if adding_entities:
