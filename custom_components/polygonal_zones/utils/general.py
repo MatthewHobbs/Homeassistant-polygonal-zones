@@ -151,6 +151,23 @@ class _PublicOnlyResolver(DefaultResolver):  # type: ignore[misc, valid-type]
         return filtered
 
 
+def literal_host_policy(host: str) -> str | None:
+    """Classify a URL host that is an IP literal; ``None`` for a hostname.
+
+    ``"public"``; ``"private"`` (RFC 1918 / ULA, allowed only with the LAN option);
+    or ``"blocked"`` (loopback, link-local, multicast, reserved, unspecified, and
+    numeric forms ``ipaddress`` cannot parse such as ``127.1`` or ``2130706433``,
+    which aiohttp may still treat as a literal). A name falls to the resolver.
+    """
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return "blocked" if re.fullmatch(r"[0-9.]+", host) or ":" in host else None
+    if not _is_public_ip(ip, allow_private=True):
+        return "blocked"
+    return "public" if _is_public_ip(ip) else "private"
+
+
 def _refuse_non_public_literal(host: str, *, allow_private: bool) -> None:
     """Apply the address policy to a host that is already an IP literal.
 
@@ -158,11 +175,8 @@ def _refuse_non_public_literal(host: str, *, allow_private: bool) -> None:
     never sees one. Without this a stored ``http://127.0.0.1:8123/`` or
     ``http://169.254.169.254/`` was fetched regardless of the policy.
     """
-    try:
-        ip = ipaddress.ip_address(host)
-    except ValueError:
-        return  # a name: the resolver checks what it resolves to
-    if not _is_public_ip(ip, allow_private=allow_private):
+    policy = literal_host_policy(host)
+    if policy == "blocked" or (policy == "private" and not allow_private):
         raise OSError(f"Refusing to connect to '{host}': no reachable addresses available")
 
 

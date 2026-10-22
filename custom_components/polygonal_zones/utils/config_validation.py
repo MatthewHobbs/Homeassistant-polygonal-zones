@@ -1,11 +1,10 @@
 """The config validation helpers for the polygonal zones integration."""
 
-import ipaddress
 from urllib.parse import urlparse
 
 from homeassistant.core import HomeAssistant
 
-from .general import _is_public_ip, safe_config_path
+from .general import literal_host_policy, safe_config_path
 
 
 async def validate_zone_urls(
@@ -34,13 +33,11 @@ async def validate_zone_urls(
                 _ = parsed.port  # raises ValueError for a malformed port
             except ValueError:
                 return {"zone_urls": "invalid_url"}
-            if not allow_private_urls:
-                try:
-                    ip = ipaddress.ip_address(parsed.hostname)
-                except ValueError:
-                    ip = None  # a hostname, not a literal IP — defer to fetch time
-                if ip is not None and not _is_public_ip(ip, allow_private=False):
-                    return {"zone_urls": "private_url_blocked"}
+            policy = literal_host_policy(parsed.hostname)
+            if policy == "blocked":
+                return {"zone_urls": "blocked_address"}
+            if policy == "private" and not allow_private_urls:
+                return {"zone_urls": "private_url_blocked"}
             continue
         if parsed.scheme:
             return {"zone_urls": "invalid_url"}
