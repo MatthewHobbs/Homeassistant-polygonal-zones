@@ -115,6 +115,8 @@ async def test_async_setup_registers_services() -> None:
         "edit_zone",
         "replace_all_zones",
     ]
+    # They write the zone file, so only HA admins may call them.
+    assert register_mock.await_args.kwargs == {"admin": True}
 
 
 async def test_async_setup_entry_initialises_runtime_data_and_forwards() -> None:
