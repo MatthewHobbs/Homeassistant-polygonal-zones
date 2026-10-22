@@ -169,6 +169,37 @@ async def test_async_added_to_hass_restores_native_value_and_attributes() -> Non
     assert sensor.extra_state_attributes == {"source_entity": "device_tracker.phone"}
 
 
+_RESTORED_WITH_GATED = {
+    "source_entity": "device_tracker.phone",
+    "matched_zones": ["Home"],
+    "latitude": 51.5,
+    "longitude": -0.1,
+    "gps_accuracy": 5,
+    "zone_uris": ["http://example.test/zones.json"],
+}
+
+
+async def _restore(expose_coordinates: bool) -> dict:
+    sensor = _make_sensor(expose_coordinates=expose_coordinates)
+    sensor.hass = _make_hass()
+    sensor.async_get_last_sensor_data = AsyncMock(return_value=SimpleNamespace(native_value="Home"))
+    sensor.async_get_last_state = AsyncMock(
+        return_value=SimpleNamespace(attributes=dict(_RESTORED_WITH_GATED))
+    )
+    with patch("custom_components.polygonal_zones.sensor.async_track_state_change_event"):
+        await sensor.async_added_to_hass()
+    return sensor.extra_state_attributes
+
+
+async def test_restore_drops_gated_attributes_when_coordinates_are_off() -> None:
+    """Turning coordinates off between restarts must not re-publish recorded location."""
+    assert await _restore(expose_coordinates=False) == {"source_entity": "device_tracker.phone"}
+
+
+async def test_restore_keeps_attributes_when_coordinates_are_on() -> None:
+    assert await _restore(expose_coordinates=True) == _RESTORED_WITH_GATED
+
+
 async def test_async_added_to_hass_no_prior_state() -> None:
     sensor = _make_sensor()
     sensor.hass = _make_hass()

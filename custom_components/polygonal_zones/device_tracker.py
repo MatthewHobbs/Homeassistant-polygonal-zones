@@ -19,7 +19,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import CONF_EXPOSE_COORDINATES, DOMAIN
+from .const import CONF_EXPOSE_COORDINATES, COORDINATE_GATED_ATTRIBUTES, DOMAIN
 from .utils import event_should_trigger
 from .utils.general import redact_uri
 from .utils.geometry import exterior_coords
@@ -76,9 +76,9 @@ async def async_setup_entry(
             translation_placeholders={"title": entry.title},
         )
     else:
-        # The key is now present (or coordinates are off) — the user has opted
-        # out (or this is a modern entry). Clear any previously-raised issue so
-        # the warning doesn't persist after opt-out. No-op if none exists.
+        # The key is present, so the user has saved the form (the review this
+        # issue asks for) or this is a modern entry; it need not mean they opted
+        # out. Clear any previously-raised issue. No-op if none exists.
         ir.async_delete_issue(hass, DOMAIN, legacy_privacy_issue)
 
     # Announce the coming breaking change (HA removing location_name) well
@@ -222,13 +222,7 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
                 # A user who turned coordinates off between restarts must not have
                 # the previously-recorded lat/lon (and the other gated attrs)
                 # re-published from restore state until the next live update.
-                for gated in (
-                    "latitude",
-                    "longitude",
-                    "gps_accuracy",
-                    "zone_uris",
-                    "matched_zones",
-                ):
+                for gated in COORDINATE_GATED_ATTRIBUTES:
                     restored.pop(gated, None)
             # State saved by an older release may hold raw URLs (credentials,
             # query tokens); never re-publish them.
