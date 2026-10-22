@@ -21,7 +21,7 @@ def _stub_state_change_tracker():
     full hass. Real event routing is covered by tests_hass/ (real Home Assistant).
     """
     with patch(
-        "custom_components.polygonal_zones.device_tracker.async_track_state_change_event",
+        "custom_components.polygonal_zones.entity.async_track_state_change_event",
         return_value=lambda: None,
     ):
         yield

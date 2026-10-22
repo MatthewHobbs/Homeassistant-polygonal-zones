@@ -13,7 +13,7 @@ platform's entity existing or its setup order.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Coroutine
+from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
@@ -27,7 +27,7 @@ from homeassistant.const import (
     EntityCategory,
 )
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import (
@@ -36,7 +36,7 @@ from homeassistant.helpers.event import (
 )
 
 from .const import CONF_EXPOSE_COORDINATES, COORDINATE_GATED_ATTRIBUTES
-from .utils import event_should_trigger
+from .entity import ZoneSourceFollower, zone_device_info
 from .zone_source import ZoneSource
 
 PARALLEL_UPDATES = 0
@@ -85,7 +85,7 @@ async def async_setup_entry(
     )
 
 
-class PolygonalZoneSensor(RestoreSensor):
+class PolygonalZoneSensor(ZoneSourceFollower, RestoreSensor):
     """The matched zone's name (or ``away``) as a plain string sensor."""
 
     _attr_should_poll = False
@@ -101,9 +101,6 @@ class PolygonalZoneSensor(RestoreSensor):
         self._source = source
         self._entity_id = tracked_entity_id
         self._expose_coordinates = expose_coordinates
-
-        self._unsub: Callable[[], None] | None = None
-        self._unsub_source: Callable[[], None] | None = None
 
         self.entity_id = own_id
         # Not own_id: generate_entity_id suffixes "_2" when the id is already in
@@ -125,57 +122,7 @@ class PolygonalZoneSensor(RestoreSensor):
                     restored.pop(gated, None)
             self._attr_extra_state_attributes = restored
 
-        self._unsub_source = self._source.add_listener(self._handle_source_reloaded)
-        self._unsub = async_track_state_change_event(
-            self.hass, [self._entity_id], self._handle_state_change_builder()
-        )
-        # See device_tracker.PolygonalZoneEntity.async_added_to_hass: the shared
-        # source's one-shot initial-load notification can fire (as a separate
-        # task, via async_at_started) before this entity's own add_listener()
-        # above has run, since the two platforms are forwarded concurrently.
-        # Resolving here too makes the initial state correct regardless of
-        # that ordering.
-        await self._update_state()
-
-    def _handle_source_reloaded(self) -> None:
-        """Source (re)loaded — re-resolve this sensor's state off the event loop."""
-        self.hass.async_create_task(self._update_state())
-
-    async def async_will_remove_from_hass(self) -> None:
-        """Handle cleanup when the entity is removed."""
-        if self._unsub:
-            self._unsub()
-            self._unsub = None
-        if self._unsub_source:
-            self._unsub_source()
-            self._unsub_source = None
-
-    async def _update_state(self) -> None:
-        # Mirrors device_tracker.py's PolygonalZoneEntity._update_state exactly:
-        # only the success path below writes HA state; the early-return branches
-        # just flip _attr_available for the next successful write to pick up.
-        if not self._source.loaded_ok:
-            self._attr_available = False
-            return
-
-        entity_state = self.hass.states.get(self._entity_id)
-        if entity_state is None or entity_state.state in ("unavailable", "unknown"):
-            self._attr_available = False
-            return
-
-        if not all(
-            key in entity_state.attributes for key in ["latitude", "longitude", "gps_accuracy"]
-        ):
-            return
-
-        await self.update_location(
-            entity_state.attributes["latitude"],
-            entity_state.attributes["longitude"],
-            entity_state.attributes["gps_accuracy"],
-        )
-        self._attr_available = True
-
-        self.async_write_ha_state()
+        await self._follow_source()
 
     async def update_location(self, latitude: float, longitude: float, gps_accuracy: float) -> None:
         """Resolve the location to a zone and publish it as this sensor's value."""
@@ -186,24 +133,10 @@ class PolygonalZoneSensor(RestoreSensor):
             attributes["matched_zones"] = zone["matched_zones"] if zone is not None else []
         self._attr_extra_state_attributes = attributes
 
-    def _handle_state_change_builder(
-        self,
-    ) -> Callable[[Any], Coroutine[Any, Any, None]]:
-        async def _handler(event: Any) -> None:
-            if event_should_trigger(event, self._entity_id):
-                await self._update_state()
-
-        return _handler
-
     @property
     def device_info(self) -> DeviceInfo | None:
-        """Share the same device as the source config entry's device_tracker mirror."""
-        return {
-            "identifiers": {("polygonal_zones", self._source.entry_id)},
-            "name": "Polygonal Zones",
-            "manufacturer": "Polygonal Zones Community",
-            "entry_type": DeviceEntryType.SERVICE,
-        }
+        """Share the same device as the config entry's mirror trackers."""
+        return zone_device_info(self._source.entry_id)
 
 
 class PolygonalZoneLastReportedSensor(RestoreSensor):
@@ -287,9 +220,4 @@ class PolygonalZoneLastReportedSensor(RestoreSensor):
     @property
     def device_info(self) -> DeviceInfo | None:
         """Share the config entry's device, as the other platforms' entities do."""
-        return {
-            "identifiers": {("polygonal_zones", self._entry_id)},
-            "name": "Polygonal Zones",
-            "manufacturer": "Polygonal Zones Community",
-            "entry_type": DeviceEntryType.SERVICE,
-        }
+        return zone_device_info(self._entry_id)
