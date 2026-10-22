@@ -59,7 +59,7 @@ The zones are then served at:
 http://<your-ha-host>:8000/zones.json
 ```
 
-You need this URL and the token in Step 2. The LAN port is plain HTTP, so use it only on a network you trust. To keep the editor one click away, enable **Show in sidebar** on the Configuration tab.
+You need this URL and the token in Step 2. Use the host's IP address, `localhost` or a `.local` name in the URL: the integration sends the token only to those, so a plain DNS name such as `homeassistant` gets a 403. The LAN port is plain HTTP, so use it only on a network you trust. To keep the editor one click away, enable **Show in sidebar** on the Configuration tab.
 
 ---
 
@@ -125,7 +125,7 @@ Use `device_tracker.polygonal_zones_<name>` (state: zone name or `away`) in auto
 
 ## Removing it
 
-Settings → Devices & Services → Polygonal Zones → ⋮ → Delete, then remove the integration in HACS. If **Download the GeoJSON files** was on, also delete `<config>/polygonal_zones/`, which holds the downloaded zones. Stop the add-on and uninstall it separately if you no longer need the editor.
+Settings → Devices & Services → Polygonal Zones → ⋮ → Delete, then remove the integration in HACS. If **Download the GeoJSON files** was on, also delete `<config>/polygonal_zones/<entry_id>.json` (the entry id is in the file name), which holds the downloaded zones; leave any other file you keep in that folder. Stop the add-on and uninstall it separately if you no longer need the editor.
 
 ---
 

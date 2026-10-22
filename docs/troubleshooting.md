@@ -17,19 +17,21 @@ Add-on source: [MatthewHobbs/Homeassistant-polygonal-zones-addon](https://github
 ## The mirror entity stays `unknown` or `away`
 
 - The source `device_tracker.*` entity needs `latitude`, `longitude` and `gps_accuracy` attributes. Wi-Fi-only trackers report presence without them, and the mirror ignores those updates.
-- Look for `custom_components.polygonal_zones` in the log. "Failed to load zones for entry=…" means a load failed. The first load is retried four times, after roughly 30, 60, 120 and 240 seconds (each delay is shortened by a random amount of up to half). After the last failure the entities are unavailable and a repair issue appears. Call `polygonal_zones.reload_zones` once the source is back.
+- Look for `custom_components.polygonal_zones` in the log. "Failed to load zones for entry=…" means a load failed. The first load is retried four times, after roughly 30, 60, 120 and 240 seconds (each delay is shortened by a random amount of up to half). After the last failure the entities are unavailable and a repair issue appears. Call `polygonal_zones.reload_zones` once the source is back. With **Download the GeoJSON files** on, a failed first download makes Home Assistant retry the setup itself, with no warning line and no repair issue.
 - Zone geometry must be `Polygon` or `MultiPolygon`. A file with any other type fails to load.
 
 ---
 
 ## Config-flow errors
 
-| Banner                | Meaning                                                                                                     |
-| --------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `invalid_url`         | A URL has no host, a malformed port, or a scheme other than `http` or `https`.                              |
-| `invalid_path`        | A non-URL entry is not an existing file under `/config`, or resolves outside it.                            |
-| `private_url_blocked` | A URL host is a literal private, loopback or link-local IP and **Allow private-network URLs (LAN)** is off. |
-| `consent_required`    | The location-tracking consent box is not ticked.                                                            |
+| Banner                | Meaning                                                                                                                                                                                         |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `invalid_url`         | A URL has no host, a malformed port, or a scheme other than `http` or `https`.                                                                                                                  |
+| `invalid_path`        | A non-URL entry is not an existing file under `/config`, or resolves outside it.                                                                                                                |
+| `private_url_blocked` | A URL host is a literal private-range IP (such as `192.168.x.x`) and **Allow private-network URLs (LAN)** is off.                                                                               |
+| `blocked_address`     | A URL host is a literal loopback, link-local, multicast or reserved IP, or a numeric form such as `127.1`. These are always refused. Use the host's network address, or a file under `/config`. |
+| `own_entities`        | A selected entity was created by this integration (`device_tracker.polygonal_zones_*`). Pick the device's own tracker.                                                                          |
+| `consent_required`    | The location-tracking consent box is not ticked.                                                                                                                                                |
 
 ---
 
@@ -39,7 +41,7 @@ By default the integration refuses private, loopback, link-local, multicast, res
 
 If the zone file is on your LAN, including the companion add-on on the same host, either:
 
-- Tick **Allow private-network URLs (LAN)** under Configure, Advanced options. This allows private ranges such as `10.x.x.x`, `172.16.x.x` to `172.31.x.x`, `192.168.x.x` and IPv6 unique local addresses. Loopback, link-local and metadata addresses stay blocked.
+- Tick **Allow private-network URLs (LAN)** under Configure. This allows private ranges such as `10.x.x.x`, `172.16.x.x` to `172.31.x.x`, `192.168.x.x` and IPv6 unique local addresses. Loopback, link-local and metadata addresses stay blocked.
 - Put `zones.json` under your HA config directory and reference it by path, for example `polygonal_zones/zones.json`. No network request is made.
 
 ---

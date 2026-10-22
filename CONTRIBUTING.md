@@ -1,6 +1,6 @@
 # Contributing
 
-This is a community-maintained fork (see the README fork notice). Pull requests are welcome; replies come at a spare-time pace.
+This is a community-maintained fork (see the [README](README.md)). Pull requests are welcome; replies come at a spare-time pace.
 
 ## Run the checks
 

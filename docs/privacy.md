@@ -84,14 +84,14 @@ Do not put a secret in a zone URL (`user:pass@`, `?token=` or a path segment); u
 
 ### Third-party map tiles
 
-The add-on's map editor loads tiles from third-party servers, depending on the active layer: OpenStreetMap, CARTO or Esri. Each tile request shows the provider your IP address and the map area you are viewing. No zone geometry is sent. The providers' own privacy policies apply.
+The add-on's map editor loads tiles from third-party servers, depending on the active layer: OpenStreetMap, CARTO or Esri. Each tile request shows the provider your IP address, your Home Assistant address as the referrer, and the map area you are viewing. No zone geometry is sent. The providers' own privacy policies apply.
 
 ### zones.json is location data
 
 `zones.json` holds the exact polygons of every place you drew.
 
 - HA backups include it (it lives in the add-on's `/data`). Deleting a zone in the editor does not remove it from earlier backups; delete those backups too (**Settings → System → Backups → ⋮ → Remove**).
-- Do not host it at a public URL. See the add-on's [DOCS.md](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon/blob/main/polygonal_zones_editor/DOCS.md), section "Last resort — public-CDN mirror".
+- Do not host it at a public URL. See the add-on's [DOCS.md](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon/blob/main/polygonal_zones_editor/DOCS.md), section "Last resort: a public-CDN mirror (privacy warning)".
 - A cloud backup that includes the recorder database sends every tracked person's location history to the backup provider. Exclude the entities with the `recorder` block above, or check the provider's data-processing terms first.
 
 ---
@@ -104,7 +104,9 @@ If a tracked person asks for their location data to be removed:
 2. Purge recorder history with `recorder.purge_entities` (Developer Tools → Actions), listing the integration's entities for that tracker and the source tracker:
    ```yaml
    entity_id:
-     - <each Polygonal Zones entity for that tracker>
+     - device_tracker.polygonal_zones_<name>
+     - sensor.polygonal_zones_<name>
+     - sensor.polygonal_zones_<name>_last_reported
      - <the source tracker, for example device_tracker.alice_phone>
    ```
    With `keep_days: 0` (the default) all past state rows are removed at once.
