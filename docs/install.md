@@ -9,13 +9,13 @@ permalink: /install/
 
 Install the **add-on first**, then the **integration**. The add-on draws your zones and serves `zones.json`; the integration reads that file. You need both.
 
-**Requirements:** Home Assistant 2026.7.1 or later, Python 3.14 (bundled with HA OS — no action needed if you run HA OS or Supervised).
+**Requirements:** Home Assistant 2026.7.4 or later.
 
 ---
 
 ## Step 1 — Add-on: Polygonal Zones Editor
 
-The add-on is a map editor that runs inside Home Assistant. You draw polygons on a map, name them, and save. The result is a `zones.json` file the integration consumes.
+The add-on is a map editor inside Home Assistant. Draw polygons, name them and save; the result is the `zones.json` file the integration reads.
 
 ### 1a. Add the custom repository
 
@@ -46,21 +46,26 @@ After adding the repository, find **Polygonal Zones** in the Add-on Store and cl
 
 Repeat for each zone you want to define.
 
-### 1d. Note the zones.json URL
+### 1d. Open the LAN port and set a token
 
-The add-on serves your zones at:
+The integration reads `zones.json` over the network, not through the sidebar, so the add-on's direct port must be open and protected:
+
+1. **Settings → Add-ons → Polygonal Zones → Network**: assign host port `8000`, then restart the add-on.
+2. **Settings → Add-ons → Polygonal Zones → Configuration**: set **`save_token`** to a long random value. The add-on refuses every request from outside Home Assistant that does not carry it.
+
+The zones are then served at:
 
 ```
 http://<your-ha-host>:8000/zones.json
 ```
 
-You'll need this URL when you configure the integration in Step 2. You can also enable **Show in sidebar** on the add-on's Configuration tab to keep the editor one click away.
+You need this URL and the token in Step 2. Use the host's IP address, `localhost` or a `.local` name in the URL: the integration sends the token only to those, so a plain DNS name such as `homeassistant` gets a 403. The LAN port is plain HTTP, so use it only on a network you trust. To keep the editor one click away, enable **Show in sidebar** on the Configuration tab.
 
 ---
 
 ## Step 2 — Integration: Polygonal Zones
 
-The integration is a HACS custom integration that watches `device_tracker` entities and resolves their GPS position against your polygon zones.
+The integration watches your `device_tracker` entities and resolves their GPS position against your zones.
 
 ### 2a. Add via HACS
 
@@ -90,14 +95,13 @@ Fill in the setup form:
 | Field                              | What to enter                                                                                                                                         |
 | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **URLs of GeoJSON files**          | `http://<your-ha-host>:8000/zones.json` — the add-on URL from Step 1d.                                                                                |
+| **Add-on save token**              | _(advanced)_ The `save_token` you set in Step 1d.                                                                                                     |
 | **Entities**                       | The `device_tracker.*` entities you want to track against your zones.                                                                                 |
 | **Tracking consent**               | A required checkbox: "I confirm everyone whose device I'm adding has been told it will be location-tracked." The form won't submit until you tick it. |
 | **Prioritize order of zone files** | _(advanced)_ When a position matches zones from multiple files, prefer the earlier file.                                                              |
 | **Download the GeoJSON files**     | _(advanced)_ Copies the remote file locally so you can mutate zones via automation actions.                                                           |
 
-> **LAN URL note.** The integration's SSRF defence (SSRF = server-side request forgery — stopping the server being tricked into fetching an address it shouldn't) blocks private network addresses (`192.168.x.x`, `10.x.x.x`, etc.) by default. Because the add-on URL is a LAN address, you need to enable **Allow private-network URLs (LAN)** in the integration's advanced options. This unlocks private home-network addresses (`192.168.x.x`, `10.x.x.x`, …); other internal-only ranges (loopback, link-local) stay blocked regardless.
->
-> In the add-on, also make sure `allow_all_ips: true` is set under **Settings → Add-ons → Polygonal Zones → Configuration** so the integration's requests are accepted.
+> **LAN URL.** The add-on URL is a private address, which the integration blocks by default as SSRF protection (SSRF is the server being tricked into fetching an internal address). Turn on **Allow private-network URLs (LAN)** in the advanced options (visible with Advanced mode on in your user profile). Loopback and link-local addresses stay blocked.
 
 Click **Submit**. The integration creates one new entity per tracked device:
 
@@ -107,36 +111,24 @@ device_tracker.alice_phone  →  device_tracker.polygonal_zones_alice_phone
 
 ### 2e. Verify
 
-Open **Developer Tools → States** and look for `device_tracker.polygonal_zones_*`. The state should be a zone name or `away` within a few seconds of the source device reporting a GPS fix.
+Open **Developer Tools → States** and look for `device_tracker.polygonal_zones_*`. The state is a zone name or `away` once the source device has reported a GPS fix.
 
-If the entity stays `unknown` for more than a minute, see [Troubleshooting](troubleshooting.md).
+If the entity stays `unknown`, see [Troubleshooting](troubleshooting.md).
 
 ---
 
-## What you'll have when done
+## Next steps
 
-- A map editor (add-on) reachable from your HA sidebar or via **Open Web UI**
-- A `zones.json` served at `http://<ha-host>:8000/zones.json`
-- One `device_tracker.polygonal_zones_<name>` entity per tracked device, with state = zone name or `away`
-- Automation triggers like "notify me when Alice arrives at School"
+Use `device_tracker.polygonal_zones_<name>` (state: zone name or `away`) in automations. There is an example under [Usage in the README](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones#usage).
 
-Use the mirror entity's state directly in automations:
+---
 
-```yaml
-automation:
-  - alias: "Notify when Alice arrives at school"
-    triggers:
-      - trigger: state
-        entity_id: device_tracker.polygonal_zones_alice_phone
-        to: "School"
-    actions:
-      - action: notify.mobile_app
-        data:
-          message: "Alice has arrived at school"
-```
+## Removing it
+
+Settings → Devices & Services → Polygonal Zones → ⋮ → Delete, then remove the integration in HACS. If **Download the GeoJSON files** was on, also delete `<config>/polygonal_zones/<entry_id>.json` (the entry id is in the file name), which holds the downloaded zones; leave any other file you keep in that folder. Stop the add-on and uninstall it separately if you no longer need the editor.
 
 ---
 
 ## Privacy note
 
-The integration continuously processes real GPS coordinates of the `device_tracker` entities you select. New installs default `Expose GPS coordinates` to **off** — only the zone name is published to entity attributes. However, the recorder still logs state-change timestamps unless you exclude the entities. See [Privacy](privacy.md) for the full picture, including how to exclude entities from the recorder and how to handle deletion requests.
+The integration processes the GPS position of the `device_tracker` entities you select. **Expose GPS coordinates** defaults to off for new installs, so only the zone name is published to attributes. The recorder still stores zone entry and exit times unless you exclude the entities; see [Privacy](privacy.md).

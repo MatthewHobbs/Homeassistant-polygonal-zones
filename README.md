@@ -6,42 +6,29 @@
 [![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5)](https://hacs.xyz/)
 [![HA quality scale](https://img.shields.io/badge/quality--scale-bronze-cd7f32)](https://developers.home-assistant.io/docs/core/integration-quality-scale/)
 [![License: MIT](https://img.shields.io/github/license/MatthewHobbs/Homeassistant-polygonal-zones)](LICENSE)
-[![Maintenance](https://img.shields.io/maintenance/yes/2026)](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/commits/main)
+[![Last commit](https://img.shields.io/github/last-commit/MatthewHobbs/Homeassistant-polygonal-zones)](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/commits/main)
 
-**Full documentation (install guide, zone format reference, privacy notice):** [matthewhobbs.github.io/Homeassistant-polygonal-zones](https://matthewhobbs.github.io/Homeassistant-polygonal-zones)
+Resolve any `device_tracker` entity into the polygonal zone it sits in, using zones from a GeoJSON file (a text format for shapes on a map). Use it where circular HA zones do not fit, such as irregular property boundaries or school catchments.
 
-This Home Assistant integration lets you define arbitrary polygonal zones from a GeoJSON file and resolve any tracked `device_tracker` entity into the zone it currently sits inside. Use it when the built-in circular HA zones aren't expressive enough — irregular property boundaries, school catchments, neighbourhoods, town centres, etc.
-
-**Status:** Actively maintained; HACS-ready. Manifest declares `quality_scale: bronze`; the rules for Silver, Gold, and Platinum are implemented and tracked in [`quality_scale.yaml`](custom_components/polygonal_zones/quality_scale.yaml), but a higher tier can only be claimed after a Home Assistant architecture-team review (which happens through the [core-integration submission process](https://developers.home-assistant.io/docs/creating_component_index/), not by self-declaration).
-
-> **Fork Notice**
->
-> This is a community-maintained continuation of the original [MichelGerding/Homeassistant-polygonal-zones](https://github.com/MichelGerding/Homeassistant-polygonal-zones), which is no longer actively maintained.
-> Development continues here at [MatthewHobbs/Homeassistant-polygonal-zones](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones).
->
-> Pull requests and contributions are welcome.
+This is a community continuation of [MichelGerding/Homeassistant-polygonal-zones](https://github.com/MichelGerding/Homeassistant-polygonal-zones), which is no longer maintained. Pull requests are welcome.
 
 ## Quick start
 
-1. **Install the editor add-on** (optional but recommended): add the [Polygonal Zones Editor add-on](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon) to your HA Supervisor, start it, and draw your zones. It serves a GeoJSON (a text format for shapes on a map) file at `http://<your-ha-host>:8000/zones.json`.
-2. **Install this integration** via HACS (see the button below) or by copying `custom_components/polygonal_zones/` into your HA config.
-3. **Add the integration**: Settings → Devices & Services → Add Integration → "Polygonal Zones".
-4. **Configure it**: paste your zones URL (or a file path under `/config`), select the `device_tracker` entities to follow, and tick the box confirming everyone whose device you're adding knows they'll be location-tracked (the form won't continue without it). If you're using a LAN address from the editor add-on, enable **Allow private-network URLs (LAN)** in the advanced options — the integration blocks private addresses by default as an SSRF protection (a protection that stops the server being tricked into fetching internal addresses).
-5. **Done**: each tracked entity now has a mirror `device_tracker.polygonal_zones_*` whose state is the zone name (`Home`, `School`, …) or `away`.
+1. Install the [Polygonal Zones Editor add-on](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon) (optional), start it and draw your zones. Under its **Network** tab assign host port 8000, and set a `save_token` in its configuration (see the [install guide](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/install/)). The zones are then served at `http://<your-ha-host>:8000/zones.json`.
+2. Install this integration through HACS (see [Installation](#installation)) and restart Home Assistant.
+3. Go to Settings → Devices & Services → Add Integration → Polygonal Zones.
+4. Enter the zones URL (or a file path under `/config`), select the `device_tracker` entities and tick the box confirming that everyone being tracked knows about it. The form will not continue without it. The add-on URL is a LAN address and private addresses are blocked by default as SSRF protection (the server being tricked into fetching internal addresses), so turn on **Allow private-network URLs (LAN)** in the advanced options (visible with Advanced mode on in your user profile), and enter the add-on's `save_token` as **Add-on save token**. Use the host's IP address, `localhost` or a `.local` name in the URL: the token is sent only to those, and a plain DNS name gets a 403.
 
-> Need more detail? See the [full install guide](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/install/).
+Each tracked entity now has a mirror `device_tracker.polygonal_zones_*` whose state is the zone name (`Home`, `School`, …) or `away`. The [install guide](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/install/) has the full walkthrough.
 
 ## Contents
 
-- [Companion add-on](#companion-add-on)
 - [Installation](#installation)
 - [Configuration options](#configuration-options)
 - [Usage](#usage)
-- [Use cases](#use-cases)
 - [How updates flow](#how-updates-flow)
 - [GeoJSON file format](#geojson-file-format)
 - [Actions / services](#actions--services)
-- [Action examples](#action-examples)
 - [Known limitations](#known-limitations)
 - [Troubleshooting](#troubleshooting)
 - [Privacy and data handling](#privacy-and-data-handling)
@@ -49,34 +36,28 @@ This Home Assistant integration lets you define arbitrary polygonal zones from a
 - [Contributing](#contributing)
 - [License](#license)
 
-## Companion add-on
-
-This integration is one half of a paired system. The other half is the **[Polygonal Zones Editor add-on](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon)** — a map editor that runs inside Home Assistant where you draw zones and save them. It serves the `zones.json` file this integration reads.
-
-If you're setting up for the first time, install the add-on first: it gives you a URL (`http://<your-ha-host>:8000/zones.json`) to paste into the integration's `zone_urls` field. See the [full install guide](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/install/) for a step-by-step walkthrough of both.
-
 ## Installation
 
-**Requirements:** Home Assistant 2026.7.1 or later (it runs on Python 3.14, which is bundled with HA OS/Supervised — so there's nothing extra to install there).
+Requires Home Assistant 2026.7.4 or later.
 
 [![Add to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=MatthewHobbs&repository=Homeassistant-polygonal-zones&category=integration)
 
-If the button doesn't work: HACS → ⋮ → Custom repositories → add `https://github.com/MatthewHobbs/Homeassistant-polygonal-zones` as an Integration. For manual installation, copy `custom_components/polygonal_zones/` into your HA config's `custom_components/` directory and restart. For beta releases, open the integration's HACS card → ⋮ → **Redownload** → toggle **Show beta versions**.
+If the button does not work: HACS → ⋮ → Custom repositories, then add `https://github.com/MatthewHobbs/Homeassistant-polygonal-zones` as an Integration. To install manually, copy `custom_components/polygonal_zones/` into your HA config's `custom_components/` directory and restart. For beta releases, open the integration's HACS card → ⋮ → **Redownload** → toggle **Show beta versions**.
 
-Full guide (add-on setup, post-install verification, first-run tips): [matthewhobbs.github.io/Homeassistant-polygonal-zones/install/](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/install/)
+Add-on setup and post-install checks: [install guide](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/install/).
 
 ## Configuration options
 
-| Field                   | Required | Default (new install)                                                     | Notes                                                                                                                                                                                                                                                                                                                                                       |
-| ----------------------- | -------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `zone_urls`             | yes\*    | —                                                                         | List of `http(s)://…` URLs or paths inside `/config`. \*Can be empty if `download_zones` is enabled.                                                                                                                                                                                                                                                        |
-| `prioritize_zone_files` | no       | off                                                                       | Prefer earlier files when a position matches zones in multiple files.                                                                                                                                                                                                                                                                                       |
-| `download_zones`        | no       | **on** (new installs); **off** when reconfiguring a legacy entry          | Materialise the source files into a single editable local file. Required to use the `add_new_zone` / `edit_zone` / `delete_zone` / `replace_all_zones` services.                                                                                                                                                                                            |
-| `expose_coordinates`    | no       | **off** (new installs); on for entries created before this option existed | Write `latitude`, `longitude`, and `gps_accuracy` to entity attributes on every update. When off, only the zone name is published.                                                                                                                                                                                                                          |
-| `allow_private_urls`    | no       | off                                                                       | Relax the SSRF block for RFC-1918 (private home-network addresses like 192.168.x.x) and similar private ranges. Required when using the add-on's LAN URL.                                                                                                                                                                                                   |
-| `zone_source_token`     | no       | —                                                                         | The add-on's `save_token`, if it has one configured — that option also gates the add-on's read routes (`GET /zones.json`, `GET /trackers.json`), not just writes. Sent as the `X-Save-Token` header, but only on requests to a URL that looks like the LAN add-on; never sent to a public `https://` source.                                                |
-| `home_zone_id`          | no       | —                                                                         | The zone's `id` (preferred — see `properties.id` in your zone file, survives a rename) or exact `name` that counts as "home". Blank means no zone is home. Publishes `in_zones` (`zone.home`) on the mirror entity when matched, regardless of `expose_coordinates` — see [Privacy](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/privacy/). |
-| `entities`              | yes      | —                                                                         | `device_tracker.*` entities to evaluate. Selectable from the entity picker.                                                                                                                                                                                                                                                                                 |
+| Field                   | Required | Default (new install)                                                                                | Notes                                                                                                                                                                                                                                                                                                                                                       |
+| ----------------------- | -------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `zone_urls`             | yes\*    | —                                                                                                    | List of `http(s)://…` URLs or paths inside `/config`. \*Can be empty if `download_zones` is enabled.                                                                                                                                                                                                                                                        |
+| `prioritize_zone_files` | no       | off                                                                                                  | Prefer earlier files when a position matches zones in multiple files.                                                                                                                                                                                                                                                                                       |
+| `download_zones`        | no       | **on**; **off** if every URL is an IP address, `localhost` or a `.local` host, or for a legacy entry | Materialise the source files into a single editable local file. Required to use the `add_new_zone` / `edit_zone` / `delete_zone` / `replace_all_zones` services.                                                                                                                                                                                            |
+| `expose_coordinates`    | no       | **off** (new installs); on for entries created before this option existed                            | Write `latitude`, `longitude`, and `gps_accuracy` to entity attributes on every update. When off, only the zone name is published.                                                                                                                                                                                                                          |
+| `allow_private_urls`    | no       | off                                                                                                  | Relax the SSRF block for RFC-1918 (private home-network addresses like 192.168.x.x) and similar private ranges. Required when using the add-on's LAN URL.                                                                                                                                                                                                   |
+| `zone_source_token`     | no       | —                                                                                                    | The add-on's `save_token`. The add-on's LAN port refuses every request without it, and it also gates the add-on's read routes (`GET /zones.json`, `GET /trackers.json`), not just writes. Sent as the `X-Save-Token` header, but only on requests to a URL that looks like the LAN add-on; never sent to a public `https://` source.                        |
+| `home_zone_id`          | no       | —                                                                                                    | The zone's `id` (preferred — see `properties.id` in your zone file, survives a rename) or exact `name` that counts as "home". Blank means no zone is home. Publishes `in_zones` (`zone.home`) on the mirror entity when matched, regardless of `expose_coordinates` — see [Privacy](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/privacy/). |
+| `entities`              | yes      | —                                                                                                    | `device_tracker.*` entities to evaluate. Selectable from the entity picker.                                                                                                                                                                                                                                                                                 |
 
 To change any of these settings after setup: Settings → Devices & Services → Polygonal Zones → ⋮ → Reconfigure.
 
@@ -89,7 +70,7 @@ device_tracker.alice_phone        →  device_tracker.polygonal_zones_alice_phon
                                    →  sensor.polygonal_zones_alice_phone
 ```
 
-The mirror's state is the name of the zone the source device is inside, falling back to `"away"`. Use it directly in automations:
+The mirror's state is the name of the zone the source device is inside, or `away`. Use it in automations:
 
 ```yaml
 automation:
@@ -104,15 +85,15 @@ automation:
           message: "Alice has arrived at school"
 ```
 
-The mirror entity always exposes `source_entity`, `last_load_result`, and `last_zones_loaded_at` (non-location load diagnostics). When **Expose GPS coordinates** is enabled, `latitude`, `longitude`, and `gps_accuracy` are also written on each update — along with `zone_uris` and `matched_zones` (every zone the point currently intersects). Those last two are gated with coordinates because they reveal fine-grained location (`matched_zones`) or can surface LAN hostnames (`zone_uris`); with **Expose GPS coordinates** off, only the zone name plus the load-diagnostic attributes leave the entity.
+The mirror always exposes `source_entity`, `last_load_result` and `last_zones_loaded_at`. With **Expose GPS coordinates** on, it also writes `latitude`, `longitude`, `gps_accuracy`, `zone_uris` (credentials and query strings removed) and `matched_zones` (every zone the point intersects). The last two are gated because they reveal fine-grained location or LAN hostnames.
 
-The companion `sensor.polygonal_zones_*` publishes the same matched zone name (or `away`) as a plain string, resolved independently of the mirror `device_tracker`. It exists so automations have a stable place to read the zone name from that isn't `device_tracker.*`'s `state` — see the deprecation notice below.
+`sensor.polygonal_zones_*` holds the same zone name (or `away`) as a plain string, resolved independently of the mirror. Read the zone name from it rather than from the `device_tracker` state; see the deprecation notice below.
 
 ### Detecting a silent tracker
 
-Phones report less often when they are stationary, so a quiet tracker looks the same as a dead one. Each tracked entity also has a **`sensor.polygonal_zones_<name>_last_reported`** diagnostic sensor: a timestamp of the last time the source tracker reported, counting a report that repeated an unchanged position. It is **disabled by default** — enable it under **Settings → Devices & services → Polygonal Zones → entities** (use the filter to show disabled entities).
+A stationary phone reports less often, so a quiet tracker looks like a dead one. `sensor.polygonal_zones_<name>_last_reported` is a diagnostic timestamp of the source tracker's last report, including reports that repeated an unchanged position. It is disabled by default: enable it under Settings → Devices & services → Polygonal Zones → entities (use the filter to show disabled entities).
 
-The sensor only holds the timestamp; you decide what "too long" means. For example, to ask a Companion-app phone for a fresh location after ten minutes of silence:
+You decide what "too long" means. For example, to ask a Companion-app phone for a fresh location after ten minutes of silence:
 
 ```yaml
 automation:
@@ -128,45 +109,30 @@ automation:
           message: request_location_update
 ```
 
-Use the notify service of your own device. `request_location_update` is a Home Assistant Companion app command: it is [documented as unreliable on iOS](https://companion.home-assistant.io/docs/notifications/notification-commands/) and not recommended on a tight schedule because of battery use, and other tracker sources do not support it. The sensor works for any source; the request is the part that depends on your device.
+Use the notify service of your own device. `request_location_update` is a Companion app command that is [documented as unreliable on iOS](https://companion.home-assistant.io/docs/notifications/notification-commands/) and not recommended on a tight schedule because of battery use. Other tracker sources do not support it; the sensor works for any source.
 
-> **⚠️ Deprecation notice: `device_tracker` `state`/`location_name` is going away**
+> **Deprecation notice: zone name in `device_tracker` state**
 >
-> Home Assistant has deprecated the `location_name` property this integration uses to publish the zone name as the mirror `device_tracker`'s `state` (a warning is logged on every setup, and the integration also raises a persistent repair issue in **Settings → Repairs**). HA will stop supporting it entirely in **2027.7**.
+> Home Assistant is removing the `location_name` property this integration uses to publish the zone name as the mirror's `state`, in **2027.7**. The integration raises a repair issue in **Settings → Repairs**. Today `state` is still the zone name. When the removal ships (no date set), `state` will become HA's standard `home` / `not_home`, and automations reading the zone name from it will break. To prepare:
 >
-> **Nothing has changed yet** — today, `state` is still the zone name, exactly as documented above. But when the removal ships (tracked as "Release B" — no date set yet), `state` will fall back to HA's own standard `home` / `not_home` / coordinates, and anything reading the zone name from `state` will break. To avoid that:
+> - Read the zone name from `sensor.polygonal_zones_*` instead. It carries the same value now.
+> - For HA's own zone-occupancy features (such as the person count of `zone.home`), set `home_zone_id` in the integration's options. It publishes `in_zones` on the mirror.
 >
-> - **Point automations that read the zone name at `sensor.polygonal_zones_*` instead of `device_tracker.polygonal_zones_*`'s `state`** — the sensor already carries the same value today and isn't affected by the removal.
-> - If you use HA's own zone-occupancy features (e.g. `zone.home`'s person count), set **`home_zone_id`** in this integration's options — it publishes `in_zones` on the mirror, which is HA's supported replacement mechanism.
->
-> Follow progress on [issue #86](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/86).
-
-## Use cases
-
-A few scenarios where polygonal zones are a better fit than HA's built-in circular zones:
-
-- **Property boundary that isn't a circle** — flag-shaped lots, mews flats with awkward driveways, farms.
-- **School catchment / neighbourhood** — fire an automation when a child arrives in a defined area larger than a single circle would naturally cover.
-- **Town centre / shopping district** — irregular footprints where a circle would either miss the edges or include unwanted streets.
-- **Multi-zone presence with priority** — overlapping zones (e.g. "Town" containing "Shop") where you want the more specific one to win automation triggers. Combine with `prioritize_zone_files` or per-feature `priority`.
-- **Geofence handover between vehicles and phones** — track multiple `device_tracker` entities into the same zone set; correlate their `polygonal_zones_*` mirror states.
+> Progress: [issue #86](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/86).
 
 ## How updates flow
 
-The integration is **push-based**. There is no polling schedule.
+Updates are push-based; nothing polls.
 
-- Each tracked source `device_tracker` entity has a `state_changed` listener attached.
-- When the source's `latitude` / `longitude` / `gps_accuracy` change, the mirror entity recomputes which zone it sits in and updates its state.
-- Zone definitions are loaded once on startup (and on `polygonal_zones.reload_zones`). Remote URLs are fetched only at those moments — never per location update.
-- If the initial zone fetch fails it retries with exponential backoff (30 s → 60 s → 120 s → 240 s → 480 s, 5 attempts) before raising a Home Assistant repair issue and marking the entity unavailable.
+- Each source `device_tracker` has a `state_changed` listener. When its position changes, the mirror re-resolves its zone.
+- Zones load once at startup and on `polygonal_zones.reload_zones`. Remote URLs are fetched only then, never per location update.
+- If the startup load fails it makes up to 5 attempts with jittered exponential backoff (starting at 30 s). After the last failure it raises a repair issue; the entities are unavailable until a load succeeds. With **Download the GeoJSON files** on, a failed first download makes Home Assistant retry the setup itself instead.
 
 ## GeoJSON file format
 
-[GeoJSON](https://geojson.org/) is a standard text format for shapes on a map. This integration accepts a `FeatureCollection` where each `Feature` has a `Polygon` or `MultiPolygon` geometry, a `name` property (shown as the entity state), and an optional integer `priority` (lower = higher priority when zones overlap). Coordinates are WGS-84 `[longitude, latitude]` order; polygon rings must close (first == last coordinate).
+A [GeoJSON](https://geojson.org/) `FeatureCollection` of `Feature`s, each with a `Polygon` or `MultiPolygon` geometry, a `name` property (the entity state) and an optional integer `priority`. When zones overlap, the lowest `priority` wins, then the nearest boundary. With `prioritize_zone_files` on, a zone without its own `priority` takes its file's position in the list. Coordinates are WGS-84 `[longitude, latitude]`.
 
-Full format specification (schema, size limits, versioning, examples): [matthewhobbs.github.io/Homeassistant-polygonal-zones/zones-format/](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/zones-format/)
-
-[![Add zone editor add-on to Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FMatthewHobbs%2FHomeassistant-polygonal-zones-addon.git)
+Full specification (schema, size limits, versioning, examples): [matthewhobbs.github.io/Homeassistant-polygonal-zones/zones-format/](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/zones-format/)
 
 ## Actions / services
 
@@ -178,78 +144,46 @@ Full format specification (schema, size limits, versioning, examples): [matthewh
 | `polygonal_zones.delete_zone`       | device | yes                         |
 | `polygonal_zones.replace_all_zones` | device | yes                         |
 
-`reload_zones` re-fetches the zone files and updates the entity's in-memory cache. The four mutating actions write to the on-disk file managed when `download_zones` is enabled — they are refused with `ZoneFileNotEditable` if the integration is reading directly from a remote URL.
+`reload_zones` reloads the zones and updates the entities' in-memory cache. With **Download the GeoJSON files** on it re-reads the local copy, because the sources are fetched only when that copy is missing. The four mutating actions write to the local file kept when `download_zones` is on, and need a Home Assistant administrator. They are refused with `ZoneFileNotEditable` when the integration reads a remote URL directly.
 
-Each mutating action automatically refreshes every tracked entity under the same config entry after a successful write — you do **not** need to call `reload_zones` afterwards. Use `reload_zones` only to re-fetch from the _source_ files/URLs: e.g. after editing `zones.json` outside of these services, or after a remote host recovers from an outage (a startup load that exhausted its retries doesn't self-heal until you reload).
+Mutating actions refresh every tracked entity under the config entry after a successful write, so you do not need `reload_zones` afterwards. Use `reload_zones` after editing a zone file outside these actions or after a remote host recovers (a startup load that used all its attempts does not retry on its own).
 
-## Action examples
-
-Worked YAML for `reload_zones`, `add_new_zone`, `edit_zone`, `delete_zone` and `replace_all_zones` is in [docs/actions.md](docs/actions.md).
+Worked YAML for each action: [docs/actions.md](docs/actions.md).
 
 ## Known limitations
 
-- **Geometry types**: only `Polygon` and `MultiPolygon` are accepted. `Point`, `LineString`, `MultiPoint`, `GeometryCollection`, and a `null` geometry are rejected at the service boundary.
-- **Coordinate system**: only WGS-84 lat/lon (the GeoJSON default, `[longitude, latitude]` order). No projected coordinate systems.
-- **Zone-file size**: HTTP zone files are capped at **5 MiB**. Service payloads (`add_new_zone`, `edit_zone`, `replace_all_zones`) at **1 MiB**.
-- **Zone counts**: max **500 features** per `FeatureCollection`, and **10,000 vertices** total across all features combined (not per-feature). Enforced on both the file/URL read path and the service write path. See the [full size-limit table](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/zones-format/).
-- **Zone names**: max **200 characters**.
-- **Network targets**: outbound zone-file fetches **refuse private, loopback, link-local, multicast, reserved, and metadata IPs** to prevent SSRF. If your zones live on a LAN or `169.254.x` host, place the file under `/config` and reference the path instead of a URL.
-- **No 3xx redirects**: HTTP responses with status 300–399 are rejected (the redirect target hasn't been validated by our DNS resolver).
-- **Service mutations require a downloaded local file**: `add_new_zone`, `edit_zone`, `delete_zone`, and `replace_all_zones` are refused with `ZoneFileNotEditable` when the integration is reading directly from a remote URL. Toggle **Download the GeoJSON files** in the integration options to enable mutations.
-- **Single point in time per device**: only the source device's most recent GPS fix is evaluated; history isn't replayed.
-- **Async constraints** _(advanced — safe to skip)_: `shapely` (the geometry library) does its maths synchronously, on Home Assistant's **event loop** — the single thread HA uses for everything else. For typical home setups (≤20 tracked devices, ≤100 zones) this is imperceptible. Very large zone sets could momentarily block that thread; the size caps above keep it bounded.
+- Only `Polygon` and `MultiPolygon` geometries are accepted. `Point`, `LineString`, `MultiPoint`, `GeometryCollection` and `null` are rejected.
+- Only WGS-84 lat/lon is supported, in GeoJSON `[longitude, latitude]` order.
+- HTTP zone files are capped at 5 MiB and service payloads at 1 MiB.
+- A `FeatureCollection` holds at most 500 features and 10,000 vertices in total (not per feature), on both the file/URL read path and the service write path. See the [size-limit table](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/zones-format/).
+- Zone names are limited to 200 characters on service writes.
+- Loopback, link-local (including cloud metadata), multicast and reserved addresses are always refused, whether written as a name or a literal IP. Private LAN addresses are refused unless **Allow private-network URLs (LAN)** is on. For a source on a blocked address, put the file under `/config` and use its path.
+- HTTP 3xx responses are rejected, because the redirect target is not validated.
+- Only the device's latest GPS fix is evaluated; history is not replayed.
 
 ## Troubleshooting
 
-### The mirror entity stays `unknown` or `away`
-
-- Check the source `device_tracker.*` actually has `latitude`, `longitude`, and `gps_accuracy` attributes. Many wifi-only trackers don't.
-- Look in the HA log for messages tagged `custom_components.polygonal_zones`. A `WARNING` line that says "Failed to load zones for entry=…" means the GeoJSON couldn't be fetched on startup. The integration retries with exponential backoff (30 s, 60 s, 120 s, 240 s, 480 s) before giving up. Call `reload_zones` after the source recovers.
-- Confirm the polygon ring is closed (first coordinate == last coordinate) and the geometry type is `Polygon` or `MultiPolygon`.
-
-### "Refusing to connect to non-public address"
-
-The integration won't fetch from `192.168.x.x`, `10.x.x.x`, `169.254.x.x`, or any other private / loopback / link-local / metadata IP by default (SSRF protection). To fix: enable **Allow private-network URLs (LAN)** in the integration's Configure dialog, or place the file under `/config` and reference it as a path.
-
-For config-flow error banners (`invalid_url`, `invalid_path`, `unreachable_url`), `ZoneFileNotEditable`, lock-timeout errors, and log verbosity: [matthewhobbs.github.io/Homeassistant-polygonal-zones/troubleshooting/](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/troubleshooting/)
+Fixes for an entity stuck on `unknown` or `away`, private-address errors, config-flow error banners, `ZoneFileNotEditable`, lock timeouts and log verbosity: [troubleshooting page](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/troubleshooting/).
 
 ## Privacy and data handling
 
-The integration continuously processes real-time GPS coordinates of the tracked `device_tracker` entities. Everything runs locally — no analytics or third-party reporting. Key points:
+The integration processes the GPS position of the tracked `device_tracker` entities in real time. It runs locally, with no analytics or third-party reporting.
 
-- **Coordinates in attributes**: latitude, longitude, and GPS accuracy are only written to entity attributes when **Expose GPS coordinates** is enabled. New installs default this to **off**; only the zone name is published.
-- **Recorder**: even with coordinates off, the recorder logs state-change timestamps (zone entry/exit events) unless you explicitly exclude the entities:
+- Latitude, longitude and accuracy are written to attributes only when **Expose GPS coordinates** is on. It defaults to off for new installs and on for entries created before the option existed.
+- With coordinates off, the recorder still stores zone entry and exit times unless you exclude the mirror and zone-sensor entities.
+- Setup requires a tick confirming that everyone being tracked has been told. Make sure that is true.
 
-  ```yaml
-  recorder:
-    exclude:
-      entity_globs:
-        - device_tracker.polygonal_zones_*
-  ```
-
-- **Consent**: any person whose `device_tracker` entity you select will have their location continuously monitored. Setup requires you to tick a confirmation that everyone being tracked has been told — make sure that's true before you do.
-
-Full privacy details (logging, outbound requests, cloud-backup GDPR note, deletion/right-to-erasure steps): [matthewhobbs.github.io/Homeassistant-polygonal-zones/privacy/](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/privacy/)
+Recorder exclude snippet, logging, outbound requests, cloud backups and erasure steps: [privacy page](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/privacy/).
 
 ## Roadmap
 
-Open work items are tracked as [GitHub issues](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues); editor add-on work lives in the [add-on repo's issues](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon/issues).
+Open work is tracked in [GitHub issues](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues) and the [add-on repo's issues](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon/issues). The `location_name` removal is [issue #86](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/86); see the [deprecation notice](#usage).
 
-**`location_name` removal.** See the [deprecation notice in Usage](#usage) above. [Issue #86](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/86) tracks the removal itself; no date is set.
-
-**Distribution.** This integration is intentionally distributed through **HACS** and is **not** being submitted to Home Assistant core. The Silver/Gold/Platinum quality-scale rules are implemented (see [`quality_scale.yaml`](custom_components/polygonal_zones/quality_scale.yaml)), but the manifest stays at `bronze` because a higher tier requires HA architecture-team review via core submission — a trade we deliberately decline, to keep HACS's release autonomy. (Revisitable if adoption grows substantially.)
+The integration is distributed through HACS and is not being submitted to Home Assistant core, so the manifest stays at `quality_scale: bronze`. The Silver, Gold and Platinum rules are implemented and tracked in [`quality_scale.yaml`](custom_components/polygonal_zones/quality_scale.yaml); claiming a higher tier needs a core-team review.
 
 ## Contributing
 
-This is a community-supported fork of the original project, maintained in spare time rather than by a dedicated team. That means responses and releases move at a best-effort pace, and the long-term health of the integration depends on contributions from the people who use it.
-
-If you rely on this integration, please consider getting involved:
-
-- **Found a bug or have an idea?** Open an issue — clear reproduction steps or a concrete use case make a big difference.
-- **Comfortable with Python?** Pull requests are very welcome, whether that's a small fix, a test, or a new feature. Smaller, focused PRs are easier to review and merge.
-- **Not a coder?** Help with documentation, translations, or triaging issues is just as valuable. Only English (`custom_components/polygonal_zones/translations/en.json`) ships today — to add a language, copy `en.json` to `translations/<lang>.json`, translate the user-facing strings, and open a PR.
-
-I'll do my best to respond to issues and review pull requests as quickly as I can, but patience is appreciated.
+This is a spare-time community project, so responses are best-effort. Issues with reproduction steps and small, focused pull requests are the most useful. Only English (`custom_components/polygonal_zones/translations/en.json`) ships today; to add a language, copy `en.json` to `translations/<lang>.json`, translate the user-facing strings and open a PR. See [CONTRIBUTING.md](CONTRIBUTING.md) for the checks to run.
 
 ## License
 

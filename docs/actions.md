@@ -7,7 +7,7 @@ permalink: /actions/
 
 # Action examples
 
-Worked YAML for each action. What each action does, and which need an editable zone file, is in the README under [Actions / services](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones#actions--services).
+Worked YAML for each action. What each action does, and which need an editable zone file, is in the README under [Actions / services](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones#actions--services). `reload_zones` and the four zone-editing actions are each limited to one call per 2 seconds for each config entry. The zone-editing actions also need an administrator.
 
 ## `reload_zones`
 
@@ -17,7 +17,7 @@ target:
   entity_id: device_tracker.polygonal_zones_alice_phone
 ```
 
-Optionally returns the loaded zones (names + polygon coordinates) — useful for debugging:
+With `response_variable`, the action returns the loaded zones as a list of `name`, `priority` and `geometry` (exterior-ring coordinates):
 
 ```yaml
 action: polygonal_zones.reload_zones
@@ -40,11 +40,11 @@ data:
       "geometry": {
         "type": "Polygon",
         "coordinates": [[
-          [-0.090, 51.515],
-          [-0.085, 51.515],
-          [-0.085, 51.518],
-          [-0.090, 51.518],
-          [-0.090, 51.515]
+          [0, 0],
+          [0.005, 0],
+          [0.005, 0.003],
+          [0, 0.003],
+          [0, 0]
         ]]
       }
     }
@@ -52,7 +52,7 @@ data:
 
 ## `edit_zone`
 
-Replace the geometry of an existing zone. The `zone_name` matches the existing zone; the `zone` payload is the new Feature.
+Replaces the zone named `zone_name` with the Feature in `zone`, properties included.
 
 ```yaml
 action: polygonal_zones.edit_zone
@@ -80,7 +80,7 @@ data:
 
 ## `replace_all_zones`
 
-Replaces the entire local file with a new `FeatureCollection`. Useful when the editor add-on regenerates the file.
+Replaces the whole local file with a `FeatureCollection`. It does not read the existing file, so it also replaces a corrupt one.
 
 ```yaml
 action: polygonal_zones.replace_all_zones
