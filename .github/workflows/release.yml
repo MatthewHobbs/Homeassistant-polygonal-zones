@@ -8,12 +8,18 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
+# Nothing by default: each job asks for what it needs. The job that mints the
+# attestation holds the OIDC token but cannot write to the release; the job that
+# writes to the release cannot mint an attestation, and checks the zip against the
+# attestation before uploading it.
+permissions: {}
+
 jobs:
-  release:
-    name: Attach integration zip
+  build:
+    name: Build and attest the integration zip
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       actions: read
       # Required for actions/attest-build-provenance to mint a Sigstore
       # bundle signed with the repo's OIDC identity — lets installers
@@ -57,6 +63,37 @@ jobs:
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: polygonal_zones.zip
+
+      - name: Hand the zip to the publish job
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: integration-zip
+          path: polygonal_zones.zip
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: Verify the zip and attach it to the release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      attestations: read
+    steps:
+      - name: Fetch the zip
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: integration-zip
+
+      - name: Verify the zip is the attested one
+        # Runs on a dry run too: this is the check that the bytes about to be
+        # published are the bytes the build job attested, from this workflow.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh attestation verify polygonal_zones.zip \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml"
 
       - name: Upload zip to release
         # A manual dispatch run has no corresponding release object to attach
