@@ -1,6 +1,5 @@
 """Sensor for the polygonal_zones integration."""
 
-from collections.abc import Callable, Coroutine
 import logging
 import time
 from typing import Any
@@ -8,19 +7,18 @@ from typing import Any
 from homeassistant.components.device_tracker import SourceType, TrackerEntity
 from homeassistant.components.zone import ENTITY_ID_HOME
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_ENTITIES, STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.const import CONF_ENTITIES
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers import issue_registry as ir
-from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import CONF_EXPOSE_COORDINATES, COORDINATE_GATED_ATTRIBUTES, DOMAIN
-from .utils import event_should_trigger
+from .entity import ZoneSourceFollower, zone_device_info
 from .utils.general import redact_uri
 from .utils.geometry import exterior_coords
 from .utils.zones import Zone
@@ -129,7 +127,7 @@ async def async_setup_entry(
     source.async_schedule_initial_load(hass)
 
 
-class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
+class PolygonalZoneEntity(ZoneSourceFollower, TrackerEntity, RestoreEntity):
     """A mirror ``device_tracker`` that resolves its source into a polygonal zone.
 
     Zone data + load lifecycle live on the shared entry-scoped :class:`ZoneSource`;
@@ -155,9 +153,6 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
         self._source = source
         self._entity_id = tracked_entity_id
         self._expose_coordinates = expose_coordinates
-
-        self._unsub: Callable[[], None] | None = None
-        self._unsub_source: Callable[[], None] | None = None
 
         self.entity_id = own_id
         self._attr_unique_id = own_id
@@ -233,22 +228,7 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
                 restored["zone_uris"] = [redact_uri(str(u)) for u in restored["zone_uris"]]
             self._attr_extra_state_attributes = restored
 
-        self._unsub_source = self._source.add_listener(self._handle_source_reloaded)
-        self._unsub = async_track_state_change_event(
-            self.hass, [self._entity_id], self._handle_state_change_builder()
-        )
-        # Resolve against whatever the source's current state already is. The
-        # shared source's own initial load is scheduled via async_at_started,
-        # which runs as a separate task rather than inline — with two platforms
-        # forwarded concurrently, that task can fire and notify listeners before
-        # this entity's own add_listener() above has run, in which case the
-        # one-shot notification is missed entirely and never retried. Resolving
-        # here too makes the initial state correct regardless of that ordering.
-        await self._update_state()
-
-    def _handle_source_reloaded(self) -> None:
-        """Source (re)loaded — re-resolve this mirror's state off the event loop."""
-        self.hass.async_create_task(self._update_state())
+        await self._follow_source()
 
     def _set_available(self, available: bool) -> None:
         """Toggle entity availability and log transitions at INFO."""
@@ -259,15 +239,6 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
             _LOGGER.info("Entity %s is available again (zones loaded)", self._attr_unique_id)
         else:
             _LOGGER.info("Entity %s is unavailable", self._attr_unique_id)
-
-    async def async_will_remove_from_hass(self) -> None:
-        """Handle cleanup when the entity is removed."""
-        if self._unsub:
-            self._unsub()
-            self._unsub = None
-        if self._unsub_source:
-            self._unsub_source()
-            self._unsub_source = None
 
     async def update_location(self, latitude: float, longitude: float, gps_accuracy: float) -> None:
         """Update the location of the entity.
@@ -315,55 +286,6 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
             # winning one — overlap-priority debugging in Developer Tools.
             attributes["matched_zones"] = zone["matched_zones"] if zone is not None else []
         self._attr_extra_state_attributes = attributes
-
-    def _handle_state_change_builder(
-        self,
-    ) -> Callable[[Any], Coroutine[Any, Any, None]]:
-        """Create a callback for the state updates.
-
-        This listener will check if it should operate on the event and then update the state.
-        """
-
-        async def func(event: Any) -> None:
-            # check if it is the entity we should listen to.
-            if event_should_trigger(event, self._entity_id):
-                await self._update_state()
-
-        return func
-
-    async def _update_state(self) -> None:
-        # Zones not (yet) loaded, or the shared load exhausted its retries. The
-        # mirror can't resolve a zone, so reflect unavailable rather than acting
-        # on an empty/stale zone set.
-        if not self._source.loaded_ok:
-            self._set_available(False)
-            return
-
-        entity_state = self.hass.states.get(self._entity_id)
-
-        # Source tracker has been removed or is reporting unavailable /
-        # unknown. Reflect that on the mirror so downstream automations
-        # can detect the gap instead of acting on stale zone data.
-        # (A tracker that merely lacks GPS attributes for one update — common
-        # for wifi-only trackers between fixes — is handled below without
-        # flipping availability.)
-        if entity_state is None or entity_state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-            self._set_available(False)
-            return
-
-        if not all(
-            key in entity_state.attributes for key in ["latitude", "longitude", "gps_accuracy"]
-        ):
-            return
-
-        await self.update_location(
-            entity_state.attributes["latitude"],
-            entity_state.attributes["longitude"],
-            entity_state.attributes["gps_accuracy"],
-        )
-        self._set_available(True)
-
-        self.async_write_ha_state()
 
     async def async_reload_zones(self, call: ServiceCall | None = None) -> dict | list | None:
         """Reload the shared zone source and re-resolve.
@@ -455,12 +377,7 @@ class PolygonalZoneEntity(TrackerEntity, RestoreEntity):
     @property
     def device_info(self) -> DeviceInfo | None:
         """Information about the polygonal_zones device."""
-        return {
-            "identifiers": {("polygonal_zones", self._source.entry_id)},
-            "name": "Polygonal Zones",
-            "manufacturer": "Polygonal Zones Community",
-            "entry_type": DeviceEntryType.SERVICE,
-        }
+        return zone_device_info(self._source.entry_id)
 
     @property
     def should_poll(self) -> bool:

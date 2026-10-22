@@ -37,7 +37,7 @@ async def test_added_to_hass_tracks_only_its_source_entity() -> None:
 
     tracker = MagicMock(return_value=lambda: None)
     with patch(
-        "custom_components.polygonal_zones.device_tracker.async_track_state_change_event",
+        "custom_components.polygonal_zones.entity.async_track_state_change_event",
         new=tracker,
     ):
         await entity.async_added_to_hass()

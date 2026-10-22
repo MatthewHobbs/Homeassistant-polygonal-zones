@@ -162,7 +162,7 @@ async def test_async_added_to_hass_restores_native_value_and_attributes() -> Non
         return_value=SimpleNamespace(attributes={"source_entity": "device_tracker.phone"})
     )
 
-    with patch("custom_components.polygonal_zones.sensor.async_track_state_change_event"):
+    with patch("custom_components.polygonal_zones.entity.async_track_state_change_event"):
         await sensor.async_added_to_hass()
 
     assert sensor.native_value == "Home"
@@ -186,7 +186,7 @@ async def _restore(expose_coordinates: bool) -> dict:
     sensor.async_get_last_state = AsyncMock(
         return_value=SimpleNamespace(attributes=dict(_RESTORED_WITH_GATED))
     )
-    with patch("custom_components.polygonal_zones.sensor.async_track_state_change_event"):
+    with patch("custom_components.polygonal_zones.entity.async_track_state_change_event"):
         await sensor.async_added_to_hass()
     return sensor.extra_state_attributes
 
@@ -200,13 +200,34 @@ async def test_restore_keeps_attributes_when_coordinates_are_on() -> None:
     assert await _restore(expose_coordinates=True) == _RESTORED_WITH_GATED
 
 
+async def test_added_to_hass_resolves_a_source_that_loaded_before_it_subscribed() -> None:
+    """The source's one-shot load notification can fire before the entity subscribes
+    (the platforms start concurrently), so it must resolve once on its own."""
+    sensor = _make_sensor(zones=[_HOME])
+    hass = _make_hass()
+    hass.states.get = MagicMock(
+        return_value=SimpleNamespace(
+            state="not_home", attributes={"latitude": 0.5, "longitude": 0.5, "gps_accuracy": 10}
+        )
+    )
+    sensor.hass = hass
+    sensor.async_write_ha_state = MagicMock()
+    sensor.async_get_last_sensor_data = AsyncMock(return_value=None)
+    sensor.async_get_last_state = AsyncMock(return_value=None)
+
+    with patch("custom_components.polygonal_zones.entity.async_track_state_change_event"):
+        await sensor.async_added_to_hass()
+
+    assert sensor.native_value == "Home"
+
+
 async def test_async_added_to_hass_no_prior_state() -> None:
     sensor = _make_sensor()
     sensor.hass = _make_hass()
     sensor.async_get_last_sensor_data = AsyncMock(return_value=None)
     sensor.async_get_last_state = AsyncMock(return_value=None)
 
-    with patch("custom_components.polygonal_zones.sensor.async_track_state_change_event"):
+    with patch("custom_components.polygonal_zones.entity.async_track_state_change_event"):
         await sensor.async_added_to_hass()
 
     assert sensor.native_value is None
@@ -220,7 +241,7 @@ async def test_added_to_hass_tracks_only_its_source_entity() -> None:
 
     tracker = MagicMock(return_value=lambda: None)
     with patch(
-        "custom_components.polygonal_zones.sensor.async_track_state_change_event",
+        "custom_components.polygonal_zones.entity.async_track_state_change_event",
         new=tracker,
     ):
         await sensor.async_added_to_hass()
@@ -236,7 +257,7 @@ async def test_added_to_hass_registers_source_listener() -> None:
     sensor.async_get_last_sensor_data = AsyncMock(return_value=None)
     sensor.async_get_last_state = AsyncMock(return_value=None)
 
-    with patch("custom_components.polygonal_zones.sensor.async_track_state_change_event"):
+    with patch("custom_components.polygonal_zones.entity.async_track_state_change_event"):
         await sensor.async_added_to_hass()
 
     assert len(source._listeners) == 1
