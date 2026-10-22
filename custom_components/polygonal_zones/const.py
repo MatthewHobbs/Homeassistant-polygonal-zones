@@ -18,3 +18,13 @@ DOMAIN = "polygonal_zones"
 # MAX_SUPPORTED_SCHEMA_VERSION with a clear error.
 SCHEMA_VERSION = 1
 MAX_SUPPORTED_SCHEMA_VERSION = 1
+
+# Attributes published only while "Expose GPS coordinates" is on; also stripped
+# from restored state, so turning it off does not re-publish them after a restart.
+COORDINATE_GATED_ATTRIBUTES = (
+    "latitude",
+    "longitude",
+    "gps_accuracy",
+    "zone_uris",
+    "matched_zones",
+)

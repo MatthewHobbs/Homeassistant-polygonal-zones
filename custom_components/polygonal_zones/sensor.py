@@ -35,7 +35,7 @@ from homeassistant.helpers.event import (
     async_track_state_report_event,
 )
 
-from .const import CONF_EXPOSE_COORDINATES
+from .const import CONF_EXPOSE_COORDINATES, COORDINATE_GATED_ATTRIBUTES
 from .utils import event_should_trigger
 from .zone_source import ZoneSource
 
@@ -110,7 +110,11 @@ class PolygonalZoneSensor(RestoreSensor):
             self._attr_native_value = last_data.native_value
         last_state = await self.async_get_last_state()
         if last_state is not None:
-            self._attr_extra_state_attributes = dict(last_state.attributes)
+            restored = dict(last_state.attributes)
+            if not self._expose_coordinates:
+                for gated in COORDINATE_GATED_ATTRIBUTES:
+                    restored.pop(gated, None)
+            self._attr_extra_state_attributes = restored
 
         self._unsub_source = self._source.add_listener(self._handle_source_reloaded)
         self._unsub = async_track_state_change_event(
