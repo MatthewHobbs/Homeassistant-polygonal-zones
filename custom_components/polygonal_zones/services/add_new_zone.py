@@ -7,10 +7,10 @@ from homeassistant.core import HomeAssistant, ServiceCall
 
 from .errors import ZoneAlreadyExists
 from .helpers import (
+    get_zone_idx,
     modify_zone_file,
     parse_zone_feature,
     resolve_mutation_target,
-    zone_already_defined,
 )
 
 
@@ -24,7 +24,7 @@ def action_builder(hass: HomeAssistant) -> Callable[[ServiceCall], Awaitable[Non
         new_name = new_zone["properties"]["name"]
 
         def add(existing_zones: dict[str, Any]) -> None:
-            if zone_already_defined(new_name, existing_zones):
+            if get_zone_idx(new_name, existing_zones) is not None:
                 raise ZoneAlreadyExists(f'The zone with name "{new_name}" already exists')
             existing_zones["features"].append(new_zone)
 

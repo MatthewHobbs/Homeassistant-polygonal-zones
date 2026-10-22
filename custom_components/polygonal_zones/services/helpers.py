@@ -205,20 +205,6 @@ def get_zone_idx(name: str, existing_zones: dict[str, Any]) -> int | None:
     return None
 
 
-def zone_already_defined(name: str, existing_zones: dict[str, Any]) -> bool:
-    """Check if a zone has already been defined.
-
-    Args:
-        name: The name of the zone to check for
-        existing_zones: a GeoJSON dict of the existing zones to check in
-
-    Returns:
-         boolean: true if the zone already exists. false if it doesn't
-
-    """
-    return any(zone["properties"]["name"] == name for zone in existing_zones["features"])
-
-
 async def sync_entities_after_write(entities: list[PolygonalZoneEntity]) -> None:
     """Refresh the shared zone source after a successful disk write.
 
