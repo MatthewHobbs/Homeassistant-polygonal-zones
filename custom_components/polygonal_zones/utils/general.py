@@ -299,7 +299,7 @@ def event_should_trigger(event: Event, entity_id: str) -> bool:
         # Source removed, or reporting unavailable/unknown. GPS attributes are
         # normally cleared in this case, so the attribute check below would
         # otherwise filter this event out — always trigger instead, so
-        # PolygonalZoneEntity._update_state's own unavailable-reflection branch
+        # the entities' shared _update_state (entity.py) unavailable-reflection branch
         # (which re-reads live state, not this event) actually gets a chance
         # to run. Without this, a source going unavailable was never reflected
         # on the mirror: the trigger that would call _update_state never fired.
