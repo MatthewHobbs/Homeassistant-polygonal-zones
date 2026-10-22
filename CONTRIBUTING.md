@@ -1,78 +1,53 @@
 # Contributing
 
-This is a community-maintained fork (see the README fork notice). Pull requests are very welcome; responses move at a spare-time pace.
+This is a community-maintained fork (see the README fork notice). Pull requests are welcome; replies come at a spare-time pace.
 
-## Running the test suite
+## Run the checks
+
+`just ci` runs Ruff, Mypy and the tests with the 98% coverage floor, in a Python 3.14 `.venv` that it creates with `uv`. Without `just`:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements_test.txt
-pytest
+pytest --cov=custom_components/polygonal_zones --cov-fail-under=98
 ruff check .
 ruff format --check .
 mypy
 ```
 
-`pytest-asyncio` is in auto mode (see `pyproject.toml`), so `async def test_*` works without decorators.
+Prettier, Hassfest and HACS run only in CI. Check JSON, Markdown and YAML locally with `npx prettier@3 --check "**/*.{json,yaml,yml,md}"` (`--write` fixes them).
 
-## Testing philosophy
+`just test-hass` runs `tests_hass/` against a real Home Assistant in a separate `.venv-hass`. Keep it out of the main `.venv`: `pytest-homeassistant-custom-component` pins one exact Home Assistant version. This suite is not part of `just ci` and has no coverage gate.
 
-### Pure-pytest, no HA bootstrap
+## CI
 
-The conftest disables `pytest-homeassistant-custom-component` via `-p no:homeassistant`. Tests run against `SimpleNamespace` / `MagicMock` stubs rather than a real HA instance. This is a conscious trade-off:
+`validate.yml` runs on every pull request. These jobs must pass to merge: `Pytest`, `Pytest (HA floor)`, `Hassfest`, `HACS`, `Ruff (lint + format)`, `Prettier` and `Mypy`. `Pytest (real hass)` and `HA floor within lag bound` also run but do not block.
 
-- **Faster CI** — no HA setup/teardown per test.
-- **Lower scope drift** — tests describe _this integration's_ behaviour, not HA core's.
-- **Accepted risk** — a breaking HA core API change that matches our stub signatures won't be caught until runtime. We mitigate with the `Pytest (HA floor)` job pinning the lower bound of the supported HA range, and by keeping stub interfaces tight.
+`Pytest (HA floor)` installs the Home Assistant version in `hacs.json`, so do not use APIs newer than that floor.
 
-If you add a test that really needs a bootstrapped HA, say so in the PR description and we'll decide whether to keep the `no:homeassistant` rule or carve out an exception.
+## Tests
 
-### Behaviour tests, not coverage-chasing
+- Unit tests run without Home Assistant: `pyproject.toml` passes `-p no:homeassistant` and tests use `SimpleNamespace` and `MagicMock` stubs. `pytest-asyncio` is in auto mode, so write `async def test_*` without a decorator. Anything that needs a real Home Assistant goes in `tests_hass/`.
+- Each test asserts an observable effect (state, exception, log line, written file, mock call) and would fail on a plausible regression. Do not add tests only to cover a line.
+- `tests/conftest.py` has an autouse fixture that resets module-level state (the action and `reload_zones` rate limits). Extend it when you add module-level state.
+- Fake entities in action tests need a `_config_entry_id` attribute; the actions read it for audit logging and rate limiting.
 
-We aim for 98 %+ coverage (enforced by `--cov-fail-under=98` in the Pytest job), but **coverage is a byproduct, not a goal**.
+## Adding a config option
 
-If you find yourself writing:
+1. Add the key to `const.py` as `CONF_*`.
+2. Add it to `config_flow.py`: `build_create_flow` (new installs and reconfigure) and `build_options_flow` (existing entries).
+3. Add the strings to `strings.json` and `translations/en.json`, in both the `config` and `options` sections.
+4. Read it with `entry.data.get(CONF_*, fallback)` where it is used: `__init__.py` (`_build_zone_source`) for source settings, the `device_tracker.py` and `sensor.py` setup for entity settings. Choose the fallback for existing entries that lack the key with care.
+5. Show it in `diagnostics.py`.
+6. Add config-flow tests and runtime-behaviour tests.
 
-```python
-def test_thing_imported():
-    assert thing is thing
-```
+## Commits and pull requests
 
-…that's noise. Delete the import, or cover the line with a behaviour test. Historically this repo had one such test (`test_asyncio_imported`), removed in v1.12.
-
-A test should:
-
-- Assert an observable effect of code changes (state, exception, logged line, file written, mock call).
-- Fail for at least one plausible future regression.
-
-### Fixture hygiene
-
-- `conftest.py` has an autouse fixture that resets module-level state (mutation rate-limit timestamps). If you add new module-level state that needs per-test reset, extend that fixture rather than scattering resets through individual tests.
-- Fake entities in service-handler tests must carry a `_config_entry_id` attribute — the mutation services read it for audit logging + rate-limiting.
-
-### What CI gates a PR
-
-The `validate.yml` workflow runs: `hassfest`, `HACS`, `Ruff (lint + format)`, `Prettier`, `Pytest`, `Pytest (HA floor)`, `Mypy`, plus `CodeQL` / `Analyze` in the security pipeline. Branch protection requires `Pytest` to pass; the rest are informational but you should still make them green.
-
-### When adding a new config option
-
-1. Add the key to `const.py` (`CONF_*`).
-2. Wire it into `config_flow.py` (`build_create_flow` for new installs + reconfigure; `build_options_flow` for existing entries).
-3. Add the translation strings in `strings.json` AND `translations/en.json` (in both `config` and `options` sections). Non-EN files will fall back to English.
-4. Read from `entry.data.get(CONF_*, FALLBACK)` in `device_tracker.py::async_setup_entry`. Think carefully about the back-compat fallback value for existing entries that won't have the key.
-5. Pass through to any relevant call sites. The entity stores runtime settings as `self._<name>` attributes.
-6. Surface the setting in `diagnostics.py`.
-7. Add config-flow tests and runtime-behaviour tests.
-
-## Commit and PR style
-
-- One logical change per commit. "WIP" / "fix typo" / "address review" fixups get squashed into the parent.
-- Commit messages: imperative mood, one-line summary, empty line, body explaining _why_ (not _what_ — the diff says what). Example: `Admin-gate mutation services (closes #10)`.
-- PR description should cover: problem, fix, test plan, and anything the reviewer needs to verify manually.
+- One logical change per commit.
+- Use Conventional Commits 1.0.0 (`fix: ...`, `feat: ...`), imperative mood, 72 characters at most on the subject line. Put the reason in the body; the diff shows the change.
+- Pull requests are squash-merged, so the PR title becomes the commit subject and follows the same format. The description covers the problem, the fix, the test plan and anything to check by hand.
 
 ## Translations
 
-Only English ships today: `strings.json` (the source) and `translations/en.json`. The earlier machine-generated `de`/`fr`/`es`/`nl`/`it` files were removed — an incorrect machine translation in a visible error message is worse than the English fallback. Home Assistant automatically falls back to English for any language without a file, so nothing is broken by their absence.
-
-To contribute a language: copy `translations/en.json` to `translations/<lang>.json`, translate the user-facing values (keep the JSON keys and any `{placeholders}` unchanged), and open a PR. Native-speaker translations are very welcome.
+Only English ships: `custom_components/polygonal_zones/strings.json` (the source) and `translations/en.json`. Home Assistant falls back to English for other languages. To add one, copy `translations/en.json` to `translations/<lang>.json`, translate the values, keep the JSON keys and any `{placeholders}`, and open a PR.

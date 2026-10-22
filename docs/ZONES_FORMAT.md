@@ -7,7 +7,7 @@ permalink: /zones-format/
 
 # Polygonal Zones file format
 
-This document is the canonical specification for the GeoJSON file consumed by the `polygonal_zones` Home Assistant integration. Producers of zone files (the companion [editor add-on](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon), third-party tools, or hand-written files) MUST follow this spec; the integration parses against it.
+The GeoJSON zone file the `polygonal_zones` integration reads. Producers (the companion [editor add-on](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon), other tools, hand-written files) must follow it.
 
 Current version: **`schema_version: 1`**.
 
@@ -27,11 +27,11 @@ The file is a standard GeoJSON [`FeatureCollection`](https://datatracker.ietf.or
         "type": "Polygon",
         "coordinates": [
           [
-            [-0.135, 51.51],
-            [-0.125, 51.51],
-            [-0.125, 51.515],
-            [-0.135, 51.515],
-            [-0.135, 51.51]
+            [0, 0],
+            [0.01, 0],
+            [0.01, 0.005],
+            [0, 0.005],
+            [0, 0]
           ]
         ]
       }
@@ -40,7 +40,7 @@ The file is a standard GeoJSON [`FeatureCollection`](https://datatracker.ietf.or
 }
 ```
 
-Foreign members are explicitly permitted by RFC 7946 §6.1. Readers that don't know the `polygonal_zones` member MUST ignore it.
+RFC 7946 §6.1 allows foreign members. The integration ignores `polygonal_zones` members it does not use and keeps them when it rewrites the file.
 
 ## Top-level members
 
@@ -50,8 +50,6 @@ Foreign members are explicitly permitted by RFC 7946 §6.1. Readers that don't k
 | `features`                       | yes      | array of Feature              | May be empty.                                                                                                  |
 | `polygonal_zones.schema_version` | no       | integer ≥ 1                   | Missing means implicit `1`. The integration refuses any value greater than `MAX_SUPPORTED` with a clear error. |
 
-Integers only for `schema_version` — no semver. The integer increments by 1 on every breaking change; consumers need a single `if version > known` branch.
-
 ## Feature members
 
 Each element of `features` is a GeoJSON `Feature`.
@@ -60,23 +58,23 @@ Each element of `features` is a GeoJSON `Feature`.
 
 - `type` MUST be `"Polygon"` or `"MultiPolygon"`.
 - Coordinates are WGS-84 lon/lat in GeoJSON `[longitude, latitude]` order.
-- Rings must close (first coordinate == last coordinate).
+- Rings should close (first coordinate == last coordinate); an unclosed ring is closed automatically.
 - Other geometry types (`Point`, `LineString`, `MultiPoint`, `GeometryCollection`, `null`) are rejected.
 
 ### `properties`
 
-| Property                | Required | Type    | Notes                                                                                                                                                                                                                                                        |
-| ----------------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `name`                  | yes      | string  | Non-empty, ≤200 characters. Surfaced as the HA entity state.                                                                                                                                                                                                 |
-| `priority`              | no       | integer | Lower value = higher priority when zones overlap. Default: `0`. When `prioritize_zone_files` is enabled and a feature omits `priority`, the integration assigns the feature's file index as its default instead of `0` — earlier files in your URL list win. |
-| `id`                    | no       | string  | Stable per-zone handle stamped by the editor add-on (a UUID4 hex string). Pass-through only — the integration preserves it through every read-modify-write but does not interpret it. Useful if you build automations that need to survive a zone rename.    |
-| `polygonal_zones_ext.*` | no       | object  | Reserved namespace for additive extensions. Free-form.                                                                                                                                                                                                       |
+| Property                | Required | Type    | Notes                                                                                                                     |
+| ----------------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `name`                  | yes      | string  | Non-empty. Shown as the entity state. Actions reject names over 200 characters.                                           |
+| `priority`              | no       | integer | Lower wins on overlap. Default `0`; with `prioritize_zone_files`, a missing value is the file's position in the URL list. |
+| `id`                    | no       | string  | Stable handle stamped by the editor add-on (UUID4 hex). Kept on every write. `home_zone_id` can match it.                 |
+| `polygonal_zones_ext.*` | no       | object  | Reserved for extensions. Free-form.                                                                                       |
 
-Unknown keys under `properties` are preserved round-trip but produce a WARNING log so drift is visible. Do **not** add new keys at the top-level `properties` map — put extensions under `properties.polygonal_zones_ext` so the canonical namespace stays small.
+Unknown keys under `properties` are kept when the file is rewritten, and the actions log a warning for them. Put new keys under `properties.polygonal_zones_ext`.
 
 ## Size limits
 
-Applied at read time; the integration rejects anything that exceeds them.
+A file is rejected when it exceeds the body, feature or vertex limit. Action payloads are also checked against the payload and name limits.
 
 | Limit                                                   | Value     | Source                                                  |
 | ------------------------------------------------------- | --------- | ------------------------------------------------------- |
@@ -86,29 +84,13 @@ Applied at read time; the integration rejects anything that exceeds them.
 | Features per FeatureCollection                          | 500       | `utils/limits.py` (`MAX_FEATURES_PER_COLLECTION`)       |
 | Total vertices across all features in a collection      | 10 000    | `utils/limits.py` (`MAX_TOTAL_VERTICES_PER_COLLECTION`) |
 
-The vertex cap is a **collection total** — it counts every ring of every polygon in the file combined, not a per-feature limit. It defends against event-loop stalls from large or pathological polygon sets.
+The vertex cap counts every ring of every polygon in the file together. Actions also apply it to a single Feature.
 
-## Versioning rules
+## Versioning
 
-### Additive (no `schema_version` bump)
+`schema_version` is an integer that rises by 1 on each breaking change: a changed or removed property meaning, a changed set of accepted geometry types, or a new required key. New optional keys under `properties.polygonal_zones_ext` or `polygonal_zones.*` do not change it.
 
-- New optional keys under `properties.polygonal_zones_ext.*`.
-- New optional top-level foreign members under `polygonal_zones.*` (e.g. `polygonal_zones.editor.last_modified`).
-- Additional optional properties that readers may safely ignore.
-
-### Breaking (bumps `schema_version` to the next integer)
-
-- Changing or removing the semantics of an existing property.
-- Changing the accepted geometry type set.
-- Changing the addressing model (e.g. moving from `device_id` to a new identifier in service calls).
-- Adding a new **required** key.
-
-Producers MUST stamp `polygonal_zones.schema_version` matching the highest-numbered rule set they use.
-
-## Compatibility contract
-
-- **Producers** (editor add-on, third-party tools): emit `schema_version` that matches the features you use. Prefer additive changes. Never emit a version the integration hasn't released.
-- **Consumer** (this integration): accept any `schema_version <= MAX_SUPPORTED`. Treat missing as `1`. Reject higher with a clear error and a repair issue pointing at this doc.
+Producers write the highest version whose rules they use, never one this integration has not released. The integration treats a missing version as `1` and refuses a file that declares a higher version than it supports; the error names this document. Actions rewrite the file with the current version.
 
 ## Examples
 
@@ -136,11 +118,11 @@ Producers MUST stamp `polygonal_zones.schema_version` matching the highest-numbe
         "type": "Polygon",
         "coordinates": [
           [
-            [-0.14, 51.5],
-            [-0.12, 51.5],
-            [-0.12, 51.52],
-            [-0.14, 51.52],
-            [-0.14, 51.5]
+            [0, 0],
+            [0.02, 0],
+            [0.02, 0.02],
+            [0, 0.02],
+            [0, 0]
           ]
         ]
       }
@@ -152,11 +134,11 @@ Producers MUST stamp `polygonal_zones.schema_version` matching the highest-numbe
         "type": "Polygon",
         "coordinates": [
           [
-            [-0.131, 51.512],
-            [-0.128, 51.512],
-            [-0.128, 51.514],
-            [-0.131, 51.514],
-            [-0.131, 51.512]
+            [0.005, 0.005],
+            [0.008, 0.005],
+            [0.008, 0.007],
+            [0.005, 0.007],
+            [0.005, 0.005]
           ]
         ]
       }
