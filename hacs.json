@@ -2,5 +2,7 @@
   "name": "Polygonal Zones",
   "render_readme": true,
   "content_in_root": false,
-  "homeassistant": "2026.9.1"
+  "homeassistant": "2026.9.1",
+  "zip_release": true,
+  "filename": "polygonal_zones.zip"
 }
