@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from custom_components.polygonal_zones.services import register_services
+from custom_components.polygonal_zones.services.schemas import SERVICE_SCHEMAS
 
 
 async def test_register_services_loads_each_module_and_registers() -> None:
@@ -27,6 +28,7 @@ async def test_register_services_loads_each_module_and_registers() -> None:
     assert domain == "polygonal_zones"
     assert name == "add_new_zone"
     assert callable(callback)
+    assert register_mock.call_args.kwargs["schema"] is SERVICE_SCHEMAS["add_new_zone"]
 
 
 async def test_register_services_admin_uses_admin_register() -> None:
@@ -48,3 +50,6 @@ async def test_register_services_admin_uses_admin_register() -> None:
     assert admin_register_mock.call_count == 2
     registered_names = {call.args[2] for call in admin_register_mock.call_args_list}
     assert registered_names == {"add_new_zone", "edit_zone"}
+    # Without a schema HA applies one that refuses every field.
+    for call in admin_register_mock.call_args_list:
+        assert call.kwargs["schema"] is SERVICE_SCHEMAS[call.args[2]]

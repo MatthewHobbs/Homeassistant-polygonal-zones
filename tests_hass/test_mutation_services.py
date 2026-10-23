@@ -12,6 +12,13 @@ import pytest
 from custom_components.polygonal_zones.const import DOMAIN
 from custom_components.polygonal_zones.services.errors import InvalidZoneData
 
+
+@pytest.fixture
+def hass_config_dir(hass_tmp_config_dir: str) -> str:
+    """Write the test zone files under tmp_path, not the plugin's shared directory."""
+    return hass_tmp_config_dir
+
+
 _FEATURE = (
     '{"type":"Feature","properties":{"name":"A"},'
     '"geometry":{"type":"Polygon","coordinates":[[[0,0],[0,1],[1,1],[1,0],[0,0]]]}}'
@@ -40,7 +47,7 @@ async def test_service_accepts_its_documented_fields(
 
 
 async def test_replace_all_zones_writes_the_file_and_updates_the_entity(
-    hass: HomeAssistant, tmp_path
+    hass: HomeAssistant,
 ) -> None:
     """A real call through Home Assistant edits the entry's file and re-resolves."""
     import json
