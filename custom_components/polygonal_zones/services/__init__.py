@@ -6,6 +6,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.service import async_register_admin_service
 
 from ..const import DOMAIN
+from .schemas import SERVICE_SCHEMAS
 
 
 async def register_services(hass: HomeAssistant, names: list[str], *, admin: bool = False) -> None:
@@ -21,7 +22,8 @@ async def register_services(hass: HomeAssistant, names: list[str], *, admin: boo
         module = await hass.async_add_executor_job(importlib.import_module, f".{name}", __package__)
         func = module.action_builder
 
+        schema = SERVICE_SCHEMAS[name]
         if admin:
-            async_register_admin_service(hass, DOMAIN, name, func(hass))
+            async_register_admin_service(hass, DOMAIN, name, func(hass), schema=schema)
         else:
-            hass.services.async_register(DOMAIN, name, func(hass))
+            hass.services.async_register(DOMAIN, name, func(hass), schema=schema)
