@@ -59,7 +59,7 @@ The zones are then served at:
 http://<your-ha-host>:8000/zones.json
 ```
 
-You need this URL and the token in Step 2. Use the host's IP address, `localhost` or a `.local` name in the URL: the integration sends the token only to those, so a plain DNS name such as `homeassistant` gets a 403. The LAN port is plain HTTP, so use it only on a network you trust. To keep the editor one click away, enable **Show in sidebar** on the Configuration tab.
+You need this URL and the token in Step 2. Use the add-on host's LAN IP address in the URL. A plain DNS name such as `homeassistant` gets no token, so the add-on answers 403. `.local` names get the token but are not reliably resolved, since the integration does no mDNS lookup, and `localhost` is always refused. The LAN port is plain HTTP, so use it only on a network you trust. To keep the editor one click away, enable **Show in sidebar** on the Configuration tab.
 
 ---
 
