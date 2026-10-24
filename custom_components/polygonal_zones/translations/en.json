@@ -64,7 +64,7 @@
       },
       "hassio_confirm": {
         "title": "Polygonal Zones app found",
-        "description": "Use the zones from {url}? The app sends its save token, so there is nothing to copy. Pick the trackers to mirror afterwards, in this integration's options."
+        "description": "Use the zones from {url}? The app sends its save token, so there is nothing to copy. Pick the trackers to mirror afterwards under the entry's ⋮ → Reconfigure menu."
       }
     },
     "abort": {
