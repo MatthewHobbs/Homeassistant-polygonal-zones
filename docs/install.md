@@ -23,7 +23,7 @@ The app is a map editor that runs inside Home Assistant. You draw polygons, give
 
 ### 1a. Add the app repository
 
-[![Add add-on repository to Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FMatthewHobbs%2FHomeassistant-polygonal-zones-addon.git)
+[![Add app repository to Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FMatthewHobbs%2FHomeassistant-polygonal-zones-addon.git)
 
 If the button does not work, add the repository by hand:
 
@@ -33,7 +33,7 @@ If the button does not work, add the repository by hand:
 
 ### 1b. Install the app
 
-Find **Polygonal Zones** in the App Store and choose **Install**.
+Find **Polygonal Zones** in the list and choose **Install**.
 
 > **32-bit hosts.** Home Assistant deprecated the `armhf`, `armv7` and `i386` app architectures in 2025.12. Releases from 0.2.26 are 64-bit only. On a 32-bit host, pin the app to 0.2.25 or move to a 64-bit installation.
 
