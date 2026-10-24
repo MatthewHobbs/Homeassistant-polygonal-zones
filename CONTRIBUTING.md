@@ -26,7 +26,7 @@ HACS installs releases, so a branch is tested by copying the component:
 
 1. Copy `custom_components/polygonal_zones/` from the branch into `/config/custom_components/`, replacing the HACS copy.
 2. Restart Home Assistant.
-3. To try the editor add-on from its branch as well, follow "Manual: live HA OS" in the add-on's `TESTING.md`. It needs the branch folder in `/addons` with its `image:` line removed, or the Supervisor installs the published image instead of building the branch.
+3. To try the editor app from its branch as well, follow "Manual: live HA OS" in the app's `TESTING.md`. It needs the branch folder in `/addons` with its `image:` line removed, or the Supervisor installs the published image instead of building the branch.
 
 Use a scratch instance. Discovery and the save-then-reload behaviour need both branches together.
 

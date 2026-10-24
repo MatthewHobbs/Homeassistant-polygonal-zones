@@ -7,10 +7,12 @@ permalink: /troubleshooting/
 
 # Troubleshooting
 
-For add-on problems, start with the add-on log: **Settings → Add-ons → Polygonal Zones → Log**.
+Home Assistant now calls these **apps**. Some versions call them **add-ons**; it is the same thing, and the menus below use **app**.
+
+For app problems, start with the app log: **Settings → Apps → Polygonal Zones → Log**.
 
 Integration source: [MatthewHobbs/Homeassistant-polygonal-zones](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones)
-Add-on source: [MatthewHobbs/Homeassistant-polygonal-zones-addon](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon)
+App source: [MatthewHobbs/Homeassistant-polygonal-zones-addon](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon)
 
 ---
 
@@ -23,15 +25,15 @@ Add-on source: [MatthewHobbs/Homeassistant-polygonal-zones-addon](https://github
 
 ---
 
-## The add-on does not appear under Devices & services
+## The app does not appear under Devices & services
 
-The add-on announces itself to Home Assistant each time it starts. Automatic setup needs add-on 0.7.0 or later and integration 1.16.0 or later.
+The app announces itself to Home Assistant each time it starts. Automatic setup needs app 0.7.0 or later and integration 1.16.0 or later.
 
-1. Restart the add-on once, then open **Settings → Devices & services**.
-2. If nothing appears, open the add-on log and look for what it sent to Home Assistant.
+1. Restart the app once, then open **Settings → Devices & services**.
+2. If nothing appears, open the app log and look for what it sent to Home Assistant.
 3. If it still does not appear, use the manual setup in the [install guide](install.md).
 
-An entry that already points at the add-on by URL is not offered a second time. Edit that entry instead, under **⋮ → Reconfigure**.
+An entry that already points at the app by URL is not offered a second time. Edit that entry instead, under **⋮ → Reconfigure**.
 
 ---
 
@@ -56,7 +58,7 @@ By default the integration refuses private, loopback, link-local, multicast, res
 
 This stops a zone URL from reaching services inside your network. The check runs on every address the host name resolves to.
 
-If your zone file is on your own network, including the add-on on the same machine, do one of these:
+If your zone file is on your own network, including the app on the same machine, do one of these:
 
 - Tick **Allow private-network URLs (LAN)** under Configure. This allows private ranges such as `10.x.x.x`, `172.16.x.x` to `172.31.x.x`, `192.168.x.x` and IPv6 unique local addresses. Loopback, link-local and metadata addresses stay blocked.
 - Put `zones.json` in your Home Assistant config folder and point at it by path, for example `polygonal_zones/zones.json`. No network request is made.
@@ -117,9 +119,9 @@ If none of this helps, open an issue with:
 - Your Home Assistant and integration versions. You can find the integration version in HACS, or under **Settings → Devices & services → Polygonal Zones**.
 - The relevant `custom_components.polygonal_zones` log lines. At `DEBUG` they contain zone names and distances, so read them before you paste.
 - The integration's diagnostics download. It removes zone URLs, tracker entities, the token, the home zone and the entry title.
-- Whether you use the add-on or your own `zones.json`.
+- Whether you use the app or your own `zones.json`.
 
 Issues are public. Do not paste coordinates, your `zones.json`, home or school zone names, or attribute dumps. They show where people are.
 
 Integration issues: [github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues)
-Add-on issues: [github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon/issues](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon/issues)
+App issues: [github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon/issues](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon/issues)

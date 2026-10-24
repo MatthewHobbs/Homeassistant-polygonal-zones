@@ -7,7 +7,7 @@ permalink: /privacy/
 
 # Privacy and data handling
 
-This page explains what the integration and the add-on handle, where that data goes, and how to keep less of it. It is written for people running this at home, not as a compliance document.
+This page explains what the integration and the app handle, where that data goes, and how to keep less of it. It is written for people running this at home, not as a compliance document.
 
 ---
 
@@ -76,9 +76,9 @@ The tick records that you told them. It does not record their agreement. Adding 
 
 When the integration fetches an `http(s)://` zone address, the request comes from your Home Assistant machine, so that host sees your public IP address.
 
-If **Add-on save token** is set, it is sent as the `X-Save-Token` header only to hosts that look like the add-on on your own network: `localhost`, `.local` names, and private, loopback or link-local addresses. The token is also sent to the address an entry received from add-on discovery.
+If **App save token** is set, it is sent as the `X-Save-Token` header only to hosts that look like the app on your own network: `localhost`, `.local` names, and private, loopback or link-local addresses. The token is also sent to the address an entry received from app discovery.
 
-Private, loopback and link-local addresses are blocked by default. **Allow private-network URLs (LAN)** allows private ranges only. Redirects are refused. The token is stored in the config entry, so it is in Home Assistant backups, and it travels unencrypted over `http://` to a local add-on.
+Private, loopback and link-local addresses are blocked by default. **Allow private-network URLs (LAN)** allows private ranges only. Redirects are refused. The token is stored in the config entry, so it is in Home Assistant backups, and it travels unencrypted over `http://` to a local app.
 
 ### Logging
 
@@ -88,13 +88,13 @@ Private, loopback and link-local addresses are blocked by default. **Allow priva
 
 Remove those details before you forward logs to another service.
 
-Do not put a secret in a zone address, whether as `user:pass@`, as `?token=` or as part of the path. Use the **Add-on save token** field instead. Logins and query strings are removed from logs and attributes, but path segments are kept as written.
+Do not put a secret in a zone address, whether as `user:pass@`, as `?token=` or as part of the path. Use the **App save token** field instead. Logins and query strings are removed from logs and attributes, but path segments are kept as written.
 
 Before 1.15.1, the whole address, logins included, went into the log and into the `zone_uris` attribute, and so into recorder history and backups. If an address ever carried a secret, change it, and treat old logs and history as sensitive.
 
 ---
 
-## Add-on: map tiles and zone file
+## App: map tiles and zone file
 
 ### Third-party map tiles
 
@@ -104,8 +104,8 @@ The editor loads map tiles from third-party servers, depending on the layer: Ope
 
 The file holds the exact outline of every place you drew.
 
-- Home Assistant backups include it, because it lives in the add-on's `/data` folder. Deleting a zone in the editor does not remove it from earlier backups. Delete those backups too, under **Settings → System → Backups → ⋮ → Remove**.
-- Do not host it at a public address. See the add-on's [DOCS.md](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon/blob/main/polygonal_zones_editor/DOCS.md), section "Last resort: a public-CDN mirror (privacy warning)".
+- Home Assistant backups include it, because it lives in the app's `/data` folder. Deleting a zone in the editor does not remove it from earlier backups. Delete those backups too, under **Settings → System → Backups → ⋮ → Remove**.
+- Do not host it at a public address. See the app's [DOCS.md](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon/blob/main/polygonal_zones_editor/DOCS.md), section "Last resort: a public-CDN mirror (privacy warning)".
 - A cloud backup that includes the recorder database sends every tracked person's location history to the backup provider. Either exclude the entities with the `recorder` block above, or read the provider's terms first.
 
 ---
