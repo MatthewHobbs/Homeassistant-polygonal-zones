@@ -1,15 +1,9 @@
 name: Upstream gate (reusable)
 
-# Answers one question for the scheduled/dispatched workflows: has the integration's
-# *operating exposure* — the latest in-range `homeassistant` + `shapely` on PyPI —
-# changed since the last time a nightly passed against it? Callers use the `changed`
-# output to skip their heavy jobs when nothing upstream moved (re-running against the
-# same versions + same code can only reproduce the last result). Not run on its own.
-#
-# The "already tested" marker is an actions/cache entry keyed by the fingerprint. The
-# caller records it *only when its heavy jobs pass* — so a real upstream break keeps
-# re-alerting every night until it's fixed, instead of caching the broken fingerprint
-# and going silently green.
+# Has upstream exposure changed (latest in-range homeassistant + shapely on PyPI)
+# since the last nightly passed? Callers skip their heavy jobs unless it has. The
+# marker is an actions/cache entry written only on success, so a real break keeps
+# alerting nightly instead of caching a broken fingerprint.
 
 on:
   workflow_call:
@@ -62,12 +56,9 @@ jobs:
           from packaging.specifiers import SpecifierSet
           from packaging.version import Version
 
-          # requirements_test.txt is the single source of truth for these ranges
-          # (Renovate tracks it via pip_requirements). Reading it here, instead
-          # of hard-coding the ranges in this workflow, is what lets a Renovate
-          # cap bump (<2027 -> <2028) actually reach this fingerprint — a
-          # hard-coded copy is invisible to Renovate and would silently keep
-          # testing the old major forever.
+          # requirements_test.txt is the source of truth for these ranges, so a
+          # Renovate cap bump reaches this fingerprint. A hard-coded copy here would
+          # be invisible to Renovate and keep testing the old major.
           specs = {}
           with open("requirements_test.txt") as f:
               for line in f:

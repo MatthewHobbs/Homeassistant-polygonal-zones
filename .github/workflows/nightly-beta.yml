@@ -1,20 +1,9 @@
 name: Nightly HA beta
 
-# ADR 0002 (Option A): HA typically ships a beta about a week
-# before the matching final release. A breaking API change lands in that
-# beta, but nothing else in this repo's CI catches it until the final release
-# ships - at which point users already have it. This job resolves the latest
-# HA PRERELEASE in requirements_test.txt's range and runs the existing
-# pytest suite against it, in its own cache-fingerprint
-# namespace so it never interacts with the stable gate.
-#
-# Runs on schedule/workflow_dispatch only - never push/pull_request. This is
-# a time-based signal about upstream HA betas, not a code-change signal, so
-# there is no PR to protect and continue-on-error is not used: a failure
-# fails the run normally and shows red in the Actions tab, which is the
-# "start simple" failure-visibility mechanism ADR 0002 chose. A red run here
-# means "HA's beta broke something," not "our code is broken" - this job is
-# never a required check and can never block a merge or release.
+# HA ships a beta a week before each final release, and breaking API changes land
+# there first. This runs the pytest suite against the latest in-range HA prerelease, in
+# its own cache namespace, on a schedule. A red run means the beta broke something; it
+# is never required.
 
 on:
   schedule:

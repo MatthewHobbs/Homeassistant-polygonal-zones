@@ -10,7 +10,7 @@ ci: lint test comments
 
 # One rule, measured: no code comment block over 50 words. Docstrings are docs.
 comments:
-    python3 scripts/check_comment_length.py custom_components tests tests_hass
+    python3 scripts/check_comment_length.py custom_components tests tests_hass .github
 
 venv:
     #!/usr/bin/env bash

@@ -52,12 +52,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # hacs/action is a container action on ghcr.io/hacs/action:main, a moving tag.
-      # Run the image by digest (its :main on 2026-10-22) with the inputs the action
-      # would pass; no PR comment, since the token here is read-only anyway.
-      # Held at this digest on purpose: the next one adds a brands check that needs
-      # the integration's domain listed in home-assistant/brands first, which is an
-      # upstream PR (hacs#check-brands). Bump it once that lands.
+      # hacs/action, pinned by digest instead of its moving :main tag. Held here on
+      # purpose: the next digest adds a brands check that needs our domain listed in
+      # home-assistant/brands first. Bump it once that lands.
       - uses: docker://ghcr.io/hacs/action@sha256:187499a09c5d41f9f0d42ff80d203ed87b974c028290140913b61e005fb0aab2
         with:
           category: integration
@@ -111,16 +108,10 @@ jobs:
       - run: pytest --cov=custom_components/polygonal_zones --cov-report=term --cov-fail-under=98
 
   pytest-floor:
-    # Separate job so the existing "Pytest" required status check stays
-    # stable for branch protection while we gain floor-version coverage.
-    # Catches HA API usage that only works on newer minor versions — the
-    # class of regression that drove v1.8.0's runtime_data migration.
-    #
-    # The floor is hacs.json's "homeassistant" field — the same value HACS
-    # itself enforces at install time (project policy: test against
-    # current stable — declare the oldest HA supported and test
-    # against it). Read from there rather than a second hard-coded copy, so
-    # bumping the declared floor can't silently stop being tested.
+    # Its own job, so the "Pytest" required check stays stable while floor coverage
+    # is added. Catches API usage that only works on newer minors. The floor is
+    # hacs.json's field, the value HACS enforces, read from there so a bump cannot go
+    # untested.
     name: Pytest (HA floor)
     needs: [gate]
     if: ${{ !cancelled() && (github.event_name == 'push' || github.event_name == 'pull_request' || needs.gate.outputs.changed == 'true') }}
@@ -136,14 +127,10 @@ jobs:
       - run: pip install "homeassistant==$(jq -r .homeassistant hacs.json)"
       - run: pytest --cov=custom_components/polygonal_zones --cov-report=term --cov-fail-under=98
 
-  # Real-hass suite (tests_hass/) for the location_name migration.
-  # Its own job, own install, own venv-equivalent:
-  # pytest-homeassistant-custom-component hard-pins one EXACT homeassistant
-  # version per release, which would fight both Pytest's "latest in range" and
-  # Pytest (HA floor)'s exact-floor installs if it ever shared their venv. Not
-  # required, not part of `record`'s upstream-fingerprint gating below — the HA
-  # version this job exercises is whatever phahcc's own release pins, not this
-  # repo's declared range, so it doesn't answer the same question that gate does.
+  # Real-hass suite (tests_hass/) with its own install: pytest-homeassistant-custom-
+  # component pins one exact HA version, which would fight the other pytest jobs in a
+  # shared venv. Not required, and outside the upstream-fingerprint gate: the version
+  # it exercises is that package's, not this repo's declared range.
   pytest-hass:
     name: Pytest (real hass)
     runs-on: ubuntu-latest
@@ -186,12 +173,9 @@ jobs:
       - run: pip install -r requirements_test.txt
       - run: mypy
 
-  # Project policy "test against current stable" (set 2026-09-25):
-  # the declared floor must never be newer than the .1 release of the month
-  # before current stable, because current stable moves every month and a
-  # floor that was compliant silently stops being — so this runs on every
-  # push/PR and re-checks on the nightly gate whenever upstream moves, not
-  # just when this repo's own files change.
+  # Policy "test against current stable": the declared floor must never be newer than
+  # the .1 release of the month before current stable. Stable moves monthly, so this
+  # runs on every push and PR, and the nightly gate re-checks it when upstream moves.
   ha-floor-lag:
     name: HA floor within lag bound
     needs: [gate]
