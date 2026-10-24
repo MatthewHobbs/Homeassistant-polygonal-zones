@@ -28,12 +28,12 @@ The app is a map editor that runs inside Home Assistant. You draw polygons, give
 If the button does not work, add the repository by hand:
 
 1. Open **Settings → Apps**, then choose **Install app**.
-2. Open the **⋮** menu at the top right and choose **Repositories**.
+2. In the store, open the **⋮** menu at the top right and choose **Repositories**.
 3. Paste `https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon` and choose **Add**.
 
 ### 1b. Install the app
 
-Find **Polygonal Zones** in the list and choose **Install**.
+Back in the store, find **Polygonal Zones** in the list and choose **Install**.
 
 > **32-bit hosts.** Home Assistant deprecated the `armhf`, `armv7` and `i386` app architectures in 2025.12. Releases from 0.2.26 are 64-bit only. On a 32-bit host, pin the app to 0.2.25 or move to a 64-bit installation.
 
