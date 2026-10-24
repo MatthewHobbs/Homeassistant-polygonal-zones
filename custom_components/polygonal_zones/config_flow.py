@@ -33,6 +33,7 @@ from .const import (
     CONF_CONSENT_CONFIRMED_AT,
     CONF_DISCOVERED_BY_ADDON,
     CONF_DOWNLOAD_ZONES,
+    CONF_EXPOSE_COORDINATES,
     CONF_HOME_ZONE_ID,
     CONF_ZONE_SOURCE_TOKEN,
     CONF_ZONES_URL,
@@ -247,6 +248,10 @@ class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
         self._discovery_create = {
             **self._discovery_update,
             CONF_ALLOW_PRIVATE_URLS: True,
+            # Explicit, not implied: without the key the entry counts as one
+            # created before the privacy option existed, so coordinates are
+            # exposed by default and the legacy repair issue is raised.
+            CONF_EXPOSE_COORDINATES: False,
             CONF_DOWNLOAD_ZONES: False,
             CONF_ENTITIES: [],
             CONF_DISCOVERED_BY_ADDON: True,
