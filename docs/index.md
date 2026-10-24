@@ -7,22 +7,24 @@ permalink: /
 
 # Polygonal Zones for Home Assistant
 
-Define irregular, polygon-shaped zones and resolve `device_tracker` entities against them. Where HA's circular zones do not fit (an oddly shaped property, a school catchment), you draw the shape and get an entity whose state is the zone name (for example `Home` or `School`) or `away`.
+Polygonal Zones gives you zones shaped like real places. Draw a property boundary, a school catchment or any other outline. Each tracked device then reports the zone it is in, such as `Home` or `School`, or `away`.
 
-Polygonal Zones is a spare-time community continuation of [MichelGerding/Homeassistant-polygonal-zones](https://github.com/MichelGerding/Homeassistant-polygonal-zones) and [MichelGerding/Homeassistant-polygonal-zones-addon](https://github.com/MichelGerding/Homeassistant-polygonal-zones-addon), neither of which is maintained. Current versions: [integration](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones) and [add-on](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon).
+Home Assistant's own zones are circles. They do not fit an irregular plot or a catchment area. Polygonal Zones takes the shape you draw instead.
 
-## Two paired components
+This is a spare-time community continuation of [MichelGerding/Homeassistant-polygonal-zones](https://github.com/MichelGerding/Homeassistant-polygonal-zones) and [MichelGerding/Homeassistant-polygonal-zones-addon](https://github.com/MichelGerding/Homeassistant-polygonal-zones-addon). Neither original project is maintained. The current versions are the [integration](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones) and the [add-on](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon).
 
-The editor add-on is a Home Assistant add-on where you draw and name zones on a map. It saves them as `zones.json` and serves the file at `http://<your-ha-host>:8000/zones.json`.
+## Two parts that work together
 
-The integration is a HACS custom integration. It reads that file and creates a mirror entity (`device_tracker.polygonal_zones_<name>`) for each tracked device, whose state is the zone the device is in, or `away`.
+The **editor add-on** runs inside Home Assistant. You draw and name your zones on a map, and it saves them as a file called `zones.json`.
 
-Install the add-on, then point the integration at its `zones.json` URL.
+The **integration** is a HACS component. It reads those zones and creates a mirror entity for each device you choose, named `device_tracker.polygonal_zones_<name>`. The state of that entity is the zone the device is in, or `away`.
+
+With add-on 0.7.0 and integration 1.16.0 or later, the add-on hands its file to Home Assistant for you. You confirm the discovered integration and choose your devices. There is no URL to copy.
 
 Requirements: Home Assistant 2026.9.1 or later.
 
 ---
 
-[Install both components &rarr;](install.md){: .btn }
+[Install both parts &rarr;](install.md){: .btn }
 &nbsp;&nbsp;
 [Zone file format reference &rarr;](ZONES_FORMAT.md){: .btn }

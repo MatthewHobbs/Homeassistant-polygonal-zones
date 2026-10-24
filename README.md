@@ -53,7 +53,7 @@ Each tracked entity gets a mirror `device_tracker.polygonal_zones_*`. Its state 
 - [Privacy and data handling](#privacy-and-data-handling)
 - [Roadmap](#roadmap)
 - [Contributing](#contributing)
-- [License](#license)
+- [Licence](#licence)
 
 ## Installation
 
@@ -228,6 +228,6 @@ The integration ships through HACS and is not being submitted to Home Assistant 
 
 This is a spare-time community project, so responses are best-effort. The most useful contributions are issues with reproduction steps, and small focused pull requests. Only English (`custom_components/polygonal_zones/translations/en.json`) ships today. To add a language, copy `en.json` to `translations/<lang>.json`, translate the user-facing strings and open a pull request. See [CONTRIBUTING.md](CONTRIBUTING.md) for the checks to run.
 
-## License
+## Licence
 
 MIT. See [LICENSE](LICENSE).
