@@ -11,14 +11,16 @@ from collections.abc import Callable
 from datetime import datetime
 import logging
 import random
+from urllib.parse import urlparse
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.start import async_at_started
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN
+from .const import CONF_ZONES_URL, DOMAIN
 from .utils.zones import (
     Zone,
     ZoneFileCorrupt,
@@ -322,3 +324,47 @@ class ZoneSource:
         if self._unsub_retry is not None:
             self._unsub_retry()
             self._unsub_retry = None
+
+
+def _source_hosts(entry: ConfigEntry) -> set[str]:
+    """The editor addresses an entry reads, as ``host:port``."""
+    hosts = set()
+    for url in entry.data.get(CONF_ZONES_URL) or []:
+        host = urlparse(str(url)).netloc
+        if host:
+            hosts.add(host)
+    return hosts
+
+
+def async_check_duplicate_source(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Warn when another entry reads the same editor address.
+
+    Two entries on one editor split the trackers between them and look the same
+    in the UI, while the extra one has no zone URL of its own: every position
+    reads "away" and every diagnostic says "ok".
+    """
+    issue_id = f"duplicate_source_{entry.entry_id}"
+    hosts = _source_hosts(entry)
+    other = next(
+        (
+            candidate
+            for candidate in hass.config_entries.async_entries(DOMAIN)
+            if candidate.entry_id != entry.entry_id and hosts & _source_hosts(candidate)
+        ),
+        None,
+    )
+    if other is None:
+        ir.async_delete_issue(hass, DOMAIN, issue_id)
+        return
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        issue_id,
+        is_fixable=False,
+        severity=ir.IssueSeverity.WARNING,
+        translation_key="duplicate_source",
+        translation_placeholders={
+            "entry_id": entry.entry_id,
+            "other_entry": other.title,
+        },
+    )

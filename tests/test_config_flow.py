@@ -8,6 +8,7 @@ import pytest
 from custom_components.polygonal_zones.config_flow import (
     ConfigFlow,
     OptionsFlowHandler,
+    _entry_title,
     build_create_flow,
     build_options_flow,
 )
@@ -598,3 +599,11 @@ async def test_options_flow_allows_a_download_only_entry_with_a_snapshot(tmp_pat
         )
 
     assert result == {"type": "options"}
+
+
+def test_entry_title_names_the_editor_it_reads() -> None:
+    """Two entries otherwise share the title "Polygonal Zones" in Settings, so the
+    one holding the trackers cannot be told from the empty one."""
+    assert _entry_title(["http://10.0.0.5:8099/zones.json"]) == ("Polygonal Zones (10.0.0.5:8099)")
+    assert _entry_title(["seed.geojson"]) == "Polygonal Zones"
+    assert _entry_title([]) == "Polygonal Zones"

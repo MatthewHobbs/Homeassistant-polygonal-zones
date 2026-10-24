@@ -133,12 +133,18 @@ async def test_async_setup_entry_initialises_runtime_data_and_forwards() -> None
         async_on_unload=MagicMock(),
         add_update_listener=MagicMock(return_value=listener_unsub),
     )
-    hass = SimpleNamespace(config_entries=SimpleNamespace(async_forward_entry_setups=forward_mock))
+    hass = SimpleNamespace(
+        config_entries=SimpleNamespace(
+            async_entries=lambda _domain: [], async_forward_entry_setups=forward_mock
+        )
+    )
 
-    result = await async_setup_entry(hass, entry)
+    with patch("custom_components.polygonal_zones.async_check_duplicate_source") as duplicate_check:
+        result = await async_setup_entry(hass, entry)
 
     assert result is True
     forward_mock.assert_awaited_once()
+    duplicate_check.assert_called_once_with(hass, entry)
     entry.async_on_unload.assert_called_once_with(listener_unsub)
     assert isinstance(entry.runtime_data, PolygonalZonesData)
     assert entry.runtime_data.entities == []
@@ -165,10 +171,13 @@ async def test_async_setup_entry_builds_source_before_forwarding_platforms() -> 
         add_update_listener=MagicMock(),
     )
     hass = SimpleNamespace(
-        config_entries=SimpleNamespace(async_forward_entry_setups=_capture_source_and_forward)
+        config_entries=SimpleNamespace(
+            async_entries=lambda _domain: [], async_forward_entry_setups=_capture_source_and_forward
+        )
     )
 
-    await async_setup_entry(hass, entry)
+    with patch("custom_components.polygonal_zones.async_check_duplicate_source"):
+        await async_setup_entry(hass, entry)
 
     assert source_at_forward_time is not None
     assert source_at_forward_time is entry.runtime_data.source
@@ -196,7 +205,9 @@ async def test_async_setup_entry_download_failure_raises_before_forward(tmp_path
     entry = _download_entry()
     hass = SimpleNamespace(
         config=SimpleNamespace(config_dir=str(tmp_path)),
-        config_entries=SimpleNamespace(async_forward_entry_setups=forward_mock),
+        config_entries=SimpleNamespace(
+            async_entries=lambda _domain: [], async_forward_entry_setups=forward_mock
+        ),
         async_add_executor_job=AsyncMock(return_value=False),  # snapshot missing
     )
 
@@ -221,7 +232,9 @@ async def test_async_setup_entry_download_unsupported_schema_raises_before_forwa
     entry = _download_entry()
     hass = SimpleNamespace(
         config=SimpleNamespace(config_dir=str(tmp_path)),
-        config_entries=SimpleNamespace(async_forward_entry_setups=forward_mock),
+        config_entries=SimpleNamespace(
+            async_entries=lambda _domain: [], async_forward_entry_setups=forward_mock
+        ),
         async_add_executor_job=AsyncMock(return_value=False),  # snapshot missing
     )
 
@@ -243,13 +256,16 @@ async def test_async_setup_entry_download_skipped_when_snapshot_exists(tmp_path)
     entry = _download_entry()
     hass = SimpleNamespace(
         config=SimpleNamespace(config_dir=str(tmp_path)),
-        config_entries=SimpleNamespace(async_forward_entry_setups=forward_mock),
+        config_entries=SimpleNamespace(
+            async_entries=lambda _domain: [], async_forward_entry_setups=forward_mock
+        ),
         async_add_executor_job=AsyncMock(return_value=True),  # snapshot already present
     )
 
-    with patch(
-        "custom_components.polygonal_zones.download_zones", new=AsyncMock()
-    ) as download_mock:
+    with (
+        patch("custom_components.polygonal_zones.download_zones", new=AsyncMock()) as download_mock,
+        patch("custom_components.polygonal_zones.async_check_duplicate_source"),
+    ):
         result = await async_setup_entry(hass, entry)
 
     assert result is True
@@ -271,7 +287,9 @@ async def test_async_unload_entry_shuts_down_source(tmp_path) -> None:
     )
     hass = SimpleNamespace(
         config=SimpleNamespace(config_dir=str(tmp_path)),
-        config_entries=SimpleNamespace(async_unload_platforms=unload_mock),
+        config_entries=SimpleNamespace(
+            async_entries=lambda _domain: [], async_unload_platforms=unload_mock
+        ),
     )
 
     result = await async_unload_entry(hass, entry)
@@ -286,7 +304,9 @@ async def test_async_unload_entry_partial_failure_leaves_state(tmp_path) -> None
     entry = SimpleNamespace(entry_id="entry-1")
     hass = SimpleNamespace(
         config=SimpleNamespace(config_dir=str(tmp_path)),
-        config_entries=SimpleNamespace(async_unload_platforms=unload_mock),
+        config_entries=SimpleNamespace(
+            async_entries=lambda _domain: [], async_unload_platforms=unload_mock
+        ),
     )
 
     result = await async_unload_entry(hass, entry)
@@ -298,7 +318,7 @@ async def test_async_reload_entry_delegates_to_async_reload() -> None:
     reload_mock = AsyncMock()
     entry = SimpleNamespace(entry_id="entry-1")
     hass = SimpleNamespace(
-        config_entries=SimpleNamespace(async_reload=reload_mock),
+        config_entries=SimpleNamespace(async_entries=lambda _domain: [], async_reload=reload_mock),
     )
 
     await async_reload_entry(hass, entry)

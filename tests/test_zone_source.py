@@ -13,7 +13,10 @@ from custom_components.polygonal_zones.utils.zones import (
     ZoneLoadResult,
     zone_key,
 )
-from custom_components.polygonal_zones.zone_source import ZoneSource
+from custom_components.polygonal_zones.zone_source import (
+    ZoneSource,
+    async_check_duplicate_source,
+)
 
 _ZONES = [Zone(name="Home", geometry=Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]), priority=0)]
 
@@ -495,3 +498,48 @@ async def test_async_reload_retires_an_armed_retry_timer() -> None:
 
     unsub.assert_called_once()
     assert src._unsub_retry is None
+
+
+def _entries(*pairs) -> SimpleNamespace:
+    entries = [
+        SimpleNamespace(entry_id=entry_id, title=entry_id, data={"zone_urls": [url]})
+        for entry_id, url in pairs
+    ]
+    return SimpleNamespace(config_entries=SimpleNamespace(async_entries=lambda _domain: entries))
+
+
+def test_duplicate_source_flags_a_shared_editor() -> None:
+    hass = _entries(
+        ("one", "http://10.0.0.5:8099/zones.json"),
+        ("two", "http://10.0.0.5:8099/other.json"),
+    )
+    with (
+        patch("custom_components.polygonal_zones.zone_source.ir.async_create_issue") as create,
+        patch("custom_components.polygonal_zones.zone_source.ir.async_delete_issue") as delete,
+    ):
+        async_check_duplicate_source(hass, hass.config_entries.async_entries("x")[1])
+
+    create.assert_called_once()
+    assert create.call_args.args[2] == "duplicate_source_two"
+    assert create.call_args.kwargs["translation_placeholders"] == {
+        "entry_id": "two",
+        "other_entry": "one",
+    }
+    delete.assert_not_called()
+
+
+def test_duplicate_source_ignores_other_editors_and_local_files() -> None:
+    hass = _entries(
+        ("one", "http://10.0.0.5:8099/zones.json"),
+        ("two", "http://10.0.0.6:8099/zones.json"),
+        ("three", "seed.geojson"),
+    )
+    with (
+        patch("custom_components.polygonal_zones.zone_source.ir.async_create_issue") as create,
+        patch("custom_components.polygonal_zones.zone_source.ir.async_delete_issue") as delete,
+    ):
+        async_check_duplicate_source(hass, hass.config_entries.async_entries("x")[1])
+        async_check_duplicate_source(hass, hass.config_entries.async_entries("x")[2])
+
+    create.assert_not_called()
+    assert delete.call_count == 2

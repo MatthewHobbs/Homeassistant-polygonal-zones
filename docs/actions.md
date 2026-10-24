@@ -80,6 +80,8 @@ data:
 
 ## `delete_zone`
 
+Deletes the zone named `zone_name` from the local file.
+
 ```yaml
 action: polygonal_zones.delete_zone
 target:
@@ -87,6 +89,11 @@ target:
 data:
   zone_name: "Office"
 ```
+
+Every change is checked as a whole file before it is written, so a file that no
+longer parses is refused by `add_new_zone`, `edit_zone` and `delete_zone` alike
+— including deleting the zone that broke it. Repair a file like that with
+`replace_all_zones`, which replaces it without reading it.
 
 ## `replace_all_zones`
 

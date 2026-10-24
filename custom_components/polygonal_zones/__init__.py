@@ -29,7 +29,7 @@ from .services.reload_all_zones import action_builder as reload_all_zones
 from .utils.general import download_zone_relative_path, safe_config_path
 from .utils.local_zones import download_zones
 from .utils.zones import UnsupportedSchemaVersion
-from .zone_source import ZoneSource
+from .zone_source import ZoneSource, async_check_duplicate_source
 
 if TYPE_CHECKING:
     from .device_tracker import PolygonalZoneEntity
@@ -84,6 +84,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: PolygonalZonesConfigEntr
     if entry.data.get(CONF_DOWNLOAD_ZONES):
         await _async_bootstrap_zone_snapshot(hass, entry)
     entry.runtime_data.source = _build_zone_source(entry)
+    async_check_duplicate_source(hass, entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
     return True
@@ -260,6 +261,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: PolygonalZonesConfigEnt
         data = getattr(entry, "runtime_data", None)
         if data is not None and data.source is not None:
             data.source.async_shutdown()
+        # The removed entry was the duplicate, so the survivor's warning is now
+        # wrong; the other entries are not reloaded, so clear it here.
+        for other in hass.config_entries.async_entries(DOMAIN):
+            if other.entry_id != entry.entry_id:
+                async_check_duplicate_source(hass, other)
     return unload_ok
 
 
