@@ -224,11 +224,11 @@ async def load_data(
     ``uri`` classifies as :func:`is_local_add_on_host` or the caller passes
     ``trusted_host`` (an entry created by the add-on's own discovery), so a
     token configured for the companion add-on is never sent to an unrelated
-    public URL. This is
-    the add-on's own read-gate (its ``save_token`` option protects GET
-    ``/zones.json``/``/trackers.json`` too, by design — see that repo's ADR
-    0002); it is never sent across a redirect, since ``allow_redirects=False``
-    below already refuses redirects outright.
+    public URL. This mirrors the add-on's own read-gate: its ``save_token``
+    protects GET ``/zones.json`` and ``/trackers.json`` as well, so the token
+    grants no more than the app already expects a client to hold. It is never
+    sent across a redirect, since ``allow_redirects=False`` below refuses them
+    outright.
     """
     parsed = urlparse(uri)
 
