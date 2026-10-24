@@ -165,7 +165,9 @@ async def test_reconfigure_keeps_the_token_trust(hass: HomeAssistant) -> None:
     submitted["entities"] = ["device_tracker.phone"]
     done = await hass.config_entries.flow.async_configure(result["flow_id"], submitted)
     assert done["type"] == FlowResultType.FORM  # the consent step
-    done = await hass.config_entries.flow.async_configure(result["flow_id"], {**submitted, "consent": True})
+    done = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {**submitted, "consent": True}
+    )
     assert done["type"] == FlowResultType.ABORT
 
     updated = hass.config_entries.async_get_entry(entry.entry_id)
