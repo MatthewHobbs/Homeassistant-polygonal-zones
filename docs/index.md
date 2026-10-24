@@ -15,13 +15,13 @@ This is a spare-time community continuation of [MichelGerding/Homeassistant-poly
 
 ## Two parts that work together
 
-The **editor app** runs inside Home Assistant. You draw and name your zones on a map, and it saves them as a file called `zones.json`.
+The **editor app** runs inside Home Assistant. You draw zones on a map, give them names, and save.
 
-The **integration** is a HACS component. It reads those zones and creates a mirror entity for each device you choose, named `device_tracker.polygonal_zones_<name>`. The state of that entity is the zone the device is in, or `away`.
+The **integration** watches the phones, cars or trackers you choose, and gives each one a zone name: `Home`, `School`, or `away` when it is outside them all.
 
-With app 0.7.0 and integration 1.16.0 or later, the app hands its file to Home Assistant for you. You confirm the discovered integration and choose your devices. There is no URL to copy.
+Install both of the current versions and they find each other. You confirm the discovered entry and tick your devices; there is no address, port or password to supply.
 
-Requirements: Home Assistant 2026.9.1 or later.
+Requirements: Home Assistant 2026.9.1 or later. The app needs a 64-bit installation (`aarch64` or `amd64`); 32-bit is not supported.
 
 ---
 

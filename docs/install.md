@@ -7,127 +7,129 @@ permalink: /install/
 
 # Installation
 
-Polygonal Zones has two parts. The **app** is a map editor where you draw your zones. The **integration** turns those zones into entities Home Assistant can use.
+Polygonal Zones needs two pieces:
 
-You need both parts, unless you already have your zones in a GeoJSON file. In that case the integration alone is enough.
+- the **Polygonal Zones Editor app**, where you draw your zones on a map;
+- this **integration**, which watches your devices and works out which zone each one is in.
 
-**Requirements:** Home Assistant 2026.9.1 or later.
+The app runs inside Home Assistant and hands your zones over on its own. Install both, confirm the connection, choose your devices — that is the whole job. No addresses, ports or passwords.
 
-Home Assistant now calls these **apps**. Some versions call them **add-ons**; it is the same thing, and the menus below use **app**.
+If you already have your zones as a GeoJSON file, from another tool or an older setup, you can skip the app and point the integration at that file instead. See [Using your own zones file](#using-your-own-zones-file).
+
+**What you need**
+
+- Home Assistant **2026.9.1** or later.
+- The app, which needs a **64-bit** Home Assistant installation (`aarch64` or `amd64`). 32-bit is not supported.
+- Something that reports where it is: a phone running the Home Assistant app, a car with a data connection, or a GPS tracker.
+
+Home Assistant now calls these **apps**. Some versions call them **add-ons**; it is the same thing, and the pages here say **app**.
 
 ---
 
-## Step 1 — Install the app
-
-The app is a map editor that runs inside Home Assistant. You draw polygons, give them names and save.
-
-### 1a. Add the app repository
+## Step 1 — Install the app, and draw a zone
 
 [![Add app repository to Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FMatthewHobbs%2FHomeassistant-polygonal-zones-addon.git)
 
-If the button does not work, add the repository by hand:
+If the button does not work, add the repository by hand: **Settings → Apps → Install app**, then the **⋮** menu at the top right, **Repositories**, and paste `https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon`.
 
-1. Open **Settings → Apps**, then choose **Install app**.
-2. In the store, open the **⋮** menu at the top right and choose **Repositories**.
-3. Paste `https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon` and choose **Add**.
-
-### 1b. Install the app
-
-Back in the store, find **Polygonal Zones** in the list and choose **Install**.
-
-### 1c. Draw your zones
-
-1. Open **Settings → Apps → Polygonal Zones** and choose **Start**.
-2. Choose **Open Web UI**.
-3. Choose the pentagon button on the right of the map.
-4. Click on the map to place the corners of your zone. Click the first corner again to close the shape.
-5. Type a name for the zone in the sidebar.
+1. Find **Polygonal Zones** in the app store and choose **Install**, then **Start**.
+2. Turn on **Watchdog** on the app's page, so it restarts itself if it stops.
+3. Choose **Open Web UI**.
+4. Choose the polygon button at the top of the map, then click each corner of the zone. Click the first corner again to close the shape.
+5. Type a name — `Home`, `Work`, `School` — in the panel on the left.
 6. Choose **Save**. Unsaved changes are lost when the app restarts.
 
-Repeat this for every zone you want.
-
-The app saves your zones as `zones.json`. Version 0.7.0 and later can hand that file to Home Assistant for you, so there is no URL to copy and no port to open. Step 3 explains this.
+Repeat for every zone you want. The app keeps them for you; you never have to copy a file or find an address.
 
 ---
 
 ## Step 2 — Install the integration
 
-The integration watches your `device_tracker` entities and works out which zone each one is in.
-
-### 2a. Add it through HACS
-
 [![Add to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=MatthewHobbs&repository=Homeassistant-polygonal-zones&category=integration)
 
-If the button does not work:
+If the button does not work: open **HACS**, then the **⋮** menu, **Custom repositories**, paste `https://github.com/MatthewHobbs/Homeassistant-polygonal-zones`, set the category to **Integration**, choose **Add**, then find **Polygonal Zones** in HACS and choose **Download**.
 
-1. Open **HACS** in the sidebar.
-2. Open the **⋮** menu and choose **Custom repositories**.
-3. Paste `https://github.com/MatthewHobbs/Homeassistant-polygonal-zones` and set the category to **Integration**.
-4. Choose **Add**, then find **Polygonal Zones** in HACS and choose **Download**.
-
-### 2b. Restart Home Assistant
-
-Restart Home Assistant before you continue. Open **Settings → System → Restart**.
+Then restart Home Assistant: **Settings → System → Restart**.
 
 ---
 
-## Step 3 — Connect the two parts
-
-### Automatic setup
+## Step 3 — Connect the two, and choose your devices
 
 This works with app 0.7.0 or later and integration 1.16.0 or later, on the same machine.
 
-1. The app tells Home Assistant where to find your zones each time it starts.
-2. Open **Settings → Devices & services**. A **Polygonal Zones** entry appears as discovered.
-3. Choose **Configure** to accept it. There is no URL to type, no port to open and no token to copy.
-4. Open the new entry's **⋮** menu and choose **Reconfigure**.
-5. Choose the `device_tracker` entities you want to follow.
-6. Tick the box confirming that everyone being tracked has been told. The form will not continue without it.
+1. Open **Settings → Devices & services** and wait a minute.
+2. A **Polygonal Zones** entry appears under **Discovered**. Choose **Configure** on it (some versions say **Confirm**).
+3. Open the entry's **⋮** menu and choose **Reconfigure**.
+4. Tick the devices you want followed.
+5. Tick the box confirming that everyone being tracked has been told. The form does not continue without it.
 
-If no entry appears, restart the app once. Its log shows what it sent to Home Assistant.
+Nothing to type: the app told Home Assistant where it is, and generated a password that only Home Assistant sees.
 
-### Manual setup
-
-Use this if the automatic setup does not appear. It also covers an app on another machine, an older integration, or your own GeoJSON file.
-
-1. Open **Settings → Apps → Polygonal Zones → Network** and give the app host port `8000`. Restart the app.
-2. Open the app's **Configuration** tab and set **`save_token`** to a long random value. Without it the app refuses every request from outside Home Assistant.
-3. Open **Settings → Devices & services → Add Integration** and search for **Polygonal Zones**.
-4. Enter the zones URL, or a path inside `/config`. For the app that is `http://<app-LAN-IP>:8000/zones.json`.
-5. Turn on **Allow private-network URLs (LAN)**, and enter the token as **App save token**. These fields are advanced, so turn on Advanced mode in your user profile to see them.
-6. Choose your `device_tracker` entities and tick the tracking notice.
-
-Use the app's LAN IP address, not a name. A plain name such as `homeassistant` receives no token, so the app answers 403. `.local` names are unreliable here, and `localhost` is always refused. The port carries no encryption, so use it only on a network you trust.
-
-`Allow private-network URLs` exists because the integration blocks private addresses by default. Without the option, Home Assistant refuses to fetch anything on your home network, including this app.
+**No entry appeared?** Check the app is started, then restart it and look at its log: it says what it sent. If it still does not appear, use [setting up by hand](#if-you-have-to-set-it-up-by-hand).
 
 ---
 
-## Step 4 — Check it worked
+## Step 4 — Check that it works
 
-Open **Developer Tools → States** and find `device_tracker.polygonal_zones_*`. Each tracked device gets one entity. The state is a zone name, or `away` when the device is outside every zone.
+1. Open **Settings → Devices & services → Polygonal Zones**.
+2. Open the device for the thing you are tracking. Its position line should read the name of your zone while it is inside it, and `away` when it leaves.
 
-States are `unknown` until the device reports a position. A device that has not moved for a while may wait. See [Troubleshooting](troubleshooting.md) if it stays `unknown`.
+You can also see the same thing under **Settings → Devices & services → Entities**: one entity per tracked device, named `device_tracker.polygonal_zones_<name>`.
+
+A device that has not reported a position yet shows `unknown`. That is normal until it does; a car that is asleep can take a while.
 
 ---
 
-## Using the result
+## If it does not work
 
-Use `device_tracker.polygonal_zones_<name>` in automations. The README has a worked example under [Usage](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones#usage).
+| What you see                                    | What to do                                                                                                                                                                          |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Nothing under **Discovered**                    | The app must be installed and started before this integration can see it. Restart the app, then restart Home Assistant.                                                             |
+| Set up, but the device always says `away`       | Check you ticked that device in **Reconfigure**, and that the zone was saved — it should be listed in the app.                                                                      |
+| A device says `away` although it is inside      | The zone may be too small to be reliable, or the device's position may be rough. See [is this the right tool](https://matthewhobbs.github.io/Homeassistant-polygonal-zones-addon/). |
+| Saving in the app says something went wrong     | Only happens after setting up by hand: the app's password and this integration's **App save token** disagree.                                                                       |
+| Many extra devices called Polygonal Zones 1, 2… | An old version of this integration left them behind. Update, then delete the leftovers once by hand.                                                                                |
+
+More detail, including the exact messages, is in [Troubleshooting](troubleshooting.md).
+
+---
+
+## If you have to set it up by hand
+
+Only for the cases the automatic path cannot cover: an app older than 0.7.0, an integration older than 1.16.0, an app on another machine, or your own zones file.
+
+You are joining the two pieces yourself, and three things have to agree: a port, a password and an address.
+
+1. **Give the app a port.** **Settings → Apps → Polygonal Zones → Network**, host port `8000`, restart the app.
+2. **Give the app a password.** On the app's **Configuration** page, set `save_token` to a long random value. Restart the app.
+3. **Add the integration.** **Settings → Devices & services → Add integration → Polygonal Zones**.
+4. **Tell it where the zones are.** `http://<app-address>:8000/zones.json`, where the address is the number that looks like `192.168.1.20`. Use the number, not a name such as `homeassistant`: this integration only sends the password to a number. `.local` names are unreliable and `localhost` is always refused.
+5. **Allow your own network, and paste the password.** Turn on **Advanced mode** in your user profile if you cannot see these options. Turn on **Allow private-network URLs (LAN)**, and put the app's `save_token` in **App save token**.
+6. **Choose your devices**, and tick the tracking notice.
+
+The connection is not encrypted, so the password and your zones cross your home network in the clear. Use it only on a network you trust.
+
+---
+
+## Using your own zones file
+
+Already have zones as GeoJSON from another tool, or a file you keep yourself? You do not need the app.
+
+When adding the integration, give the address of the file instead of the app: a path inside `/config`, a `file://` path, or an `http(s)://` address. Everything after that is the same: choose your devices, and each one reports the zone it is in.
+
+The [zone file format](ZONES_FORMAT.md) page describes what the file must contain.
 
 ---
 
 ## Removing it
 
-1. Open **Settings → Devices & services → Polygonal Zones**, open the **⋮** menu and choose **Delete**.
+1. **Settings → Devices & services → Polygonal Zones**, **⋮ → Delete**.
 2. Remove the integration in HACS.
-3. If **Download the GeoJSON files** was on, delete `<config>/polygonal_zones/<entry_id>.json`. The entry id is part of the file name. Leave any other file in that folder alone.
+3. If **Download the GeoJSON files** was on, delete `<config>/polygonal_zones/<entry_id>.json`. Leave any other file in that folder alone.
 4. Uninstall the app separately if you no longer want the editor.
 
 ---
 
 ## Privacy
 
-The integration reads the position of the `device_tracker` entities you choose. **Expose GPS coordinates** is off for new installs, so only the zone name is published.
-
-Home Assistant's recorder still stores when a device enters and leaves a zone, unless you exclude these entities. See [Privacy](privacy.md).
+The integration reads the position of the devices you choose. **Expose GPS coordinates** is off for new installs, so only the zone name is published. Home Assistant's recorder still stores when a device enters and leaves a zone unless you exclude these entities. See [Privacy](privacy.md).

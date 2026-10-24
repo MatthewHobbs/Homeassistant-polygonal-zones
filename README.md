@@ -16,31 +16,14 @@ This is a community continuation of [MichelGerding/Homeassistant-polygonal-zones
 
 ## Quick start
 
-### Automatic setup
+1. Install the [Polygonal Zones Editor app](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon) (0.7.0 or later), start it, and draw a zone on the map. The app needs a 64-bit Home Assistant installation; 32-bit is not supported.
+2. Install this integration through HACS (1.16.0 or later) and restart Home Assistant.
+3. Open **Settings → Devices & services**. A **Polygonal Zones** entry appears under **Discovered**; choose **Configure** on it.
+4. Open its **⋮ → Reconfigure** menu, tick the devices you want followed, and confirm the tracking notice.
 
-Home Assistant now calls these **apps**. Some versions call them **add-ons**; it is the same thing, and the menus below use **app**.
+There is no address, port or password to supply: the app tells Home Assistant where it is. The [install guide](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/install/) walks through it with screenshots of each step, and covers setting up by hand when the app cannot be discovered, plus using a zones file you already have.
 
-1. Install the [Polygonal Zones Editor app](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon) version 0.7.0 or later. Start it, then draw and save your zones.
-2. Install this integration version 1.16.0 or later through HACS. See [Installation](#installation). Restart Home Assistant.
-3. The app announces itself through the Supervisor. Open **Settings → Devices & services** and confirm the discovered **Polygonal Zones** entry.
-4. Open the entry's **⋮ → Reconfigure** menu. Choose your `device_tracker` entities, then confirm the tracking notice.
-
-You do not enter a URL, map a port or copy a token.
-
-### Manual setup
-
-Use this path for an integration older than 1.16.0, for an app on another host, or for your own GeoJSON file.
-
-1. Install the app if you want it, then draw and save your zones.
-2. In the app's **Network** tab, assign host port 8000. Set a `save_token` in its configuration and restart the app.
-3. Install the integration through HACS and restart Home Assistant. Open **Settings → Devices & services → Add Integration → Polygonal Zones**.
-4. Enter the zones URL, or a path inside `/config`. For the app that is `http://<app-LAN-IP>:8000/zones.json`.
-5. For the app's LAN address, turn on **Allow private-network URLs (LAN)** and enter the `save_token` as **App save token**. Both fields are advanced, so turn on Advanced mode in your user profile to see them.
-6. Choose your `device_tracker` entities. Tick the box confirming that everyone being tracked has been told. The form will not continue without it.
-
-Use the app host's LAN IP address in the URL. A plain DNS name such as `homeassistant` receives no token, so the app answers 403. `.local` names are not resolved reliably, and `localhost` is always refused.
-
-Each tracked entity gets a mirror `device_tracker.polygonal_zones_*`. Its state is the zone name (`Home`, `School`, …) or `away`. The [install guide](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/install/) has the full walkthrough.
+If you use Home Assistant's own words for these: **apps** are what older versions call **add-ons**, and the **devices** you tick are `device_tracker` entities.
 
 ## Contents
 
@@ -76,6 +59,8 @@ For a beta release, open the integration's HACS card, choose **⋮ → Redownloa
 App setup and post-install checks: [install guide](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/install/).
 
 ## Configuration options
+
+The setup above fills these in. They are here for unusual arrangements: your own zones file, a zone source on another machine, or coordinates you want published.
 
 | Field                   | Required | Default                   | Notes                                                                                |
 | ----------------------- | -------- | ------------------------- | ------------------------------------------------------------------------------------ |
