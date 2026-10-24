@@ -7,6 +7,8 @@ it to the entity. These helpers keep that construction in one place.
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 from custom_components.polygonal_zones.device_tracker import PolygonalZoneEntity
 from custom_components.polygonal_zones.sensor import PolygonalZoneSensor
 from custom_components.polygonal_zones.utils.zones import Zone
@@ -50,7 +52,11 @@ def make_entity(
     """Build a ``PolygonalZoneEntity`` backed by a shared ``ZoneSource``."""
     if source is None:
         source = make_source(**source_kwargs)
-    return PolygonalZoneEntity(source, tracked_entity_id, own_id, expose_coordinates)
+    entity = PolygonalZoneEntity(source, tracked_entity_id, own_id, expose_coordinates)
+    # Unit tests build these entities without a state machine; the write itself is
+    # covered against a real hass in tests_hass.
+    entity.async_write_ha_state = MagicMock()
+    return entity
 
 
 def make_sensor(
@@ -64,4 +70,6 @@ def make_sensor(
     """Build a ``PolygonalZoneSensor`` backed by a shared ``ZoneSource``."""
     if source is None:
         source = make_source(**source_kwargs)
-    return PolygonalZoneSensor(source, tracked_entity_id, own_id, expose_coordinates)
+    sensor = PolygonalZoneSensor(source, tracked_entity_id, own_id, expose_coordinates)
+    sensor.async_write_ha_state = MagicMock()
+    return sensor

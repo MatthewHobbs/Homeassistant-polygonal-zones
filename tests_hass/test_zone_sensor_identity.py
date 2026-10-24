@@ -20,15 +20,17 @@ _SRC = "device_tracker.phone"
 _ZONES = {"type": "FeatureCollection", "polygonal_zones": {"schema_version": 1}, "features": []}
 
 
-async def _entry(hass: HomeAssistant) -> MockConfigEntry:
+async def _entry(hass: HomeAssistant, entities: list[str] | None = None) -> MockConfigEntry:
     path = hass.config.path("identity.geojson")
     await hass.async_add_executor_job(Path(path).write_text, json.dumps(_ZONES), "utf-8")
-    hass.states.async_set(_SRC, "not_home", {"latitude": 51.5, "longitude": -0.1})
+    entities = entities or [_SRC]
+    for entity in entities:
+        hass.states.async_set(entity, "not_home", {"latitude": 51.5, "longitude": -0.1})
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={
             "zone_urls": ["identity.geojson"],
-            "entities": [_SRC],
+            "entities": entities,
             "download_zones": False,
             "expose_coordinates": True,
             "consent_confirmed_at": "2026-09-27T00:00:00+00:00",
@@ -110,3 +112,55 @@ async def test_1_15_1_registry_is_migrated(hass: HomeAssistant) -> None:
     kept = reg.async_get("sensor.polygonal_zones_phone")
     assert kept.id == original_ids[""]
     assert kept.name == "My zone"
+
+
+async def test_a_lone_suffixed_original_is_kept(hass: HomeAssistant) -> None:
+    """When the preferred entity_id was taken, 1.15.x registered the only sensor
+    as ``…_2_zone``. It must be re-keyed, not deleted as a duplicate."""
+    entry = await _entry(hass)
+    reg = er.async_get(hass)
+    created = reg.async_get_or_create(
+        "sensor",
+        DOMAIN,
+        "sensor.polygonal_zones_phone_2_zone",
+        suggested_object_id="polygonal_zones_phone_2",
+        config_entry=entry,
+    )
+    reg.async_update_entity(created.entity_id, name="My zone")
+    row_id = created.id
+
+    assert await async_setup_component(hass, DOMAIN, {})
+    await hass.async_block_till_done()
+
+    assert [s for s in _sensors(hass) if s[1].endswith("_zone")] == [
+        (created.entity_id, f"{entry.entry_id}_{_SRC}_zone")
+    ]
+    kept = reg.async_get(created.entity_id)
+    assert kept.id == row_id
+    assert kept.name == "My zone"
+
+
+async def test_a_suffixed_row_stays_with_the_tracker_it_belongs_to(hass: HomeAssistant) -> None:
+    """``…_phone_2_zone`` is tracker ``phone_2``'s original, not a duplicate of
+    ``phone``'s sensor, so it must not be re-keyed onto the shorter slug."""
+    second = "device_tracker.phone_2"
+    entry = await _entry(hass, entities=[_SRC, second])
+    reg = er.async_get(hass)
+    created = reg.async_get_or_create(
+        "sensor",
+        DOMAIN,
+        "sensor.polygonal_zones_phone_2_zone",
+        suggested_object_id="polygonal_zones_phone_2",
+        config_entry=entry,
+    )
+    row_id = created.id
+
+    assert await async_setup_component(hass, DOMAIN, {})
+    await hass.async_block_till_done()
+
+    zone_sensors = {uid: entity_id for entity_id, uid in _sensors(hass) if uid.endswith("_zone")}
+    # The suffixed row moves with phone_2, keeping its registry identity, and
+    # phone gets a sensor of its own instead of hijacking it.
+    assert zone_sensors[f"{entry.entry_id}_{second}_zone"] == created.entity_id
+    assert f"{entry.entry_id}_{_SRC}_zone" in zone_sensors
+    assert reg.async_get(created.entity_id).id == row_id

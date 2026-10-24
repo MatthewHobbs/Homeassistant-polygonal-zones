@@ -31,7 +31,12 @@ _ADDON_OUTPUT = {
     "features": [
         {
             "type": "Feature",
-            "properties": {"name": "Home", "id": "9f8c1e2a4b6d4f0a8c7e1d2b3a4c5e6f"},
+            "properties": {
+                "name": "Home",
+                "id": "9f8c1e2a4b6d4f0a8c7e1d2b3a4c5e6f",
+                "priority": 2,
+                "polygonal_zones_ext": {"source": "imported"},
+            },
             "geometry": {
                 "type": "Polygon",
                 "coordinates": [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]],

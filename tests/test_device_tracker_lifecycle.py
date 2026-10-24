@@ -5,6 +5,7 @@ Zone loading/reload now happens on the shared ``ZoneSource``; the entity's
 ``zone_source.load_zones``.
 """
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -333,3 +334,105 @@ async def test_handle_state_change_builder_skips_other_entity() -> None:
     await entity._handle_state_change_builder()(event)
 
     entity._update_state.assert_not_awaited()
+
+
+async def test_home_zone_matches_an_id_bearing_zone_by_name() -> None:
+    """Regression: the add-on stamps an id on every zone, so a configured name
+    never matched and in_zones stayed empty."""
+    home = Zone(
+        name="Home",
+        geometry=Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]),
+        properties={"id": "abc123"},
+    )
+    entity = _make_entity(zones=[home], home_zone_id="Home")
+    entity.hass = _make_hass()
+
+    await entity.update_location(latitude=0.5, longitude=0.5, gps_accuracy=10)
+
+    assert entity._attr_in_zones == ["zone.home"]
+
+
+async def test_source_going_unavailable_is_published() -> None:
+    """Both entity types are non-polling: an availability held only in the
+    attribute is never seen, so HA keeps serving the last zone name."""
+    entity = _make_entity(zones=[_HOME])
+    entity.hass = _make_hass()
+    entity.hass.states.get = MagicMock(
+        return_value=SimpleNamespace(state="unavailable", attributes={})
+    )
+    assert entity.available is True
+
+    await entity._update_state()
+
+    assert entity.available is False
+    entity.async_write_ha_state.assert_called_once()
+
+    await entity._update_state()
+
+    # Already unavailable: no repeated write for a steady state.
+    entity.async_write_ha_state.assert_called_once()
+
+
+async def test_missing_gps_attributes_do_not_change_availability() -> None:
+    """A tracker between fixes (keys absent) keeps its last zone and stays available."""
+    entity = _make_entity(zones=[_HOME])
+    entity.hass = _make_hass()
+    entity.hass.states.get = MagicMock(return_value=SimpleNamespace(state="home", attributes={}))
+
+    await entity._update_state()
+
+    assert entity.available is True
+    entity.async_write_ha_state.assert_not_called()
+
+
+async def test_null_gps_values_are_treated_as_no_fix() -> None:
+    """Keys present with null values must not reach shapely as coordinates."""
+    entity = _make_entity(zones=[_HOME])
+    entity.hass = _make_hass()
+    entity.hass.states.get = MagicMock(
+        return_value=SimpleNamespace(
+            state="home",
+            attributes={"latitude": None, "longitude": None, "gps_accuracy": None},
+        )
+    )
+
+    await entity._update_state()
+
+    assert entity._attr_location_name is None
+    assert entity.available is True
+    entity.async_write_ha_state.assert_not_called()
+
+
+async def test_concurrent_updates_cannot_publish_an_older_position() -> None:
+    """Resolution is executor-backed: without serialisation the update that
+    started first can finish last and win."""
+    entity = _make_entity(zones=[_HOME])
+    completed: list[float] = []
+
+    async def fake_update_location(latitude, longitude, gps_accuracy):
+        if latitude == 1.0:
+            await asyncio.sleep(0.05)
+        completed.append(latitude)
+
+    entity.update_location = fake_update_location
+    states = iter(
+        [
+            SimpleNamespace(
+                state="home",
+                attributes={"latitude": 1.0, "longitude": 1.0, "gps_accuracy": 1},
+            ),
+            SimpleNamespace(
+                state="home",
+                attributes={"latitude": 2.0, "longitude": 2.0, "gps_accuracy": 1},
+            ),
+        ]
+    )
+    entity.hass = SimpleNamespace(
+        states=SimpleNamespace(get=lambda _entity_id: next(states)),
+        async_create_task=MagicMock(),
+        async_add_executor_job=AsyncMock(),
+    )
+
+    await asyncio.gather(entity._update_state(), entity._update_state())
+
+    assert completed == [1.0, 2.0]

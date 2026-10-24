@@ -17,6 +17,7 @@ from homeassistant.data_entry_flow import callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import selector
 from homeassistant.helpers.selector import TextSelectorType
+from homeassistant.helpers.service_info.hassio import HassioServiceInfo
 from homeassistant.util import dt as dt_util
 
 if TYPE_CHECKING:
@@ -28,6 +29,7 @@ else:
     import voluptuous as vol
 
 from .const import (
+    CONF_ALLOW_PRIVATE_URLS,
     CONF_CONSENT_CONFIRMED_AT,
     CONF_DOWNLOAD_ZONES,
     CONF_HOME_ZONE_ID,
@@ -214,6 +216,45 @@ class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
     """Config flow handler."""
 
     VERSION = 1
+
+    _discovery: dict[str, Any]
+    _discovery_title: str
+
+    async def async_step_hassio(self, discovery_info: HassioServiceInfo) -> ConfigFlowResult:
+        """Handle discovery from the companion editor add-on.
+
+        The add-on announces its host, port and generated save token through
+        the Supervisor, so setup needs no URL or token typed in. The entry
+        starts with no trackers; picking them, and the tracking consent gate,
+        stay in the options flow where a person chooses a device.
+        """
+        config = discovery_info.config
+        self._discovery = {
+            CONF_ZONES_URL: [
+                f"http://{config['host']}:{config['port']}{config.get('path', '/zones.json')}"
+            ],
+            CONF_ZONE_SOURCE_TOKEN: config.get("token", ""),
+            CONF_ALLOW_PRIVATE_URLS: True,
+            CONF_DOWNLOAD_ZONES: False,
+            CONF_ENTITIES: [],
+        }
+        self._discovery_title = discovery_info.name or "Polygonal Zones"
+        await self.async_set_unique_id(f"addon_{discovery_info.slug}")
+        # The add-on re-posts on every start with a fresh token: update the one
+        # entry rather than adding a second, and let the reload pick it up.
+        self._abort_if_unique_id_configured(updates=self._discovery)
+        return await self.async_step_hassio_confirm()
+
+    async def async_step_hassio_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Ask once before creating the entry the add-on suggested."""
+        if user_input is not None:
+            return self.async_create_entry(title=self._discovery_title, data=self._discovery)
+        return self.async_show_form(
+            step_id="hassio_confirm",
+            description_placeholders={"url": self._discovery[CONF_ZONES_URL][0]},
+        )
 
     async def async_step_user(self, user_input=None) -> ConfigFlowResult:
         """Perform the initial step of the configuration flow, handling user input."""

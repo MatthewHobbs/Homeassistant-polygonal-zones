@@ -8,12 +8,14 @@ import pytest
 
 from custom_components.polygonal_zones import (
     PolygonalZonesData,
+    _legacy_sensor_for,
     _migrate_zone_sensor_unique_ids,
     async_reload_entry,
     async_setup,
     async_setup_entry,
     async_unload_entry,
 )
+from custom_components.polygonal_zones.const import DOMAIN
 from custom_components.polygonal_zones.utils.zones import UnsupportedSchemaVersion
 
 
@@ -93,7 +95,7 @@ def test_migration_is_a_noop_without_legacy_entries() -> None:
 
 async def test_async_setup_registers_services() -> None:
     """async_setup registers all four services. No per-domain dict any more."""
-    hass = SimpleNamespace()
+    hass = SimpleNamespace(services=SimpleNamespace(async_register=AsyncMock()))
     register_mock = AsyncMock()
 
     from custom_components import polygonal_zones as pkg
@@ -107,6 +109,9 @@ async def test_async_setup_registers_services() -> None:
 
     assert result is True
     register_mock.assert_awaited_once()
+    # The companion add-on reloads by name, with no entity to target.
+    hass.services.async_register.assert_called_once()
+    assert hass.services.async_register.call_args.args[:2] == (DOMAIN, "reload_all_zones")
     args = register_mock.await_args[0]
     assert sorted(args[1]) == [
         "add_new_zone",
@@ -300,3 +305,57 @@ async def test_async_reload_entry_delegates_to_async_reload() -> None:
     await async_reload_entry(hass, entry)
 
     reload_mock.assert_awaited_once_with("entry-1")
+
+
+def test_legacy_sensor_for_ignores_other_slugs() -> None:
+    """A legacy row for a different tracker is not a candidate for this one."""
+    row = SimpleNamespace(
+        entity_id="sensor.polygonal_zones_other", unique_id="sensor.polygonal_zones_other_zone"
+    )
+
+    assert _legacy_sensor_for([row], "phone", taken=set()) is None
+
+
+def test_migration_keeps_a_lone_suffixed_row() -> None:
+    """When the preferred entity_id was taken, the only legacy row is `…_2_zone`;
+    it is re-keyed rather than removed as a duplicate."""
+    entry = SimpleNamespace(entry_id="e1", data={"entities": ["device_tracker.phone"]})
+    registry = MagicMock()
+    registry.async_get_entity_id.return_value = None
+    legacy = [_legacy("sensor.polygonal_zones_phone_2", "sensor.polygonal_zones_phone_2_zone")]
+    with (
+        patch("custom_components.polygonal_zones.er.async_get", return_value=registry),
+        patch(
+            "custom_components.polygonal_zones.er.async_entries_for_config_entry",
+            return_value=legacy,
+        ),
+    ):
+        _migrate_zone_sensor_unique_ids(MagicMock(), entry)
+
+    registry.async_update_entity.assert_called_once_with(
+        "sensor.polygonal_zones_phone_2", new_unique_id="e1_device_tracker.phone_zone"
+    )
+    registry.async_remove.assert_not_called()
+
+
+def test_migration_leaves_a_suffixed_row_to_its_own_tracker() -> None:
+    """`…_phone_2_zone` belongs to tracker `phone_2`, not to `phone`."""
+    entry = SimpleNamespace(
+        entry_id="e1", data={"entities": ["device_tracker.phone", "device_tracker.phone_2"]}
+    )
+    registry = MagicMock()
+    registry.async_get_entity_id.return_value = None
+    legacy = [_legacy("sensor.polygonal_zones_phone_2", "sensor.polygonal_zones_phone_2_zone")]
+    with (
+        patch("custom_components.polygonal_zones.er.async_get", return_value=registry),
+        patch(
+            "custom_components.polygonal_zones.er.async_entries_for_config_entry",
+            return_value=legacy,
+        ),
+    ):
+        _migrate_zone_sensor_unique_ids(MagicMock(), entry)
+
+    registry.async_update_entity.assert_called_once_with(
+        "sensor.polygonal_zones_phone_2", new_unique_id="e1_device_tracker.phone_2_zone"
+    )
+    registry.async_remove.assert_not_called()

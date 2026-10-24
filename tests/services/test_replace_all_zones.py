@@ -2,14 +2,16 @@
 
 import json
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from custom_components.polygonal_zones.services.errors import (
     InvalidZoneData,
+    ZoneAlreadyExists,
     ZoneFileNotEditable,
 )
+from custom_components.polygonal_zones.services.helpers import reset_mutation_rate_limit
 from custom_components.polygonal_zones.services.replace_all_zones import action_builder
 
 
@@ -123,9 +125,73 @@ async def test_replace_all_wraps_a_lock_timeout(tmp_path) -> None:
             return_value=[fake_entity],
         ),
         patch(
-            "custom_components.polygonal_zones.services.replace_all_zones.save_zones",
-            new=AsyncMock(side_effect=TimeoutError),
+            "custom_components.polygonal_zones.services.replace_all_zones.write_zones",
+            new=MagicMock(side_effect=TimeoutError),
         ),
         pytest.raises(InvalidZoneData),
     ):
         await action_builder(_make_hass(tmp_path))(call)
+
+
+async def test_replace_with_duplicate_names_is_refused(tmp_path) -> None:
+    reset_mutation_rate_limit()
+    zones_file = tmp_path / "zones.json"
+    zones_file.write_text(
+        json.dumps({"type": "FeatureCollection", "features": [_polygon_feature("Home")]})
+    )
+    fake_entity = SimpleNamespace(
+        editable_file=True,
+        zone_urls=["zones.json"],
+        _source=SimpleNamespace(async_reload=AsyncMock(), entry_id="entry-id"),
+        _config_entry_id="entry-id",
+        hass=None,
+    )
+    collection = {
+        "type": "FeatureCollection",
+        "features": [_polygon_feature("Home"), _polygon_feature("Home")],
+    }
+    call = SimpleNamespace(data={"device_id": "fake-device-id", "zone": json.dumps(collection)})
+
+    with (
+        patch(
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
+            return_value=[fake_entity],
+        ),
+        pytest.raises(ZoneAlreadyExists, match="Home"),
+    ):
+        await action_builder(_make_hass(tmp_path))(call)
+
+    assert len(json.loads(zones_file.read_text())["features"]) == 1
+    fake_entity._source.async_reload.assert_not_awaited()
+
+
+async def test_replace_with_duplicate_ids_is_refused(tmp_path) -> None:
+    reset_mutation_rate_limit()
+    zones_file = tmp_path / "zones.json"
+    zones_file.write_text(
+        json.dumps({"type": "FeatureCollection", "features": [_polygon_feature("Home")]})
+    )
+    fake_entity = SimpleNamespace(
+        editable_file=True,
+        zone_urls=["zones.json"],
+        _source=SimpleNamespace(async_reload=AsyncMock(), entry_id="entry-id"),
+        _config_entry_id="entry-id",
+        hass=None,
+    )
+    home = _polygon_feature("Home")
+    home["properties"]["id"] = "same"
+    work = _polygon_feature("Work")
+    work["properties"]["id"] = "same"
+    collection = {"type": "FeatureCollection", "features": [home, work]}
+    call = SimpleNamespace(data={"device_id": "fake-device-id", "zone": json.dumps(collection)})
+
+    with (
+        patch(
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
+            return_value=[fake_entity],
+        ),
+        pytest.raises(ZoneAlreadyExists, match="same"),
+    ):
+        await action_builder(_make_hass(tmp_path))(call)
+
+    assert len(json.loads(zones_file.read_text())["features"]) == 1

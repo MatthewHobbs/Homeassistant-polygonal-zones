@@ -1,4 +1,4 @@
-"""Sensor for the polygonal_zones integration."""
+"""Mirror device_tracker: the zone the source tracker is currently in."""
 
 import logging
 import time
@@ -26,13 +26,12 @@ from .zone_source import ZoneSource
 
 _LOGGER = logging.getLogger(__name__)
 
-# Push-based: zone resolution runs in response to source-tracker state_changed
-# events, not on a polled schedule. Unlimited concurrency is safe.
+# Push-based: no polling. Each entity serialises its own resolution, so
+# unlimited platform concurrency is safe.
 PARALLEL_UPDATES = 0
 
 # Minimum seconds between distinct reload_zones *service* calls for one entry.
 _RELOAD_MIN_INTERVAL_S = 2.0
-# entry_id -> (monotonic timestamp, service-call context id) of the last reload.
 _LAST_RELOAD: dict[str, tuple[float, str | None]] = {}
 
 
@@ -80,10 +79,9 @@ async def async_setup_entry(
         ir.async_delete_issue(hass, DOMAIN, legacy_privacy_issue)
 
     # Announce the coming breaking change (HA removing location_name) well
-    # before it ships, not alongside it. Raised unconditionally — every entry
-    # is affected once HA removes location_name, regardless of any config
-    # value. Not cleared here: the PR that finishes the state migration is responsible
-    # for deleting or rewording this once the state migration actually ships.
+    # before it ships, not alongside it. Raised unconditionally: every entry is
+    # affected once HA removes location_name, whatever its config. Release B
+    # deletes it.
     ir.async_create_issue(
         hass,
         DOMAIN,
@@ -123,7 +121,6 @@ async def async_setup_entry(
 
     async_add_entities(entities, True)
     entry.runtime_data.entities = entities
-    # Kick off the single shared load once entities exist to receive the result.
     source.async_schedule_initial_load(hass)
 
 
@@ -161,10 +158,6 @@ class PolygonalZoneEntity(ZoneSourceFollower, TrackerEntity, RestoreEntity):
         self._attr_name = tracked_entity_id.split(".")[-1].replace("_", " ")
         self._attr_source_type = SourceType.GPS
 
-    # --- read interface delegating to the shared source ------------------------
-    # Kept so services (which read _config_entry_id / editable_file / zone_urls)
-    # and diagnostics (which getattr _zones / _last_load_* …) need no changes.
-
     @property
     def _config_entry_id(self) -> str:
         return self._source.entry_id
@@ -200,8 +193,6 @@ class PolygonalZoneEntity(ZoneSourceFollower, TrackerEntity, RestoreEntity):
     @property
     def _last_load_failures(self) -> list[tuple[str, str]]:
         return self._source.last_load_failures
-
-    # --------------------------------------------------------------------------
 
     async def async_added_to_hass(self) -> None:
         """Restore prior state, subscribe to the source tracker, and to reloads.
@@ -256,11 +247,7 @@ class PolygonalZoneEntity(ZoneSourceFollower, TrackerEntity, RestoreEntity):
         # exists for our other (polygon) zones to reference.
         self._attr_in_zones = (
             [ENTITY_ID_HOME]
-            if (
-                zone is not None
-                and self._source.home_zone_id
-                and zone["zone_key"] == self._source.home_zone_id
-            )
+            if (zone is not None and self._source.home_zone_matches(zone["zone_key"], zone["name"]))
             else []
         )
         # Base attributes are non-location diagnostics — safe to publish even when
@@ -275,12 +262,11 @@ class PolygonalZoneEntity(ZoneSourceFollower, TrackerEntity, RestoreEntity):
             attributes["latitude"] = latitude
             attributes["longitude"] = longitude
             attributes["gps_accuracy"] = gps_accuracy
-            # `matched_zones` reveals fine-grained (overlapping) semantic location
-            # and `zone_uris` can leak LAN hostnames/paths on a shared dashboard.
-            # Both are gated with coordinates so "expose off" means only the zone
-            # name (plus load diagnostics) leaves the entity. The URIs are published
-            # without credentials or query strings, since attributes are persisted
-            # by the recorder and copied into bug reports. See docs/privacy.md.
+            # `matched_zones` (overlapping location) and `zone_uris` (LAN
+            # hostnames, paths) are gated with coordinates: with exposure off,
+            # only the zone name and load diagnostics leave. URIs are published
+            # without credentials or query strings — attributes are recorded and
+            # pasted into bug reports. See docs/privacy.md.
             attributes["zone_uris"] = [redact_uri(u) for u in self._source.zone_urls]
             # Every zone the buffered GPS point currently intersects, not just the
             # winning one — overlap-priority debugging in Developer Tools.
@@ -301,12 +287,10 @@ class PolygonalZoneEntity(ZoneSourceFollower, TrackerEntity, RestoreEntity):
         """
         invoked_as_service = call is not None
         if invoked_as_service:
-            # reload_zones is a plain (non-admin) entity service that triggers an
-            # outbound fetch; rate-limit *distinct* calls per entry so a
-            # low-privilege user can't spam the source. HA fans one service call
-            # out to each targeted entity, so entities sharing a call's context id
-            # (e.g. `entity_id: all`) are exempt — otherwise a legit multi-entity
-            # reload would trip on its second entity.
+            # Non-admin, and it triggers an outbound fetch: rate-limit
+            # *distinct* calls per entry. HA fans one call out to every targeted
+            # entity, and those share a context id and are exempt, or `all` would
+            # trip on its second entity.
             entry_id = self._source.entry_id
             context_id = getattr(getattr(call, "context", None), "id", None)
             now = time.monotonic()

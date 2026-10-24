@@ -28,7 +28,6 @@ from .limits import (
     count_geometry_vertices,
 )
 
-# Re-exported for back-compat with call sites / tests that imported from zones.
 __all__ = [
     "UnsupportedSchemaVersion",
     "Zone",
@@ -40,6 +39,9 @@ __all__ = [
     "get_zones",
     "haversine_distances",
     "load_zones",
+    "validate_zone_document",
+    "zone_id",
+    "zone_key",
 ]
 
 _LOGGER = logging.getLogger(__name__)
@@ -68,6 +70,12 @@ class Zone:
     properties: dict[str, Any] = field(default_factory=dict)
 
 
+def zone_id(zone: Zone) -> str | None:
+    """The producer-stamped ``properties.id``, when it is a usable one."""
+    value = zone.properties.get("id")
+    return value if isinstance(value, str) and value else None
+
+
 def zone_key(zone: Zone) -> str:
     """Return the stable identifier for a zone.
 
@@ -77,8 +85,7 @@ def zone_key(zone: Zone) -> str:
     the producer sets ``id`` — matching by name alone fails silently (no
     error, permanently unmatched) if the zone is later renamed.
     """
-    zone_id = zone.properties.get("id")
-    return zone_id if isinstance(zone_id, str) and zone_id else zone.name
+    return zone_id(zone) or zone.name
 
 
 @dataclass
@@ -210,6 +217,16 @@ def _parse_zone_document(raw: str, idx: int, prioritize: bool, uri: str) -> list
 
     default_priority = idx if prioritize else 0
     return [_parse_feature(feature, default_priority) for feature in features]
+
+
+def validate_zone_document(raw: str, uri: str = "<zone mutation>") -> None:
+    """Raise ``ZoneFileCorrupt`` unless ``raw`` parses as a zone document.
+
+    The mutation services call this on the exact bytes they are about to write,
+    with the parser the loader uses, so a service call can never persist a file
+    that stops every zone from loading on the next start.
+    """
+    _parse_zone_document(raw, 0, False, uri)
 
 
 async def _load_zones_from_uri(
@@ -354,16 +371,10 @@ def get_locations_zone(lat: float, lon: float, acc: float | None, zones: list[Zo
         return None
 
     gps_point = Point(lon, lat)
-    # Shapely returns an EMPTY polygon for Point.buffer(0), and an empty geometry
-    # intersects nothing — so inflating by a non-positive accuracy made every zone
-    # test fail regardless of where the fix actually was.
-    #
-    # None is reachable too: the caller gates on the gps_accuracy key being *present*,
-    # not on it being non-None, and TrackerEntity types it `float | None`. None, 0 and
-    # NaN all mean "no accuracy figure", not "outside everything".
-    #
-    # isfinite also screens out infinity, which would otherwise reach shapely and raise
-    # ValueError("buffer distance must be finite") from inside the executor job.
+    # Point.buffer(0) is EMPTY and intersects nothing, and the caller only checks
+    # that the gps_accuracy key is present (TrackerEntity types it ``float | None``):
+    # None, 0 and NaN must all mean "no accuracy figure", not "outside everything".
+    # isfinite also keeps infinity out of buffer(), which raises ValueError.
     search_area = (
         _accuracy_circle(gps_point, acc)
         if acc is not None and math.isfinite(acc) and acc > 0

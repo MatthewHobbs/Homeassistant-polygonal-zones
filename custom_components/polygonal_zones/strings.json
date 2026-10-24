@@ -52,6 +52,10 @@
           "home_zone_id": "The zone's id (preferred, survives a rename) or exact name — see the zone file's `properties.id`/`properties.name`. Blank means no zone counts as home; state stays not_home for that case.",
           "consent": "Shown only when you add a device_tracker that wasn't already tracked. This integration continuously records the GPS location of the entities you select. Tick to confirm before continuing."
         }
+      },
+      "hassio_confirm": {
+        "title": "Polygonal Zones add-on found",
+        "description": "Use the zones from {url}? The add-on sends its save token, so there is nothing to copy. Pick the trackers to mirror afterwards, in this integration's options."
       }
     },
     "error": {
@@ -59,9 +63,12 @@
       "unreachable_url": "One or more URLs cannot be reached",
       "invalid_path": "The file could not be found",
       "private_url_blocked": "That looks like a private/LAN address (e.g. 192.168.x.x). Turn on 'Allow private-network URLs (LAN)' in the advanced options to use it, or reference a file under /config instead.",
-      "blocked_address": "That address (loopback, link-local or reserved) is always refused. Use the host\u2019s network address or a file under /config instead.",
+      "blocked_address": "That address (loopback, link-local or reserved) is always refused. Use the host’s network address or a file under /config instead.",
       "consent_required": "Please confirm tracking consent to continue.",
       "own_entities": "Pick your devices' own trackers. Entities created by this integration cannot be tracked."
+    },
+    "abort": {
+      "already_configured": "The Polygonal Zones add-on is already set up."
     }
   },
   "options": {
@@ -94,7 +101,7 @@
       "unreachable_url": "One or more URLs cannot be reached",
       "invalid_path": "The file could not be found",
       "private_url_blocked": "That looks like a private/LAN address (e.g. 192.168.x.x). Turn on 'Allow private-network URLs (LAN)' in the advanced options to use it, or reference a file under /config instead.",
-      "blocked_address": "That address (loopback, link-local or reserved) is always refused. Use the host\u2019s network address or a file under /config instead."
+      "blocked_address": "That address (loopback, link-local or reserved) is always refused. Use the host’s network address or a file under /config instead."
     }
   },
   "services": {
@@ -161,6 +168,10 @@
           "description": "The name of the zone to delete."
         }
       }
+    },
+    "reload_all_zones": {
+      "name": "Reload All Zones",
+      "description": "Reload the zone files for every Polygonal Zones entry. Used by the companion add-on after it saves its file."
     }
   },
   "exceptions": {

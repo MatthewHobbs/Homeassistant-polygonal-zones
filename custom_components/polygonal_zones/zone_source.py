@@ -1,12 +1,7 @@
 """Entry-scoped zone source shared by every mirror entity in one config entry.
 
-Every ``device_tracker`` mirror under a single config entry reads the *same*
-zone definitions. Historically each entity fetched, parsed, and stored its own
-copy — N identical HTTP GETs and N identical shapely parses per entry, plus a
-``sync_entities_after_write`` fan-out that existed only to keep those copies in
-step. ``ZoneSource`` lifts that ownership to the entry: one fetch/parse, one
-retry/backoff lifecycle, one repair issue, and a listener list so each entity
-re-resolves its state when the shared zones (re)load.
+One fetch/parse, one retry lifecycle and one repair issue per entry, plus a
+listener list so each entity re-resolves when the shared zones reload.
 """
 
 from __future__ import annotations
@@ -24,7 +19,14 @@ from homeassistant.helpers.start import async_at_started
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
-from .utils.zones import Zone, ZoneFileCorrupt, get_locations_zone, load_zones, zone_key
+from .utils.zones import (
+    Zone,
+    ZoneFileCorrupt,
+    get_locations_zone,
+    load_zones,
+    zone_id,
+    zone_key,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -55,8 +57,9 @@ class ZoneSource:
         self.editable_file = editable_file
         self.allow_private_urls = allow_private_urls
         self.token = token
-        # The polygon whose zone_key() equals this counts as "home" for
-        # in_zones — blank/unset means no zone is home.
+        # The zone whose ``id`` — or, when no zone carries it as an id, whose
+        # ``name`` — equals this counts as "home" for in_zones; blank/unset
+        # means no zone is home. See ``home_zone_matches``.
         self.home_zone_id = home_zone_id
 
         self._zones: list[Zone] = []
@@ -149,6 +152,22 @@ class ZoneSource:
     def home_zone_missing_issue_id(self) -> str:
         """Repair-issue id for a configured home zone that no longer resolves."""
         return f"home_zone_missing_{self.entry_id}"
+
+    def home_zone_matches(self, key: str, name: str) -> bool:
+        """Whether the zone resolved as ``(key, name)`` is the configured home zone.
+
+        The configured value is an ``id`` (preferred: it survives a rename) or an
+        exact name. Ids win: when any loaded zone carries the value as its id, a
+        name match for a *different* zone does not count, so one value can never
+        designate two zones.
+        """
+        if not self.home_zone_id:
+            return False
+        if key == self.home_zone_id:
+            return True
+        if any(zone_id(z) == self.home_zone_id for z in self._zones):
+            return False
+        return name == self.home_zone_id
 
     def add_listener(self, listener: Callable[[], None]) -> Callable[[], None]:
         """Register a callback fired after every (re)load; returns an unsubscribe."""
@@ -254,7 +273,7 @@ class ZoneSource:
         if not self.home_zone_id:
             ir.async_delete_issue(hass, DOMAIN, self.home_zone_missing_issue_id)
             return
-        if any(zone_key(z) == self.home_zone_id for z in self.zones):
+        if any(self.home_zone_matches(zone_key(z), z.name) for z in self.zones):
             ir.async_delete_issue(hass, DOMAIN, self.home_zone_missing_issue_id)
             return
         ir.async_create_issue(
@@ -275,8 +294,13 @@ class ZoneSource:
 
         Used by the ``reload_zones`` service and the mutation-service post-write
         sync. Unlike the initial load this does not arm a retry — the caller
-        (service handler) surfaces the error to the user.
+        (service handler) surfaces the error to the user — but it retires one
+        the initial load armed, so a stale timer cannot fire after the incident
+        is over and re-raise the issue.
         """
+        if self._unsub_retry is not None:
+            self._unsub_retry()
+            self._unsub_retry = None
         try:
             await self._async_load(hass)
         except Exception:

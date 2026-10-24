@@ -265,12 +265,16 @@ async def load_data(
     if parsed.scheme and parsed.scheme not in ("http", "https"):
         raise ValueError(f"Unsupported URI scheme: {parsed.scheme}")
 
-    safe_path = safe_config_path(hass.config.config_dir, uri)
+    return await hass.async_add_executor_job(read_local_file, hass.config.config_dir, uri)
 
-    def _read() -> str:
-        return safe_path.read_text(encoding="utf-8")
 
-    return await hass.async_add_executor_job(_read)
+def read_local_file(config_dir: str, uri: str) -> str:
+    """Read a zone file from the config directory.
+
+    Sync on purpose: the mutation services run it inside their executor job,
+    under the file lock, so the read cannot straddle another write.
+    """
+    return safe_config_path(config_dir, uri).read_text(encoding="utf-8")
 
 
 REQUIRED_ATTRIBUTES = {"latitude", "longitude", "gps_accuracy"}
@@ -293,24 +297,23 @@ def event_should_trigger(event: Event, entity_id: str) -> bool:
     old_state: State | None = event.data.get("old_state")
     new_state: State | None = event.data.get("new_state")
 
-    if old_state is None:
-        return False
     if new_state is None or new_state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-        # Source removed, or reporting unavailable/unknown. GPS attributes are
-        # normally cleared in this case, so the attribute check below would
-        # otherwise filter this event out — always trigger instead, so
-        # the entities' shared _update_state (entity.py) unavailable-reflection branch
-        # (which re-reads live state, not this event) actually gets a chance
-        # to run. Without this, a source going unavailable was never reflected
-        # on the mirror: the trigger that would call _update_state never fired.
+        # Source removed or unavailable: GPS attributes are cleared, so the
+        # check below would filter this event out. Always trigger, so
+        # _update_state's unavailable branch (which re-reads live state) runs;
+        # otherwise a source going unavailable was never reflected.
         return True
+    if old_state is None:
+        # First state a tracker ever reports, for one created after setup: no
+        # previous position to compare against, so trigger whenever it already
+        # carries a fix. The initial load covers trackers that existed at setup.
+        return all(attr in new_state.attributes for attr in REQUIRED_ATTRIBUTES)
     if not all(attr in new_state.attributes for attr in REQUIRED_ATTRIBUTES):
         return False
     # the old state's attributes are missing when it is the first real update
     if not all(attr in old_state.attributes for attr in REQUIRED_ATTRIBUTES):
         return True
 
-    # Check if any location attributes changed
     return any(
         new_state.attributes[attr] != old_state.attributes[attr] for attr in REQUIRED_ATTRIBUTES
     )

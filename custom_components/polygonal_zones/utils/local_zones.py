@@ -1,12 +1,12 @@
 """Helper functions to handle local zones."""
 
-import asyncio
 import contextlib
 import json
 import logging
 import math
 import os
 from pathlib import Path
+import threading
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -17,7 +17,8 @@ from .zones import Zone, get_zones
 
 _LOGGER = logging.getLogger(__name__)
 
-_FILE_LOCKS: dict[str, asyncio.Lock] = {}
+_FILE_LOCKS: dict[str, threading.Lock] = {}
+_FILE_LOCKS_GUARD = threading.Lock()
 
 
 def _lock_timeout() -> float:
@@ -48,14 +49,16 @@ def _lock_timeout() -> float:
 LOCK_ACQUIRE_TIMEOUT = _lock_timeout()
 
 
-def get_file_lock(path: Path) -> asyncio.Lock:
-    """Return the shared ``asyncio.Lock`` for ``path``, creating it on first use.
+def file_lock(path: Path) -> threading.Lock:
+    """The shared thread lock for ``path``, created on first use.
 
-    Serializes read-modify-write service calls against one zone file so two
-    concurrent callers cannot lose each other's changes. One idle Lock per file
-    path is kept for the life of the process, which is a few bytes.
+    A thread lock, not an asyncio one: the whole read-modify-write runs in one
+    executor job, and an executor write cannot be cancelled. An asyncio lock is
+    released when its caller is cancelled, which let the next mutation read the
+    pre-write file and erase the first.
     """
-    return _FILE_LOCKS.setdefault(str(path), asyncio.Lock())
+    with _FILE_LOCKS_GUARD:
+        return _FILE_LOCKS.setdefault(str(path), threading.Lock())
 
 
 def dump_feature_collection(
@@ -125,55 +128,51 @@ async def download_zones(
 
 
 async def save_zones(geojson: str, destination: Path, hass: HomeAssistant) -> None:
-    """Save the GeoJSON string to a file atomically.
+    """Save the GeoJSON string to a file atomically, off the event loop."""
+    await hass.async_add_executor_job(write_zones, geojson, destination)
+
+
+def write_zones(geojson: str, destination: Path) -> None:
+    """Save the GeoJSON string atomically. Sync: callers hold the file lock.
 
     Writes to a sibling ``.tmp`` file and ``os.replace``s it into place so a
     crash mid-write cannot corrupt the destination. The parent directory is
     created with restrictive permissions; the file is written 0600.
     """
-
-    def _write() -> None:
-        destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        # Symlink hardening (CWE-59): an attacker with /config write access
-        # could pre-plant a symlink at the destination or the .tmp path to
-        # redirect this write elsewhere. Refuse a symlinked destination
-        # (os.replace would overwrite it rather than follow it, but rejecting
-        # surfaces tampering instead of silently clobbering), and open the .tmp
-        # with O_NOFOLLOW so a symlinked temp path fails instead of being
-        # followed through to its target.
-        if destination.is_symlink():
-            raise OSError(f"Refusing to write zones: {destination} is a symlink")
-        tmp = destination.with_suffix(destination.suffix + ".tmp")
-        # os.open used here (rather than Path.write_text) so we can pass an
-        # explicit 0o600 mode atomically — Path.open doesn't accept mode for new
-        # files until Python 3.13's Path.open(mode_arg=...) and even then we'd
-        # need a chmod follow-up which leaves a brief world-readable window.
-        # O_NOFOLLOW: fail (ELOOP) rather than follow a pre-planted symlink at tmp.
-        fd = os.open(
-            tmp,
-            os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0),
-            0o600,
-        )
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                f.write(geojson)
-                # Flush-to-disk before the rename so a host power loss between
-                # write() and replace() can't leave us with an empty file.
-                f.flush()
-                os.fsync(f.fileno())
-            tmp.replace(destination)
-            # Sync the directory entry too — the rename is durable only once
-            # the parent's fsync completes. Harmless on filesystems that
-            # don't require it (HFS+, APFS).
-            with contextlib.suppress(OSError):
-                dir_fd = os.open(destination.parent, os.O_DIRECTORY)
-                try:
-                    os.fsync(dir_fd)
-                finally:
-                    os.close(dir_fd)
-        except Exception:
-            with contextlib.suppress(FileNotFoundError):
-                tmp.unlink()
-            raise
-
-    await hass.async_add_executor_job(_write)
+    destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    # Symlink hardening (CWE-59): /config write access would let an attacker
+    # pre-plant a symlink and redirect this write. Refuse a symlinked
+    # destination rather than silently clobbering, and open the .tmp with
+    # O_NOFOLLOW so a planted temp path fails instead of being followed.
+    if destination.is_symlink():
+        raise OSError(f"Refusing to write zones: {destination} is a symlink")
+    tmp = destination.with_suffix(destination.suffix + ".tmp")
+    # os.open, not Path.write_text: it applies the 0o600 mode atomically, with
+    # no chmod follow-up window where the file is world-readable. O_NOFOLLOW
+    # fails (ELOOP) on a pre-planted symlink at tmp.
+    fd = os.open(
+        tmp,
+        os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0),
+        0o600,
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(geojson)
+            # Flush-to-disk before the rename so a host power loss between
+            # write() and replace() can't leave us with an empty file.
+            f.flush()
+            os.fsync(f.fileno())
+        tmp.replace(destination)
+        # Sync the directory entry too — the rename is durable only once
+        # the parent's fsync completes. Harmless on filesystems that
+        # don't require it (HFS+, APFS).
+        with contextlib.suppress(OSError):
+            dir_fd = os.open(destination.parent, os.O_DIRECTORY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+    except Exception:
+        with contextlib.suppress(FileNotFoundError):
+            tmp.unlink()
+        raise

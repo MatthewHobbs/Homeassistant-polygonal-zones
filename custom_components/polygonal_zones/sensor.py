@@ -37,6 +37,7 @@ from homeassistant.helpers.event import (
 
 from .const import CONF_EXPOSE_COORDINATES, COORDINATE_GATED_ATTRIBUTES
 from .entity import ZoneSourceFollower, zone_device_info
+from .utils.general import redact_uri
 from .zone_source import ZoneSource
 
 PARALLEL_UPDATES = 0
@@ -103,9 +104,8 @@ class PolygonalZoneSensor(ZoneSourceFollower, RestoreSensor):
         self._expose_coordinates = expose_coordinates
 
         self.entity_id = own_id
-        # Not own_id: generate_entity_id suffixes "_2" when the id is already in
-        # the state machine, so an own_id-derived id minted a new registry entry on
-        # every reload.
+        # Not own_id: generate_entity_id suffixes "_2" when the id is taken, which
+        # minted a new registry entry on every reload (#131).
         self._attr_unique_id = f"{source.entry_id}_{tracked_entity_id}_zone"
         self._attr_name = f"{_slug(tracked_entity_id)} zone"
 
@@ -120,6 +120,10 @@ class PolygonalZoneSensor(ZoneSourceFollower, RestoreSensor):
             if not self._expose_coordinates:
                 for gated in COORDINATE_GATED_ATTRIBUTES:
                     restored.pop(gated, None)
+            # State saved by an older release may hold raw URLs (credentials,
+            # query tokens); never re-publish them, matching the mirror tracker.
+            if isinstance(restored.get("zone_uris"), list):
+                restored["zone_uris"] = [redact_uri(str(u)) for u in restored["zone_uris"]]
             self._attr_extra_state_attributes = restored
 
         await self._follow_source()
@@ -194,13 +198,10 @@ class PolygonalZoneLastReportedSensor(RestoreSensor):
 
     @callback
     def _handle_event(self, event: Any) -> None:
-        # A source's first write after HA starts or after the source reloads (no
-        # previous state, or the "restored" placeholder HA writes) is not counted
-        # as a report. For a source that restores its state that write is its old
-        # position re-published with the restart time, and counting it would
-        # overwrite the restored value and hide a tracker that died while HA was
-        # down. A polling source's genuine first write is dropped too; the next
-        # report corrects it. state_reported events are always genuine.
+        # A source's first write after HA starts or reloads is its restored
+        # position re-stamped with the restart time, not a report: counting it
+        # would hide a tracker that died while HA was down. A polling source's
+        # first write is dropped too; state_reported events are always genuine.
         if event.event_type == EVENT_STATE_CHANGED:
             old_state = event.data.get("old_state")
             if old_state is None or old_state.attributes.get("restored"):

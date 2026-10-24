@@ -1,14 +1,13 @@
 """Coverage for the new exception-translation paths in services + helpers + general.
 
-These tests exercise the broad except blocks (aiohttp.ClientError, OSError,
+These tests exercise the broad except blocks (OSError,
 ValueError) added for the action-exceptions Silver rule.
 """
 
 import json
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import MagicMock, patch
 
-import aiohttp
 import pytest
 
 from custom_components.polygonal_zones.services.add_new_zone import (
@@ -62,23 +61,6 @@ def _add_call() -> SimpleNamespace:
     )
 
 
-async def test_add_zone_aiohttp_error_wrapped(tmp_path) -> None:
-    (tmp_path / "zones.json").write_text(json.dumps({"type": "FeatureCollection", "features": []}))
-    action = add_builder(_hass(tmp_path))
-    with (
-        patch(
-            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
-            return_value=[_entity()],
-        ),
-        patch(
-            "custom_components.polygonal_zones.services.helpers.load_data",
-            new=AsyncMock(side_effect=aiohttp.ClientError("network down")),
-        ),
-        pytest.raises(InvalidZoneData),
-    ):
-        await action(_add_call())
-
-
 async def test_add_zone_oserror_wrapped(tmp_path) -> None:
     (tmp_path / "zones.json").write_text(json.dumps({"type": "FeatureCollection", "features": []}))
     action = add_builder(_hass(tmp_path))
@@ -88,8 +70,8 @@ async def test_add_zone_oserror_wrapped(tmp_path) -> None:
             return_value=[_entity()],
         ),
         patch(
-            "custom_components.polygonal_zones.services.helpers.save_zones",
-            new=AsyncMock(side_effect=OSError("disk full")),
+            "custom_components.polygonal_zones.services.helpers.write_zones",
+            new=MagicMock(side_effect=OSError("disk full")),
         ),
         pytest.raises(InvalidZoneData),
     ):
@@ -109,26 +91,6 @@ async def test_add_zone_valueerror_wrapped(tmp_path) -> None:
         await action(_add_call())
 
 
-async def test_delete_zone_aiohttp_error_wrapped(tmp_path) -> None:
-    (tmp_path / "zones.json").write_text(
-        json.dumps({"type": "FeatureCollection", "features": [_polygon_feature("Home")]})
-    )
-    action = delete_builder(_hass(tmp_path))
-    call = SimpleNamespace(data={"device_id": "x", "zone_name": "Home"})
-    with (
-        patch(
-            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
-            return_value=[_entity()],
-        ),
-        patch(
-            "custom_components.polygonal_zones.services.helpers.load_data",
-            new=AsyncMock(side_effect=aiohttp.ClientError("nope")),
-        ),
-        pytest.raises(InvalidZoneData),
-    ):
-        await action(call)
-
-
 async def test_delete_zone_oserror_wrapped(tmp_path) -> None:
     (tmp_path / "zones.json").write_text(
         json.dumps({"type": "FeatureCollection", "features": [_polygon_feature("Home")]})
@@ -141,8 +103,8 @@ async def test_delete_zone_oserror_wrapped(tmp_path) -> None:
             return_value=[_entity()],
         ),
         patch(
-            "custom_components.polygonal_zones.services.helpers.save_zones",
-            new=AsyncMock(side_effect=OSError("disk full")),
+            "custom_components.polygonal_zones.services.helpers.write_zones",
+            new=MagicMock(side_effect=OSError("disk full")),
         ),
         pytest.raises(InvalidZoneData),
     ):
@@ -157,32 +119,6 @@ async def test_delete_zone_corrupt_json_wrapped(tmp_path) -> None:
         patch(
             "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
             return_value=[_entity()],
-        ),
-        pytest.raises(InvalidZoneData),
-    ):
-        await action(call)
-
-
-async def test_edit_zone_aiohttp_error_wrapped(tmp_path) -> None:
-    (tmp_path / "zones.json").write_text(
-        json.dumps({"type": "FeatureCollection", "features": [_polygon_feature("Home")]})
-    )
-    action = edit_builder(_hass(tmp_path))
-    call = SimpleNamespace(
-        data={
-            "device_id": "x",
-            "zone_name": "Home",
-            "zone": json.dumps(_polygon_feature("Home")),
-        }
-    )
-    with (
-        patch(
-            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
-            return_value=[_entity()],
-        ),
-        patch(
-            "custom_components.polygonal_zones.services.helpers.load_data",
-            new=AsyncMock(side_effect=aiohttp.ClientError("nope")),
         ),
         pytest.raises(InvalidZoneData),
     ):
@@ -207,8 +143,8 @@ async def test_edit_zone_oserror_wrapped(tmp_path) -> None:
             return_value=[_entity()],
         ),
         patch(
-            "custom_components.polygonal_zones.services.helpers.save_zones",
-            new=AsyncMock(side_effect=OSError("disk full")),
+            "custom_components.polygonal_zones.services.helpers.write_zones",
+            new=MagicMock(side_effect=OSError("disk full")),
         ),
         pytest.raises(InvalidZoneData),
     ):
@@ -249,8 +185,8 @@ async def test_replace_all_oserror_wrapped(tmp_path) -> None:
             return_value=[_entity()],
         ),
         patch(
-            "custom_components.polygonal_zones.services.replace_all_zones.save_zones",
-            new=AsyncMock(side_effect=OSError("disk full")),
+            "custom_components.polygonal_zones.services.replace_all_zones.write_zones",
+            new=MagicMock(side_effect=OSError("disk full")),
         ),
         pytest.raises(InvalidZoneData),
     ):

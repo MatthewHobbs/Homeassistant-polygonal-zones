@@ -3,8 +3,10 @@
 import asyncio
 import json
 from pathlib import Path
+import threading
+import time
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -25,6 +27,7 @@ from custom_components.polygonal_zones.services.helpers import (
     resolve_mutation_target,
     sync_entities_after_write,
 )
+from custom_components.polygonal_zones.utils.local_zones import file_lock, write_zones
 
 
 def test_require_device_id_string() -> None:
@@ -222,7 +225,13 @@ def test_resolve_mutation_target_refuses_a_non_editable_file() -> None:
 
 
 def _hass(tmp_path: Path) -> SimpleNamespace:
-    return SimpleNamespace(config=SimpleNamespace(config_dir=str(tmp_path)))
+    async def _executor_job(func, *args):
+        return func(*args)
+
+    return SimpleNamespace(
+        config=SimpleNamespace(config_dir=str(tmp_path)),
+        async_add_executor_job=_executor_job,
+    )
 
 
 async def test_modify_zone_file_serializes_concurrent_edits(tmp_path) -> None:
@@ -232,20 +241,19 @@ async def test_modify_zone_file_serializes_concurrent_edits(tmp_path) -> None:
     (tmp_path / "zones.json").write_text("{}")
     events: list[str] = []
 
-    async def fake_load(_uri, _hass):
+    def fake_read(_config_dir, _uri):
         events.append("read")
-        await asyncio.sleep(0.01)  # a second caller would interleave here without the lock
         return json.dumps({"features": []})
 
-    async def fake_save(*_args):
+    def fake_write(_content, _path):
         events.append("save")
 
     def mutate(_doc):
         events.append("mutate")
 
     with (
-        patch(f"{_HELPERS}.load_data", new=fake_load),
-        patch(f"{_HELPERS}.save_zones", new=fake_save),
+        patch(f"{_HELPERS}.read_local_file", new=fake_read),
+        patch(f"{_HELPERS}.write_zones", new=fake_write),
         patch(f"{_HELPERS}.sync_entities_after_write", new=AsyncMock()),
     ):
         await asyncio.gather(
@@ -261,10 +269,6 @@ async def test_modify_zone_file_serializes_concurrent_edits(tmp_path) -> None:
     [
         (OSError("disk"), "Failed to access zone file"),
         (ValueError("bad"), "Zone file content or path is invalid"),
-        (
-            TimeoutError(),
-            "Timed out waiting for zone file lock; another operation may be in progress",
-        ),
     ],
 )
 async def test_modify_zone_file_maps_failures_to_invalid_zone_data(
@@ -274,7 +278,141 @@ async def test_modify_zone_file_maps_failures_to_invalid_zone_data(
     entity.zone_urls = ["zones.json"]
 
     with (
-        patch(f"{_HELPERS}.load_data", new=AsyncMock(side_effect=raised)),
+        patch(f"{_HELPERS}.read_local_file", new=MagicMock(side_effect=raised)),
         pytest.raises(InvalidZoneData, match=message),
     ):
         await modify_zone_file(_hass(tmp_path), entities, entity, lambda _doc: None)
+
+
+async def test_modify_zone_file_times_out_on_a_held_lock(tmp_path) -> None:
+    """A lock held past the deadline is a translated error, not a hang."""
+    entities, entity = _target()
+    entity.zone_urls = ["zones.json"]
+    (tmp_path / "zones.json").write_text(json.dumps({"type": "FeatureCollection", "features": []}))
+    held = file_lock(tmp_path / "zones.json")
+    held.acquire()
+    try:
+        with (
+            patch(f"{_HELPERS}.LOCK_ACQUIRE_TIMEOUT", 0.01),
+            pytest.raises(InvalidZoneData, match="Timed out waiting for zone file lock"),
+        ):
+            await modify_zone_file(_hass(tmp_path), entities, entity, lambda _doc: None)
+    finally:
+        held.release()
+
+
+async def test_a_write_slower_than_the_lock_timeout_still_commits(tmp_path) -> None:
+    """The timeout bounds the wait for the lock only — never the write.
+
+    A write that outlives it used to raise a lock timeout after the file had
+    already been written, inviting a retry that duplicated the change.
+    """
+    entities, entity = _target()
+    entity.zone_urls = ["zones.json"]
+    (tmp_path / "zones.json").write_text(json.dumps({"type": "FeatureCollection", "features": []}))
+    real_write = write_zones
+
+    def slow_write(content, path):
+        time.sleep(0.05)
+        real_write(content, path)
+
+    def add_home(doc):
+        doc["features"].append(
+            {
+                "type": "Feature",
+                "properties": {"name": "Home"},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]],
+                },
+            }
+        )
+
+    with (
+        patch(f"{_HELPERS}.LOCK_ACQUIRE_TIMEOUT", 0.01),
+        patch(f"{_HELPERS}.write_zones", new=slow_write),
+        patch(f"{_HELPERS}.sync_entities_after_write", new=AsyncMock()),
+    ):
+        await modify_zone_file(_hass(tmp_path), entities, entity, add_home)
+
+    names = [
+        f["properties"]["name"]
+        for f in json.loads((tmp_path / "zones.json").read_text())["features"]
+    ]
+    assert names == ["Home"]
+
+
+@pytest.mark.parametrize("document", [{}, [], {"features": None}, {"features": {}}])
+def test_get_zone_idx_rejects_a_document_without_features(document) -> None:
+    """A readable but malformed file is a validation failure, not a raw
+    KeyError/TypeError escaping the service call."""
+    with pytest.raises(InvalidZoneData):
+        get_zone_idx("Home", document)
+
+
+def test_get_zone_idx_skips_features_without_properties() -> None:
+    document = {"features": [{"properties": None}, {"properties": {"name": "Home"}}]}
+
+    assert get_zone_idx("Home", document) == 1
+
+
+async def test_a_cancelled_mutation_cannot_lose_its_update(tmp_path) -> None:
+    """Cancelling a mutation must not hand the file to the next one.
+
+    The write runs in a thread and cannot be cancelled. When the lock was an
+    asyncio one, the cancelled caller released it mid-write and the next
+    mutation read the pre-write document, erasing the first change.
+    """
+    entities, entity = _target()
+    entity.zone_urls = ["zones.json"]
+    zones = tmp_path / "zones.json"
+    zones.write_text(json.dumps({"type": "FeatureCollection", "features": []}))
+    loop = asyncio.get_running_loop()
+
+    async def real_executor(func, *args):
+        return await loop.run_in_executor(None, func, *args)
+
+    hass = SimpleNamespace(
+        config=SimpleNamespace(config_dir=str(tmp_path)),
+        async_add_executor_job=real_executor,
+    )
+    in_write = threading.Event()
+    release = threading.Event()
+    real_write = write_zones
+
+    def blocking_write(content, path):
+        in_write.set()
+        release.wait(5)
+        real_write(content, path)
+
+    def add(name):
+        def mutate(doc):
+            doc["features"].append(
+                {
+                    "type": "Feature",
+                    "properties": {"name": name},
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]],
+                    },
+                }
+            )
+
+        return mutate
+
+    with (
+        patch(f"{_HELPERS}.write_zones", new=blocking_write),
+        patch(f"{_HELPERS}.sync_entities_after_write", new=AsyncMock()),
+    ):
+        first = asyncio.create_task(modify_zone_file(hass, entities, entity, add("Home")))
+        assert await asyncio.to_thread(in_write.wait, 5)
+        first.cancel()
+        second = asyncio.create_task(modify_zone_file(hass, entities, entity, add("Work")))
+        await asyncio.sleep(0.05)  # the second must still be waiting for the lock
+        release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await first
+        await second
+
+    names = [f["properties"]["name"] for f in json.loads(zones.read_text())["features"]]
+    assert names == ["Home", "Work"]

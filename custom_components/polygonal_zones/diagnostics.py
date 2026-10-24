@@ -11,14 +11,10 @@ from .utils.general import redact_uri
 if TYPE_CHECKING:
     from . import PolygonalZonesConfigEntry
 
-# Keys whose values may carry user-meaningful identifiers; replace with placeholder.
-# - ``entities`` / ``zone_urls`` live inside entry.data and carry URIs + entity_ids.
-# - ``zone_source_token`` is the add-on's X-Save-Token credential — a genuine
-#   secret, not just an identifier; it must never appear verbatim in a dump a
-#   user might paste into a public bug report.
-# - ``home_zone_id`` is a zone's key, usually a place name ("Alice flat").
-# - ``title`` is the config-entry title, which a user may have personalised
-#   (e.g. "Alice's tracking") — redact before shipping diagnostics externally.
+# Redacted from a dump a user may paste publicly: entity ids and URIs
+# (`entities`, `zone_urls`), the add-on token (`zone_source_token`, a real
+# secret), the home zone (`home_zone_id`, usually a place name) and the
+# personalised entry `title`.
 TO_REDACT_DATA = {"entities", "zone_urls", "zone_source_token", "home_zone_id"}
 TO_REDACT_ENTRY_FIELDS = {"title"}
 

@@ -504,3 +504,25 @@ async def test_last_reported_will_remove_releases_unsubs() -> None:
     unsub_a.assert_called_once()
     unsub_b.assert_called_once()
     assert sensor._unsubs == []
+
+
+async def test_restore_redacts_credentials_in_zone_uris() -> None:
+    """State saved by an older release can hold raw URLs. The tracker re-redacts
+    them on restore; the sensor must too, or the credential lands back in the
+    state machine, diagnostics and bug reports."""
+    sensor = _make_sensor(expose_coordinates=True)
+    sensor.hass = _make_hass()
+    sensor.async_get_last_sensor_data = AsyncMock(return_value=SimpleNamespace(native_value="Home"))
+    sensor.async_get_last_state = AsyncMock(
+        return_value=SimpleNamespace(
+            attributes={
+                "zone_uris": ["http://user:pass@addon.local:8000/zones.json?token=s3cret"],
+                "matched_zones": ["Home"],
+            }
+        )
+    )
+
+    with patch("custom_components.polygonal_zones.entity.async_track_state_change_event"):
+        await sensor.async_added_to_hass()
+
+    assert sensor.extra_state_attributes["zone_uris"] == ["http://addon.local:8000/zones.json"]

@@ -24,6 +24,7 @@ from .const import (
     DOMAIN,
 )
 from .services import register_services
+from .services.reload_all_zones import action_builder as reload_all_zones
 from .utils.general import download_zone_relative_path, safe_config_path
 from .utils.local_zones import download_zones
 from .utils.zones import UnsupportedSchemaVersion
@@ -61,6 +62,9 @@ async def async_setup(hass: HomeAssistant, _config: dict) -> bool:
         ["add_new_zone", "delete_zone", "edit_zone", "replace_all_zones"],
         admin=True,
     )
+    # Not admin and no target: it only reloads what is already configured, and
+    # the companion add-on has no entity ids to target after it saves its file.
+    hass.services.async_register(DOMAIN, "reload_all_zones", reload_all_zones(hass))
     return True
 
 
@@ -88,6 +92,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: PolygonalZonesConfigEntr
 _LEGACY_ZONE_SENSOR_UID = re.compile(r"^sensor\.polygonal_zones_.+_zone$")
 
 
+def _legacy_sensor_for(
+    entries: list[er.RegistryEntry], slug: str, *, taken: set[str]
+) -> er.RegistryEntry | None:
+    """The oldest unclaimed legacy zone-sensor row for one tracked entity.
+
+    ``generate_entity_id`` suffixed the entity_id, so the original is ``…_zone``
+    or, when that entity_id was already taken, ``…_2_zone``. Picking the lowest
+    suffix keeps the row the user has been customising instead of deleting it.
+    ``taken`` keeps one row from being re-keyed for two tracked entities.
+    """
+    pattern = re.compile(rf"^sensor\.polygonal_zones_{re.escape(slug)}(?:_(\d+))?_zone$")
+    candidates = [
+        (int(match.group(1) or 1), row)
+        for row in entries
+        if row.entity_id not in taken and (match := pattern.match(row.unique_id or ""))
+    ]
+    if not candidates:
+        return None
+    return min(candidates, key=lambda candidate: candidate[0])[1]
+
+
 def _migrate_zone_sensor_unique_ids(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Move 1.15.0/1.15.1 zone sensors onto stable ids and drop their duplicates.
 
@@ -105,10 +130,27 @@ def _migrate_zone_sensor_unique_ids(hass: HomeAssistant, entry: ConfigEntry) -> 
     ]
     if not entries:
         return
-    by_uid = {e.unique_id: e for e in entries}
+    tracked_entities = list(entry.data.get(CONF_ENTITIES, []))
+    assigned: dict[str, er.RegistryEntry] = {}
+    taken: set[str] = set()
+    # Exact ids first: a suffixed row is another tracker's original whenever a
+    # tracked entity's own slug ends in that suffix (e.g. phone vs phone_2).
+    by_uid = {row.unique_id: row for row in entries}
+    for tracked in tracked_entities:
+        exact = by_uid.get(f"sensor.polygonal_zones_{tracked.split('.')[-1]}_zone")
+        if exact is not None:
+            assigned[tracked] = exact
+            taken.add(exact.entity_id)
+    for tracked in tracked_entities:
+        if tracked in assigned:
+            continue
+        if (row := _legacy_sensor_for(entries, tracked.split(".")[-1], taken=taken)) is not None:
+            assigned[tracked] = row
+            taken.add(row.entity_id)
+
     kept: set[str] = set()
-    for tracked in entry.data.get(CONF_ENTITIES, []):
-        legacy = by_uid.get(f"sensor.polygonal_zones_{tracked.split('.')[-1]}_zone")
+    for tracked in tracked_entities:
+        legacy = assigned.get(tracked)
         new_uid = f"{entry.entry_id}_{tracked}_zone"
         # A downgrade to 1.15.x and back leaves both ids registered; re-keying onto
         # an id already in use raises and would fail the whole entry's setup.
@@ -199,12 +241,9 @@ async def _async_bootstrap_zone_snapshot(
             f"Zone file for entry {entry.entry_id} uses an unsupported schema version: {err}"
         ) from err
     except Exception as err:
-        # Any other failure (unreachable source, SSRF block, corrupt payload,
-        # disk error) may be transient — and crucially, an all-URIs-down
-        # outage is indistinguishable from a corrupt file at this boundary
-        # (get_zones raises ZoneFileCorrupt for both). Don't hard-fail the
-        # entry — that would leave no entities and no retry. Signal HA to
-        # retry setup with its own backoff.
+        # Any other failure may be transient, and an all-URIs-down outage is
+        # indistinguishable from a corrupt file here (both raise ZoneFileCorrupt).
+        # Retry with HA's backoff instead of hard-failing into no entities.
         raise ConfigEntryNotReady(
             f"Could not download zone files for entry {entry.entry_id}: {err}"
         ) from err

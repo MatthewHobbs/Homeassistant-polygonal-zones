@@ -8,9 +8,11 @@ import pytest
 
 from custom_components.polygonal_zones.services.edit_zone import action_builder
 from custom_components.polygonal_zones.services.errors import (
+    ZoneAlreadyExists,
     ZoneDoesNotExists,
     ZoneFileNotEditable,
 )
+from custom_components.polygonal_zones.services.helpers import reset_mutation_rate_limit
 
 
 def _polygon_feature(name: str, lat0: float = 0.0) -> dict:
@@ -189,3 +191,84 @@ async def test_edit_non_editable_raises(tmp_path) -> None:
         pytest.raises(ZoneFileNotEditable),
     ):
         await action(call)
+
+
+async def test_rename_onto_an_existing_name_is_refused(tmp_path) -> None:
+    """Duplicates make the target of every later action ambiguous: get_zone_idx
+    returns the first match, so a delete would remove the wrong polygon."""
+    reset_mutation_rate_limit()
+    zones_file = tmp_path / "zones.json"
+    zones_file.write_text(
+        json.dumps(
+            {
+                "type": "FeatureCollection",
+                "features": [_polygon_feature("Alpha"), _polygon_feature("Bravo")],
+            }
+        )
+    )
+    fake_entity = SimpleNamespace(
+        editable_file=True,
+        zone_urls=["zones.json"],
+        _source=SimpleNamespace(async_reload=AsyncMock(), entry_id="entry-id"),
+        _config_entry_id="entry-id",
+        hass=None,
+    )
+    call = SimpleNamespace(
+        data={
+            "device_id": "fake-device-id",
+            "zone_name": "Alpha",
+            "zone": json.dumps(_polygon_feature("Bravo")),
+        }
+    )
+
+    with (
+        patch(
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
+            return_value=[fake_entity],
+        ),
+        pytest.raises(ZoneAlreadyExists, match="Bravo"),
+    ):
+        await action_builder(_make_hass(tmp_path))(call)
+
+    names = [f["properties"]["name"] for f in json.loads(zones_file.read_text())["features"]]
+    assert names == ["Alpha", "Bravo"]
+    fake_entity._source.async_reload.assert_not_awaited()
+
+
+async def test_edit_onto_an_existing_id_is_refused(tmp_path) -> None:
+    """An id binds automations to a zone; two zones sharing one is ambiguous."""
+    reset_mutation_rate_limit()
+    zones_file = tmp_path / "zones.json"
+    alpha = _polygon_feature("Alpha")
+    alpha["properties"]["id"] = "id-alpha"
+    bravo = _polygon_feature("Bravo")
+    bravo["properties"]["id"] = "id-bravo"
+    zones_file.write_text(json.dumps({"type": "FeatureCollection", "features": [alpha, bravo]}))
+    fake_entity = SimpleNamespace(
+        editable_file=True,
+        zone_urls=["zones.json"],
+        _source=SimpleNamespace(async_reload=AsyncMock(), entry_id="entry-id"),
+        _config_entry_id="entry-id",
+        hass=None,
+    )
+    renamed = _polygon_feature("Alpha", lat0=5)
+    renamed["properties"]["id"] = "id-bravo"
+    call = SimpleNamespace(
+        data={
+            "device_id": "fake-device-id",
+            "zone_name": "Alpha",
+            "zone": json.dumps(renamed),
+        }
+    )
+
+    with (
+        patch(
+            "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
+            return_value=[fake_entity],
+        ),
+        pytest.raises(ZoneAlreadyExists, match="id-bravo"),
+    ):
+        await action_builder(_make_hass(tmp_path))(call)
+
+    ids = [f["properties"]["id"] for f in json.loads(zones_file.read_text())["features"]]
+    assert ids == ["id-alpha", "id-bravo"]
