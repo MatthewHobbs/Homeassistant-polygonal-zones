@@ -19,8 +19,8 @@ Automatic setup with the editor app, and a set of fixes found by testing.
   then its exact name, as the documentation always said.
 - **New action** `polygonal_zones.reload_all_zones`, for a producer that has no
   entity ids to target. The editor app calls it after each save.
-- **Restored values are redacted.** A restart no longer republishes a credential
-  that an older release had left in an attribute.
+- **Restored values follow the same rules as live ones.** Attributes rebuilt after
+  a restart are redacted exactly as they are when first published.
 - Positions update in the order they were received, and a null accuracy figure no
   longer stops a valid position from resolving.
 
