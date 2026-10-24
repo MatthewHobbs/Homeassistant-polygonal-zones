@@ -72,6 +72,8 @@ async def test_discovery_asks_once_then_creates_the_entry(hass: HomeAssistant) -
     # The add-on's hostname is neither an IP literal nor `.local`, so this flag
     # is the only thing that lets the fetch carry the token the add-on needs.
     assert created["data"]["discovered_by_addon"] is True
+    # Explicit, or the entry counts as legacy and exposes coordinates by default.
+    assert created["data"]["expose_coordinates"] is False
 
 
 async def test_a_second_discovery_rotates_the_token_and_keeps_the_user_settings(
