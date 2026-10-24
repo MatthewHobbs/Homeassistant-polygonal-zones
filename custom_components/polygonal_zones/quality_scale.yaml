@@ -1,10 +1,6 @@
-# Tracks the implementation status of every Home Assistant integration
-# quality-scale rule for this integration. NOT a panel-certified statement of
-# tier — the manifest's quality_scale field is set to "bronze" because higher
-# tiers can only be claimed after review by the HA architecture team (which
-# happens through the core-integration submission process, not by
-# self-declaration). This file documents the work done in case a future
-# submission goes ahead.
+# Implementation status of each Home Assistant quality-scale rule. Not a claim of
+# tier: `quality_scale: bronze` is set because higher tiers need review through core
+# submission. This records the work in case that submission happens.
 
 rules:
   # --------- Bronze ---------
