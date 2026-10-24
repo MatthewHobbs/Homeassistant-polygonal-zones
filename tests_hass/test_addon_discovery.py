@@ -140,3 +140,36 @@ async def test_an_entry_already_pointing_at_the_addon_is_not_duplicated(
     assert result["type"] == FlowResultType.ABORT
     assert result["reason"] == "already_configured"
     assert len(hass.config_entries.async_entries(DOMAIN)) == 1
+
+
+async def test_reconfigure_keeps_the_token_trust(hass: HomeAssistant) -> None:
+    """Reconfigure rebuilds the data from the form, which cannot carry the
+    discovery flag. Losing it stopped the token being sent to the app's
+    hostname, so every zone load was refused with 403."""
+    entry = await _create(hass, _info())
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={
+            "source": "reconfigure",
+            "entry_id": entry.entry_id,
+        },
+        data=None,
+    )
+    assert result["type"] == FlowResultType.FORM
+    submitted = {
+        key: value
+        for key, value in entry.data.items()
+        if key not in ("consent_confirmed_at", "discovered_by_addon")
+    }
+    submitted["entities"] = ["device_tracker.phone"]
+    done = await hass.config_entries.flow.async_configure(result["flow_id"], submitted)
+    assert done["type"] == FlowResultType.FORM  # the consent step
+    done = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {**submitted, "consent": True}
+    )
+    assert done["type"] == FlowResultType.ABORT
+
+    updated = hass.config_entries.async_get_entry(entry.entry_id)
+    assert updated.data["discovered_by_addon"] is True
+    assert updated.data["entities"] == ["device_tracker.phone"]

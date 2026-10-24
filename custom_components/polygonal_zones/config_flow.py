@@ -345,6 +345,11 @@ class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
                 errors[CONF_ENTITIES] = "own_entities"
             if not errors:
                 data = {k: v for k, v in user_input.items() if k != "consent"}
+                # The form cannot carry this: it is set by add-on discovery, and
+                # dropping it stops the token being sent to the app's hostname,
+                # so every later zone load would be refused with 403.
+                if entry.data.get(CONF_DISCOVERED_BY_ADDON):
+                    data[CONF_DISCOVERED_BY_ADDON] = True
                 if adding_entities:
                     # New subject introduced — record a fresh attestation.
                     data[CONF_CONSENT_CONFIRMED_AT] = dt_util.utcnow().isoformat()
