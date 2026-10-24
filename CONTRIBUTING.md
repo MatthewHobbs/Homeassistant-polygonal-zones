@@ -20,6 +20,16 @@ Prettier, Hassfest and HACS run only in CI. Check JSON, Markdown and YAML locall
 
 `just test-hass` runs `tests_hass/` against a real Home Assistant in a separate `.venv-hass`. Keep it out of the main `.venv`: `pytest-homeassistant-custom-component` pins one exact Home Assistant version. This suite is not part of `just ci` and has no coverage gate.
 
+## Trying a branch on a real instance
+
+HACS installs releases, so a branch is tested by copying the component:
+
+1. Copy `custom_components/polygonal_zones/` from the branch into `/config/custom_components/`, replacing the HACS copy.
+2. Restart Home Assistant.
+3. To try the editor add-on from its branch as well, follow "Manual: live HA OS" in the add-on's `TESTING.md`. It needs the branch folder in `/addons` with its `image:` line removed, or the Supervisor installs the published image instead of building the branch.
+
+Use a scratch instance. Discovery and the save-then-reload behaviour need both branches together.
+
 ## CI
 
 `validate.yml` runs on every pull request. These jobs must pass to merge: `Pytest`, `Pytest (HA floor)`, `Hassfest`, `HACS`, `Ruff (lint + format)`, `Prettier`, `Comment length` and `Mypy`. `Pytest (real hass)` and `HA floor within lag bound` also run but do not block.
