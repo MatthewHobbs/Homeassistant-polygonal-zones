@@ -68,7 +68,8 @@
       "own_entities": "Pick your devices' own trackers. Entities created by this integration cannot be tracked."
     },
     "abort": {
-      "already_configured": "The Polygonal Zones add-on is already set up."
+      "already_configured": "The Polygonal Zones add-on is already set up.",
+      "invalid_discovery": "The add-on did not send a usable address. Check its log and try again."
     }
   },
   "options": {

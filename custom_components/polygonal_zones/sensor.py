@@ -128,7 +128,9 @@ class PolygonalZoneSensor(ZoneSourceFollower, RestoreSensor):
 
         await self._follow_source()
 
-    async def update_location(self, latitude: float, longitude: float, gps_accuracy: float) -> None:
+    async def update_location(
+        self, latitude: float, longitude: float, gps_accuracy: float | None
+    ) -> None:
         """Resolve the location to a zone and publish it as this sensor's value."""
         zone = await self._source.async_resolve(self.hass, latitude, longitude, gps_accuracy)
         self._attr_native_value = zone["name"] if zone is not None else "away"

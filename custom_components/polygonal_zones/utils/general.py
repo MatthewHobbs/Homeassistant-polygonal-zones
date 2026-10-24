@@ -206,7 +206,12 @@ def is_local_add_on_host(uri: str) -> bool:
 
 
 async def load_data(
-    uri: str, hass: HomeAssistant, *, allow_private_urls: bool = False, token: str | None = None
+    uri: str,
+    hass: HomeAssistant,
+    *,
+    allow_private_urls: bool = False,
+    token: str | None = None,
+    trusted_host: bool = False,
 ) -> str:
     """Load data from an HTTP(S) URL or a file inside the HA config directory.
 
@@ -216,8 +221,10 @@ async def load_data(
     Loopback / link-local / multicast / metadata addresses stay blocked.
 
     ``token``, if given, is sent as the ``X-Save-Token`` header — but ONLY when
-    ``uri`` classifies as :func:`is_local_add_on_host`, so a token configured
-    for the companion add-on is never sent to an unrelated public URL. This is
+    ``uri`` classifies as :func:`is_local_add_on_host` or the caller passes
+    ``trusted_host`` (an entry created by the add-on's own discovery), so a
+    token configured for the companion add-on is never sent to an unrelated
+    public URL. This is
     the add-on's own read-gate (its ``save_token`` option protects GET
     ``/zones.json``/``/trackers.json`` too, by design — see that repo's ADR
     0002); it is never sent across a redirect, since ``allow_redirects=False``
@@ -233,7 +240,9 @@ async def load_data(
         connector = aiohttp.TCPConnector(
             resolver=_PublicOnlyResolver(allow_private=allow_private_urls)
         )
-        headers = {"X-Save-Token": token} if token and is_local_add_on_host(uri) else None
+        headers = None
+        if token and (trusted_host or is_local_add_on_host(uri)):
+            headers = {"X-Save-Token": token}
         # ``trust_env=False`` explicitly: do NOT inherit HTTP_PROXY / HTTPS_PROXY
         # / NO_PROXY / .netrc from the environment. aiohttp defaults to False
         # already; pinning it keeps the SSRF-hardened resolver authoritative and

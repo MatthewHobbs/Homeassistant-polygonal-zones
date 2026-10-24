@@ -31,6 +31,7 @@ else:
 from .const import (
     CONF_ALLOW_PRIVATE_URLS,
     CONF_CONSENT_CONFIRMED_AT,
+    CONF_DISCOVERED_BY_ADDON,
     CONF_DOWNLOAD_ZONES,
     CONF_HOME_ZONE_ID,
     CONF_ZONE_SOURCE_TOKEN,
@@ -217,8 +218,10 @@ class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
-    _discovery: dict[str, Any]
+    _discovery_create: dict[str, Any]
+    _discovery_update: dict[str, Any]
     _discovery_title: str
+    _discovery_url: str
 
     async def async_step_hassio(self, discovery_info: HassioServiceInfo) -> ConfigFlowResult:
         """Handle discovery from the companion editor add-on.
@@ -229,20 +232,38 @@ class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
         stay in the options flow where a person chooses a device.
         """
         config = discovery_info.config
-        self._discovery = {
-            CONF_ZONES_URL: [
-                f"http://{config['host']}:{config['port']}{config.get('path', '/zones.json')}"
-            ],
-            CONF_ZONE_SOURCE_TOKEN: config.get("token", ""),
+        if not config.get("host") or not config.get("port") or not config.get("token"):
+            return self.async_abort(reason="invalid_discovery")
+
+        url = f"http://{config['host']}:{config['port']}{config.get('path', '/zones.json')}"
+        self._discovery_url = url
+        # Only the producer's address and token may be rewritten when it
+        # announces itself again: entities, consent and the download/exposure
+        # choices belong to the user.
+        self._discovery_update = {
+            CONF_ZONES_URL: [url],
+            CONF_ZONE_SOURCE_TOKEN: config["token"],
+        }
+        self._discovery_create = {
+            **self._discovery_update,
             CONF_ALLOW_PRIVATE_URLS: True,
             CONF_DOWNLOAD_ZONES: False,
             CONF_ENTITIES: [],
+            CONF_DISCOVERED_BY_ADDON: True,
         }
         self._discovery_title = discovery_info.name or "Polygonal Zones"
+
         await self.async_set_unique_id(f"addon_{discovery_info.slug}")
         # The add-on re-posts on every start with a fresh token: update the one
         # entry rather than adding a second, and let the reload pick it up.
-        self._abort_if_unique_id_configured(updates=self._discovery)
+        self._abort_if_unique_id_configured(updates=self._discovery_update)
+
+        # A hand-configured entry may already point at this add-on; a second
+        # one would double the fetches and the entities.
+        for entry in self.hass.config_entries.async_entries(DOMAIN):
+            if url in (entry.data.get(CONF_ZONES_URL) or []):
+                return self.async_abort(reason="already_configured")
+
         return await self.async_step_hassio_confirm()
 
     async def async_step_hassio_confirm(
@@ -250,10 +271,10 @@ class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Ask once before creating the entry the add-on suggested."""
         if user_input is not None:
-            return self.async_create_entry(title=self._discovery_title, data=self._discovery)
+            return self.async_create_entry(title=self._discovery_title, data=self._discovery_create)
         return self.async_show_form(
             step_id="hassio_confirm",
-            description_placeholders={"url": self._discovery[CONF_ZONES_URL][0]},
+            description_placeholders={"url": self._discovery_url},
         )
 
     async def async_step_user(self, user_input=None) -> ConfigFlowResult:

@@ -237,13 +237,16 @@ async def _load_zones_from_uri(
     *,
     allow_private_urls: bool = False,
     token: str | None = None,
+    trusted_host: bool = False,
 ) -> list[Zone]:
     """Fetch one zone file and parse it off the event loop.
 
     The network fetch stays on the loop; the CPU-heavy parse (``json.loads`` +
     shapely construction) is offloaded to the executor.
     """
-    raw = await load_data(uri, hass, allow_private_urls=allow_private_urls, token=token)
+    raw = await load_data(
+        uri, hass, allow_private_urls=allow_private_urls, token=token, trusted_host=trusted_host
+    )
     return await hass.async_add_executor_job(_parse_zone_document, raw, idx, prioritize, uri)
 
 
@@ -254,6 +257,7 @@ async def load_zones(
     *,
     allow_private_urls: bool = False,
     token: str | None = None,
+    trusted_host: bool = False,
 ) -> ZoneLoadResult:
     """Load every URI independently; return successes plus per-URI failure records.
 
@@ -265,7 +269,8 @@ async def load_zones(
     ``allow_private_urls`` relaxes the SSRF resolver for RFC-1918 / ULA
     addresses so a user can point the integration at a LAN-installed source.
     ``token`` is only ever sent to a URI that classifies as a local add-on
-    host (see :func:`load_data`) — never to any other configured source.
+    host, or when ``trusted_host`` says the entry came from the add-on's own
+    discovery (see :func:`load_data`) — never to any other configured source.
     """
     result = ZoneLoadResult()
     for idx, uri in enumerate(uris):
@@ -278,6 +283,7 @@ async def load_zones(
                     hass,
                     allow_private_urls=allow_private_urls,
                     token=token,
+                    trusted_host=trusted_host,
                 )
             )
         except UnsupportedSchemaVersion:

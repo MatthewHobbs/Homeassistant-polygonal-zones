@@ -36,7 +36,9 @@ class ZoneSourceFollower(Entity):
     _unsub_source: Callable[[], None] | None = None
     _update_lock: asyncio.Lock | None = None
 
-    async def update_location(self, latitude: float, longitude: float, gps_accuracy: float) -> None:
+    async def update_location(
+        self, latitude: float, longitude: float, gps_accuracy: float | None
+    ) -> None:
         """Publish the zone for this position (implemented by the entity)."""
         raise NotImplementedError
 
@@ -129,11 +131,14 @@ class ZoneSourceFollower(Entity):
         try:
             latitude = float(entity_state.attributes["latitude"])
             longitude = float(entity_state.attributes["longitude"])
-            gps_accuracy = float(entity_state.attributes["gps_accuracy"])
         except TypeError, ValueError:
-            # The keys are there but hold null or non-numeric values: no usable
-            # fix, which is not the same as an unavailable tracker. Keep the last
-            # zone and the current availability.
+            # Keys present but null or non-numeric: no usable fix, which is not
+            # the same as an unavailable tracker. Keep the last zone.
+            return
+        raw_accuracy = entity_state.attributes["gps_accuracy"]
+        try:
+            gps_accuracy = float(raw_accuracy) if raw_accuracy is not None else None
+        except TypeError, ValueError:
             return
 
         await self.update_location(latitude, longitude, gps_accuracy)

@@ -16,6 +16,7 @@ from homeassistant.helpers import entity_registry as er
 
 from .const import (
     CONF_ALLOW_PRIVATE_URLS,
+    CONF_DISCOVERED_BY_ADDON,
     CONF_DOWNLOAD_ZONES,
     CONF_HOME_ZONE_ID,
     CONF_PRIORITIZE_ZONE_FILES,
@@ -172,6 +173,7 @@ def _fetch_settings(entry: PolygonalZonesConfigEntry) -> tuple[list[str], dict[s
         "prioritize": bool(entry.data.get(CONF_PRIORITIZE_ZONE_FILES)),
         "allow_private_urls": bool(entry.data.get(CONF_ALLOW_PRIVATE_URLS, False)),
         "token": entry.data.get(CONF_ZONE_SOURCE_TOKEN) or None,
+        "trusted_host": bool(entry.data.get(CONF_DISCOVERED_BY_ADDON)),
     }
 
 
@@ -199,6 +201,7 @@ def _build_zone_source(entry: PolygonalZonesConfigEntry) -> ZoneSource:
         allow_private_urls=fetch["allow_private_urls"],
         token=fetch["token"],
         home_zone_id=home_zone_id,
+        trusted_host=fetch["trusted_host"],
     )
 
 

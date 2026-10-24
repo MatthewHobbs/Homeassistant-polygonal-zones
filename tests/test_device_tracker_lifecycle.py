@@ -436,3 +436,22 @@ async def test_concurrent_updates_cannot_publish_an_older_position() -> None:
     await asyncio.gather(entity._update_state(), entity._update_state())
 
     assert completed == [1.0, 2.0]
+
+
+async def test_a_fix_without_an_accuracy_figure_still_resolves() -> None:
+    """`gps_accuracy` is typed float|None: a real lat/lon with null accuracy is
+    a fix with no inflation, not "no fix"."""
+    entity = _make_entity(zones=[_HOME])
+    entity.hass = _make_hass()
+    entity.hass.states.get = MagicMock(
+        return_value=SimpleNamespace(
+            state="home",
+            attributes={"latitude": 0.5, "longitude": 0.5, "gps_accuracy": None},
+        )
+    )
+
+    await entity._update_state()
+
+    assert entity._attr_location_name == "Home"
+    assert entity.available is True
+    entity.async_write_ha_state.assert_called_once()

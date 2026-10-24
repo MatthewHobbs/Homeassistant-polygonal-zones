@@ -231,7 +231,9 @@ class PolygonalZoneEntity(ZoneSourceFollower, TrackerEntity, RestoreEntity):
         else:
             _LOGGER.info("Entity %s is unavailable", self._attr_unique_id)
 
-    async def update_location(self, latitude: float, longitude: float, gps_accuracy: float) -> None:
+    async def update_location(
+        self, latitude: float, longitude: float, gps_accuracy: float | None
+    ) -> None:
         """Update the location of the entity.
 
         Resolves the location to a zone via the executor so the (sync, CPU-bound)
