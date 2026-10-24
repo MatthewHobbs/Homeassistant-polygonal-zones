@@ -1,6 +1,7 @@
 """Config flow for Polygonal zones integrations."""
 
 import logging
+import pathlib
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
@@ -13,6 +14,7 @@ from homeassistant.config_entries import (
     ConfigFlow as EntryConfigFlow,
 )
 from homeassistant.const import CONF_ENTITIES
+from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import selector
@@ -40,7 +42,7 @@ from .const import (
     DOMAIN,
 )
 from .utils.config_validation import validate_zone_urls
-from .utils.general import is_local_add_on_host
+from .utils.general import download_zone_relative_path, is_local_add_on_host
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -214,6 +216,26 @@ def build_options_flow(
     )
 
 
+def _zone_source_configured(
+    hass: HomeAssistant,
+    zone_urls: list[str],
+    download_zones: bool,
+    entry_id: str | None,
+) -> bool:
+    """Whether the entry would have anything to load.
+
+    With no URLs and no download, the source has nothing to fetch and reports a
+    successful load of zero zones, which looks healthy while every position is
+    "away". A download-only entry is fine when its snapshot already exists.
+    """
+    if [url for url in zone_urls if url]:
+        return True
+    if download_zones and entry_id is not None:
+        snapshot = pathlib.Path(hass.config.config_dir) / download_zone_relative_path(entry_id)
+        return snapshot.exists()
+    return False
+
+
 class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
     """Config flow handler."""
 
@@ -291,6 +313,13 @@ class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
                 self.hass,
                 allow_private_urls=user_input.get("allow_private_urls", False),
             )
+            if not errors and not _zone_source_configured(
+                self.hass,
+                user_input["zone_urls"],
+                bool(user_input.get(CONF_DOWNLOAD_ZONES)),
+                None,
+            ):
+                errors["zone_urls"] = "no_zone_source"
             # Affirmative tracking consent: a required checkbox the installer must
             # tick. The integration continuously records the GPS position of the
             # selected device_tracker entities — possibly belonging to other
@@ -341,6 +370,13 @@ class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
                 self.hass,
                 allow_private_urls=user_input.get("allow_private_urls", False),
             )
+            if not errors and not _zone_source_configured(
+                self.hass,
+                user_input["zone_urls"],
+                bool(user_input.get(CONF_DOWNLOAD_ZONES)),
+                getattr(entry, "entry_id", None),
+            ):
+                errors["zone_urls"] = "no_zone_source"
             added_entities = set(user_input.get(CONF_ENTITIES, [])) - stored_entities
             adding_entities = bool(added_entities)
             if adding_entities and not user_input.get("consent"):
@@ -401,6 +437,13 @@ class OptionsFlowHandler(OptionsFlow):
                 self.hass,
                 allow_private_urls=user_input.get("allow_private_urls", False),
             )
+            if not errors and not _zone_source_configured(
+                self.hass,
+                user_input["zone_urls"],
+                bool(user_input.get(CONF_DOWNLOAD_ZONES)),
+                getattr(self.config_entry, "entry_id", None),
+            ):
+                errors["zone_urls"] = "no_zone_source"
             if not errors:
                 merged = {**self.config_entry.data, **user_input}
                 self.hass.config_entries.async_update_entry(self.config_entry, data=merged)

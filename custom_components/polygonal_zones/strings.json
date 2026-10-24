@@ -65,7 +65,8 @@
       "private_url_blocked": "That looks like a private/LAN address (e.g. 192.168.x.x). Turn on 'Allow private-network URLs (LAN)' in the advanced options to use it, or reference a file under /config instead.",
       "blocked_address": "That address (loopback, link-local or reserved) is always refused. Use the host’s network address or a file under /config instead.",
       "consent_required": "Please confirm tracking consent to continue.",
-      "own_entities": "Pick your devices' own trackers. Entities created by this integration cannot be tracked."
+      "own_entities": "Pick your devices' own trackers. Entities created by this integration cannot be tracked.",
+      "no_zone_source": "Give at least one zone address, or keep a local copy that already exists."
     },
     "abort": {
       "already_configured": "The Polygonal Zones app is already set up.",
@@ -102,7 +103,8 @@
       "unreachable_url": "One or more URLs cannot be reached",
       "invalid_path": "The file could not be found",
       "private_url_blocked": "That looks like a private/LAN address (e.g. 192.168.x.x). Turn on 'Allow private-network URLs (LAN)' in the advanced options to use it, or reference a file under /config instead.",
-      "blocked_address": "That address (loopback, link-local or reserved) is always refused. Use the host’s network address or a file under /config instead."
+      "blocked_address": "That address (loopback, link-local or reserved) is always refused. Use the host’s network address or a file under /config instead.",
+      "no_zone_source": "Give at least one zone address, or keep a local copy that already exists."
     }
   },
   "services": {

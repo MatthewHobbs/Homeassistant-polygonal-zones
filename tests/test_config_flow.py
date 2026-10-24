@@ -558,3 +558,43 @@ async def test_config_flow_accepts_trackers_from_other_integrations(
     )
 
     assert result == {"type": "create_entry"}
+
+
+async def test_options_flow_refuses_an_entry_with_no_zone_source(tmp_path) -> None:
+    """No URLs and no download is a silent no-op: the source reports a
+    successful load of zero zones, so every position reads "away" while every
+    diagnostic looks healthy."""
+    flow = OptionsFlowHandler()
+    flow.hass = _hass(tmp_path)
+    flow.hass.config_entries = SimpleNamespace(async_update_entry=MagicMock())
+    fake_entry = SimpleNamespace(
+        entry_id="entry-1",
+        data={"zone_urls": ["https://old"], "download_zones": False},
+    )
+
+    with patch.object(OptionsFlowHandler, "config_entry", new=fake_entry, create=True):
+        flow.async_show_form = MagicMock(return_value={"type": "form"})
+        await flow.async_step_init(
+            {"zone_urls": [], "prioritize_zone_files": False, "download_zones": False}
+        )
+
+    assert flow.async_show_form.call_args.kwargs["errors"] == {"zone_urls": "no_zone_source"}
+
+
+async def test_options_flow_allows_a_download_only_entry_with_a_snapshot(tmp_path) -> None:
+    """A local copy is a valid source on its own, once it exists."""
+    snapshot = tmp_path / "polygonal_zones" / "entry-1.json"
+    snapshot.parent.mkdir(parents=True)
+    snapshot.write_text('{"type": "FeatureCollection", "features": []}')
+    flow = OptionsFlowHandler()
+    flow.hass = _hass(tmp_path)
+    flow.hass.config_entries = SimpleNamespace(async_update_entry=MagicMock())
+    fake_entry = SimpleNamespace(entry_id="entry-1", data={"zone_urls": []})
+
+    with patch.object(OptionsFlowHandler, "config_entry", new=fake_entry, create=True):
+        flow.async_create_entry = MagicMock(return_value={"type": "options"})
+        result = await flow.async_step_init(
+            {"zone_urls": [], "prioritize_zone_files": False, "download_zones": True}
+        )
+
+    assert result == {"type": "options"}
