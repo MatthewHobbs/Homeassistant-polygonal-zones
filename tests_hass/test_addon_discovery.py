@@ -63,7 +63,8 @@ async def test_discovery_asks_once_then_creates_the_entry(hass: HomeAssistant) -
     created = await hass.config_entries.flow.async_configure(result["flow_id"], {})
 
     assert created["type"] == FlowResultType.CREATE_ENTRY
-    assert created["title"] == "Polygonal Zones"
+    # The address is part of the title so two entries are told apart in Settings.
+    assert created["title"] == "Polygonal Zones (local-polygonal-zones:8000)"
     assert created["data"]["zone_urls"] == ["http://local-polygonal-zones:8000/zones.json"]
     assert created["data"]["zone_source_token"] == "generated-token"
     assert created["data"]["allow_private_urls"] is True

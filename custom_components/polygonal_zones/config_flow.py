@@ -4,6 +4,7 @@ import logging
 import pathlib
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlparse
 
 from homeassistant.config_entries import (
     ConfigEntry,
@@ -236,6 +237,19 @@ def _zone_source_configured(
     return False
 
 
+def _entry_title(zone_urls: list[str]) -> str:
+    """Name the entry after the editor it reads.
+
+    Two entries reading different editors are otherwise both called "Polygonal
+    Zones" in Settings, with no way to tell which one holds the trackers.
+    """
+    for url in zone_urls:
+        host = urlparse(url).netloc
+        if host:
+            return f"Polygonal Zones ({host})"
+    return "Polygonal Zones"
+
+
 class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
     """Config flow handler."""
 
@@ -278,7 +292,9 @@ class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
             CONF_ENTITIES: [],
             CONF_DISCOVERED_BY_ADDON: True,
         }
-        self._discovery_title = discovery_info.name or "Polygonal Zones"
+        self._discovery_title = (
+            f"{discovery_info.name or 'Polygonal Zones'} ({config['host']}:{config['port']})"
+        )
 
         await self.async_set_unique_id(f"addon_{discovery_info.slug}")
         # The add-on re-posts on every start with a fresh token: update the one
@@ -336,7 +352,9 @@ class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
                 # accountability). The tick itself is a gate, not a setting, but
                 # a timestamp lets the operator demonstrate when it happened.
                 user_input[CONF_CONSENT_CONFIRMED_AT] = dt_util.utcnow().isoformat()
-                return self.async_create_entry(title="Polygonal Zones", data=user_input)
+                return self.async_create_entry(
+                    title=_entry_title(user_input["zone_urls"]), data=user_input
+                )
 
         user_input = user_input or {}
 
