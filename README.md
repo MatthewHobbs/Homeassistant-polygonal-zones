@@ -18,25 +18,27 @@ This is a community continuation of [MichelGerding/Homeassistant-polygonal-zones
 
 ### Automatic setup
 
-1. Install the [Polygonal Zones Editor add-on](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon) version 0.7.0 or later. Start it, then draw and save your zones.
+Home Assistant now calls these **apps**. Some versions call them **add-ons**; it is the same thing, and the menus below use **app**.
+
+1. Install the [Polygonal Zones Editor app](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon) version 0.7.0 or later. Start it, then draw and save your zones.
 2. Install this integration version 1.16.0 or later through HACS. See [Installation](#installation). Restart Home Assistant.
-3. The add-on announces itself through the Supervisor. Open **Settings → Devices & services** and confirm the discovered **Polygonal Zones** entry.
+3. The app announces itself through the Supervisor. Open **Settings → Devices & services** and confirm the discovered **Polygonal Zones** entry.
 4. Open the entry's **⋮ → Reconfigure** menu. Choose your `device_tracker` entities, then confirm the tracking notice.
 
 You do not enter a URL, map a port or copy a token.
 
 ### Manual setup
 
-Use this path for an integration older than 1.16.0, for an add-on on another host, or for your own GeoJSON file.
+Use this path for an integration older than 1.16.0, for an app on another host, or for your own GeoJSON file.
 
-1. Install the add-on if you want it, then draw and save your zones.
-2. In the add-on's **Network** tab, assign host port 8000. Set a `save_token` in its configuration and restart the add-on.
+1. Install the app if you want it, then draw and save your zones.
+2. In the app's **Network** tab, assign host port 8000. Set a `save_token` in its configuration and restart the app.
 3. Install the integration through HACS and restart Home Assistant. Open **Settings → Devices & services → Add Integration → Polygonal Zones**.
-4. Enter the zones URL, or a path inside `/config`. For the add-on that is `http://<add-on-LAN-IP>:8000/zones.json`.
-5. For the add-on's LAN address, turn on **Allow private-network URLs (LAN)** and enter the `save_token` as **Add-on save token**. Both fields are advanced, so turn on Advanced mode in your user profile to see them.
+4. Enter the zones URL, or a path inside `/config`. For the app that is `http://<app-LAN-IP>:8000/zones.json`.
+5. For the app's LAN address, turn on **Allow private-network URLs (LAN)** and enter the `save_token` as **App save token**. Both fields are advanced, so turn on Advanced mode in your user profile to see them.
 6. Choose your `device_tracker` entities. Tick the box confirming that everyone being tracked has been told. The form will not continue without it.
 
-Use the add-on host's LAN IP address in the URL. A plain DNS name such as `homeassistant` receives no token, so the add-on answers 403. `.local` names are not resolved reliably, and `localhost` is always refused.
+Use the app host's LAN IP address in the URL. A plain DNS name such as `homeassistant` receives no token, so the app answers 403. `.local` names are not resolved reliably, and `localhost` is always refused.
 
 Each tracked entity gets a mirror `device_tracker.polygonal_zones_*`. Its state is the zone name (`Home`, `School`, …) or `away`. The [install guide](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/install/) has the full walkthrough.
 
@@ -71,7 +73,7 @@ To install by hand, copy `custom_components/polygonal_zones/` into `custom_compo
 
 For a beta release, open the integration's HACS card, choose **⋮ → Redownload** and turn on **Show beta versions**.
 
-Add-on setup and post-install checks: [install guide](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/install/).
+App setup and post-install checks: [install guide](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/install/).
 
 ## Configuration options
 
@@ -81,18 +83,18 @@ Add-on setup and post-install checks: [install guide](https://matthewhobbs.githu
 | `prioritize_zone_files` | no       | off                       | Prefer earlier files when a position matches zones in more than one.                 |
 | `download_zones`        | no       | on, with exceptions       | Keep one editable local copy. Required by the four zone-editing actions.             |
 | `expose_coordinates`    | no       | off; on for older entries | Publish latitude, longitude and accuracy as attributes. Off publishes the zone name. |
-| `allow_private_urls`    | no       | off; on for discovered    | Allow private network addresses. Required for the add-on's LAN address.              |
-| `zone_source_token`     | no       | —; set by discovery       | The add-on's `save_token`. Sent as `X-Save-Token` to the add-on only.                |
+| `allow_private_urls`    | no       | off; on for discovered    | Allow private network addresses. Required for the app's LAN address.                 |
+| `zone_source_token`     | no       | —; set by discovery       | The app's `save_token`. Sent as `X-Save-Token` to the app only.                      |
 | `home_zone_id`          | no       | —                         | Zone `id` (preferred) or exact `name` that counts as home. Publishes `in_zones`.     |
 | `entities`              | yes      | —; empty when discovered  | The `device_tracker.*` entities to evaluate.                                         |
 
-`download_zones` is on for a new manual entry, unless every URL is a private or link-local IP address, `localhost` or a `.local` name. It is off for a legacy entry without the setting and for an entry created by discovery, because the add-on keeps the file.
+`download_zones` is on for a new manual entry, unless every URL is a private or link-local IP address, `localhost` or a `.local` name. It is off for a legacy entry without the setting and for an entry created by discovery, because the app keeps the file.
 
-`zone_source_token` is sent only to a host the integration recognises as the LAN add-on, or to the host an entry received from discovery. It is never sent to an unrelated public URL.
+`zone_source_token` is sent only to a host the integration recognises as the LAN app, or to the host an entry received from discovery. It is never sent to an unrelated public URL.
 
 `home_zone_id` takes the zone's `id` before its `name`, so one value never designates two zones. A match publishes `in_zones` containing `zone.home` on the mirror, whether or not coordinates are exposed. See [Privacy](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/privacy/).
 
-To change these settings, open **Settings → Devices & services → Polygonal Zones → ⋮ → Reconfigure**. Adding trackers there asks for the tracking notice again.
+To change these settings, open **Settings → Devices & services → Polygonal Zones → ⋮ → Configure**. The trackers, and the tracking notice, are under **⋮ → Reconfigure** instead.
 
 ## Usage
 
@@ -165,7 +167,7 @@ Updates are push-based. Nothing polls.
 
 - Each source `device_tracker` has a `state_changed` listener. When its position changes, the mirror re-resolves its zone.
 - Zones load once at startup, on `polygonal_zones.reload_zones`, and on `polygonal_zones.reload_all_zones`. Remote URLs are fetched only then, never per location update.
-- Saving in the editor add-on calls `reload_all_zones` for you, so the new zones are live without a manual reload.
+- Saving in the editor app calls `reload_all_zones` for you, so the new zones are live without a manual reload.
 - A startup load makes up to 5 attempts with jittered exponential backoff, starting at 30 s. After the last failure it raises a repair issue, and the entities stay unavailable until a load succeeds. With **Download the GeoJSON files** on, a failed first download makes Home Assistant retry the setup itself.
 
 ## GeoJSON file format
@@ -185,7 +187,7 @@ Full specification, with the schema, size limits, versioning and examples: [matt
 | `polygonal_zones.delete_zone`       | device | yes                         |
 | `polygonal_zones.replace_all_zones` | device | yes                         |
 
-`reload_zones` reloads the zones and updates the entities. With **Download the GeoJSON files** on it re-reads the local copy, because the sources are fetched only when that copy is missing. `reload_all_zones` does the same for every entry, which is what the add-on calls after a save.
+`reload_zones` reloads the zones and updates the entities. With **Download the GeoJSON files** on it re-reads the local copy, because the sources are fetched only when that copy is missing. `reload_all_zones` does the same for every entry, which is what the app calls after a save.
 
 The four mutating actions write to the local file kept when `download_zones` is on. They need a Home Assistant administrator, and they are refused with `ZoneFileNotEditable` when the integration reads a remote URL directly.
 
@@ -220,7 +222,7 @@ Recorder exclude snippet, logging, outbound requests, cloud backups and erasure 
 
 ## Roadmap
 
-Open work is tracked in [GitHub issues](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues) and the [add-on repo's issues](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon/issues). The `location_name` removal is [issue #86](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/86); see the [deprecation notice](#usage).
+Open work is tracked in [GitHub issues](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues) and the [app repo's issues](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon/issues). The `location_name` removal is [issue #86](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/86); see the [deprecation notice](#usage).
 
 The integration ships through HACS and is not being submitted to Home Assistant core, so the manifest stays at `quality_scale: bronze`. The Silver, Gold and Platinum rules are implemented and tracked in [`quality_scale.yaml`](custom_components/polygonal_zones/quality_scale.yaml). Claiming a higher tier needs a core-team review.
 

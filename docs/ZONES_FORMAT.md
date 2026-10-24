@@ -7,7 +7,7 @@ permalink: /zones-format/
 
 # Polygonal Zones file format
 
-The GeoJSON zone file the `polygonal_zones` integration reads. Producers (the companion [editor add-on](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon), other tools, hand-written files) must follow it.
+The GeoJSON zone file the `polygonal_zones` integration reads. Producers (the companion [editor app](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones-addon), other tools, hand-written files) must follow it.
 
 Current version: **`schema_version: 1`**.
 
@@ -63,12 +63,12 @@ Each element of `features` is a GeoJSON `Feature`.
 
 ### `properties`
 
-| Property                | Required | Type    | Notes                                                                                                                               |
-| ----------------------- | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `name`                  | yes      | string  | Non-empty. Shown as the entity state. Actions reject names over 200 characters.                                                     |
-| `priority`              | no       | integer | Lower wins on overlap. Default `0`; with `prioritize_zone_files`, a missing value is the file's position in the URL list.           |
-| `id`                    | no       | string  | Stable handle stamped by the editor add-on (UUID4 hex). Kept on every write. `home_zone_id` matches it first, then a zone's `name`. |
-| `polygonal_zones_ext.*` | no       | object  | Reserved for extensions. Free-form.                                                                                                 |
+| Property                | Required | Type    | Notes                                                                                                                            |
+| ----------------------- | -------- | ------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `name`                  | yes      | string  | Non-empty. Shown as the entity state. Actions reject names over 200 characters.                                                  |
+| `priority`              | no       | integer | Lower wins on overlap. Default `0`; with `prioritize_zone_files`, a missing value is the file's position in the URL list.        |
+| `id`                    | no       | string  | Stable handle stamped by the editor app (UUID4 hex). Kept on every write. `home_zone_id` matches it first, then a zone's `name`. |
+| `polygonal_zones_ext.*` | no       | object  | Reserved for extensions. Free-form.                                                                                              |
 
 Unknown keys under `properties` are kept when the file is rewritten, and the actions log a warning for them. Put new keys under `properties.polygonal_zones_ext`.
 
