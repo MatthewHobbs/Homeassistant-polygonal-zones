@@ -1,4 +1,4 @@
-"""Real-hass checks for the per-tracker "last reported" diagnostic sensor (RFC 0001).
+"""Real-hass checks for the per-tracker "last reported" diagnostic sensor.
 
 The case that matters is a phone re-reporting an unchanged position: HA fires
 ``state_reported`` for it, not ``state_changed``. A unit test with a stubbed hass
