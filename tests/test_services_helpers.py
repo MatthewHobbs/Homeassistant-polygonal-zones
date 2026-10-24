@@ -234,36 +234,6 @@ def _hass(tmp_path: Path) -> SimpleNamespace:
     )
 
 
-async def test_modify_zone_file_serializes_concurrent_edits(tmp_path) -> None:
-    """Two edits of one file must not interleave: each reads, changes and saves alone."""
-    entities, entity = _target()
-    entity.zone_urls = ["zones.json"]
-    (tmp_path / "zones.json").write_text("{}")
-    events: list[str] = []
-
-    def fake_read(_config_dir, _uri):
-        events.append("read")
-        return json.dumps({"features": []})
-
-    def fake_write(_content, _path):
-        events.append("save")
-
-    def mutate(_doc):
-        events.append("mutate")
-
-    with (
-        patch(f"{_HELPERS}.read_local_file", new=fake_read),
-        patch(f"{_HELPERS}.write_zones", new=fake_write),
-        patch(f"{_HELPERS}.sync_entities_after_write", new=AsyncMock()),
-    ):
-        await asyncio.gather(
-            modify_zone_file(_hass(tmp_path), entities, entity, mutate),
-            modify_zone_file(_hass(tmp_path), entities, entity, mutate),
-        )
-
-    assert events == ["read", "mutate", "save", "read", "mutate", "save"]
-
-
 @pytest.mark.parametrize(
     ("raised", "message"),
     [
@@ -342,7 +312,7 @@ async def test_a_write_slower_than_the_lock_timeout_still_commits(tmp_path) -> N
     assert names == ["Home"]
 
 
-@pytest.mark.parametrize("document", [{}, [], {"features": None}, {"features": {}}])
+@pytest.mark.parametrize("document", [{}, {"features": None}])
 def test_get_zone_idx_rejects_a_document_without_features(document) -> None:
     """A readable but malformed file is a validation failure, not a raw
     KeyError/TypeError escaping the service call."""

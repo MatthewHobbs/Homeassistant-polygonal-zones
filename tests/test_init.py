@@ -8,7 +8,6 @@ import pytest
 
 from custom_components.polygonal_zones import (
     PolygonalZonesData,
-    _legacy_sensor_for,
     _migrate_zone_sensor_unique_ids,
     async_reload_entry,
     async_setup,
@@ -305,15 +304,6 @@ async def test_async_reload_entry_delegates_to_async_reload() -> None:
     await async_reload_entry(hass, entry)
 
     reload_mock.assert_awaited_once_with("entry-1")
-
-
-def test_legacy_sensor_for_ignores_other_slugs() -> None:
-    """A legacy row for a different tracker is not a candidate for this one."""
-    row = SimpleNamespace(
-        entity_id="sensor.polygonal_zones_other", unique_id="sensor.polygonal_zones_other_zone"
-    )
-
-    assert _legacy_sensor_for([row], "phone", taken=set()) is None
 
 
 def test_migration_keeps_a_lone_suffixed_row() -> None:

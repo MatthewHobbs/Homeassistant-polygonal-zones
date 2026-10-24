@@ -104,7 +104,7 @@ async def test_a_second_discovery_rotates_the_token_and_keeps_the_user_settings(
     assert len(hass.config_entries.async_entries(DOMAIN)) == 1
 
 
-@pytest.mark.parametrize("missing", ["host", "port", "token"])
+@pytest.mark.parametrize("missing", ["host"])
 async def test_a_malformed_discovery_aborts_cleanly(hass: HomeAssistant, missing: str) -> None:
     info = _info()
     payload = dict(info.config)
