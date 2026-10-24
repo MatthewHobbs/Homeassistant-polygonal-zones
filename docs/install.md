@@ -35,8 +35,6 @@ If the button does not work, add the repository by hand:
 
 Back in the store, find **Polygonal Zones** in the list and choose **Install**.
 
-> **32-bit hosts.** Home Assistant deprecated the `armhf`, `armv7` and `i386` app architectures in 2025.12. Releases from 0.2.26 are 64-bit only. On a 32-bit host, pin the app to 0.2.25 or move to a 64-bit installation.
-
 ### 1c. Draw your zones
 
 1. Open **Settings → Apps → Polygonal Zones** and choose **Start**.
