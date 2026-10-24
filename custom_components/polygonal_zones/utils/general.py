@@ -206,7 +206,12 @@ def is_local_add_on_host(uri: str) -> bool:
 
 
 async def load_data(
-    uri: str, hass: HomeAssistant, *, allow_private_urls: bool = False, token: str | None = None
+    uri: str,
+    hass: HomeAssistant,
+    *,
+    allow_private_urls: bool = False,
+    token: str | None = None,
+    trusted_host: bool = False,
 ) -> str:
     """Load data from an HTTP(S) URL or a file inside the HA config directory.
 
@@ -216,8 +221,10 @@ async def load_data(
     Loopback / link-local / multicast / metadata addresses stay blocked.
 
     ``token``, if given, is sent as the ``X-Save-Token`` header — but ONLY when
-    ``uri`` classifies as :func:`is_local_add_on_host`, so a token configured
-    for the companion add-on is never sent to an unrelated public URL. This is
+    ``uri`` classifies as :func:`is_local_add_on_host` or the caller passes
+    ``trusted_host`` (an entry created by the add-on's own discovery), so a
+    token configured for the companion add-on is never sent to an unrelated
+    public URL. This is
     the add-on's own read-gate (its ``save_token`` option protects GET
     ``/zones.json``/``/trackers.json`` too, by design — see that repo's ADR
     0002); it is never sent across a redirect, since ``allow_redirects=False``
@@ -233,7 +240,9 @@ async def load_data(
         connector = aiohttp.TCPConnector(
             resolver=_PublicOnlyResolver(allow_private=allow_private_urls)
         )
-        headers = {"X-Save-Token": token} if token and is_local_add_on_host(uri) else None
+        headers = None
+        if token and (trusted_host or is_local_add_on_host(uri)):
+            headers = {"X-Save-Token": token}
         # ``trust_env=False`` explicitly: do NOT inherit HTTP_PROXY / HTTPS_PROXY
         # / NO_PROXY / .netrc from the environment. aiohttp defaults to False
         # already; pinning it keeps the SSRF-hardened resolver authoritative and
@@ -265,12 +274,16 @@ async def load_data(
     if parsed.scheme and parsed.scheme not in ("http", "https"):
         raise ValueError(f"Unsupported URI scheme: {parsed.scheme}")
 
-    safe_path = safe_config_path(hass.config.config_dir, uri)
+    return await hass.async_add_executor_job(read_local_file, hass.config.config_dir, uri)
 
-    def _read() -> str:
-        return safe_path.read_text(encoding="utf-8")
 
-    return await hass.async_add_executor_job(_read)
+def read_local_file(config_dir: str, uri: str) -> str:
+    """Read a zone file from the config directory.
+
+    Sync on purpose: the mutation services run it inside their executor job,
+    under the file lock, so the read cannot straddle another write.
+    """
+    return safe_config_path(config_dir, uri).read_text(encoding="utf-8")
 
 
 REQUIRED_ATTRIBUTES = {"latitude", "longitude", "gps_accuracy"}
@@ -293,24 +306,23 @@ def event_should_trigger(event: Event, entity_id: str) -> bool:
     old_state: State | None = event.data.get("old_state")
     new_state: State | None = event.data.get("new_state")
 
-    if old_state is None:
-        return False
     if new_state is None or new_state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-        # Source removed, or reporting unavailable/unknown. GPS attributes are
-        # normally cleared in this case, so the attribute check below would
-        # otherwise filter this event out — always trigger instead, so
-        # the entities' shared _update_state (entity.py) unavailable-reflection branch
-        # (which re-reads live state, not this event) actually gets a chance
-        # to run. Without this, a source going unavailable was never reflected
-        # on the mirror: the trigger that would call _update_state never fired.
+        # Source removed or unavailable: GPS attributes are cleared, so the
+        # check below would filter this event out. Always trigger, so
+        # _update_state's unavailable branch (which re-reads live state) runs;
+        # otherwise a source going unavailable was never reflected.
         return True
+    if old_state is None:
+        # First state a tracker ever reports, for one created after setup: no
+        # previous position to compare against, so trigger whenever it already
+        # carries a fix. The initial load covers trackers that existed at setup.
+        return all(attr in new_state.attributes for attr in REQUIRED_ATTRIBUTES)
     if not all(attr in new_state.attributes for attr in REQUIRED_ATTRIBUTES):
         return False
     # the old state's attributes are missing when it is the first real update
     if not all(attr in old_state.attributes for attr in REQUIRED_ATTRIBUTES):
         return True
 
-    # Check if any location attributes changed
     return any(
         new_state.attributes[attr] != old_state.attributes[attr] for attr in REQUIRED_ATTRIBUTES
     )

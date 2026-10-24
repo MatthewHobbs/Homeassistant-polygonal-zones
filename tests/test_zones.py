@@ -103,17 +103,10 @@ def test_matched_zones_single_match() -> None:
 
 # --- accuracy handling -------------------------------------------------------
 #
-# Regression cover for a bug where any tracker reporting gps_accuracy 0 read as
-# "away" no matter where it was. get_locations_zone inflated the fix with
-# Point.buffer(acc / 111320); Shapely returns an EMPTY polygon for buffer(0), and
-# an empty geometry intersects nothing, so every zone test failed. The whole
-# suite previously passed acc=1 as its stand-in for "no inflation", so the
-# boundary value was never exercised.
-#
-# None is reachable in production: the caller gates on the gps_accuracy key being
-# *present*, not on it being non-None, and TrackerEntity declares it `float | None`.
-# Before the fix that raised TypeError on `acc / 111320`; it must now behave as
-# "no accuracy figure". NaN takes the same branch, as every NaN comparison is False.
+# Regression cover: gps_accuracy 0 used to read as "away" because buffer(0) is
+# EMPTY and intersects nothing; the suite passed acc=1 as its "no inflation"
+# stand-in. None is reachable (the caller only checks the key is present) and,
+# like NaN, must mean "no accuracy figure".
 
 
 @pytest.mark.parametrize("acc", [0, 0.0, -1, -0.5, None, float("nan"), float("inf"), float("-inf")])

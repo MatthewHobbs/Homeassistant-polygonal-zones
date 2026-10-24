@@ -317,3 +317,52 @@ async def test_load_data_applies_the_address_policy_to_ip_literals(
         else:
             await load_data(url, _hass(tmp_path), allow_private_urls=allow_private)
             assert session.get_kwargs
+
+
+async def test_a_discovered_addon_host_gets_the_token(tmp_path) -> None:
+    """An entry created by the add-on's discovery points at a single-label
+    hostname, which is_local_add_on_host cannot classify. The entry's own flag
+    is what authorises the token there — and only there."""
+    session = _FakeSession(_FakeResponse())
+    with (
+        patch(
+            "custom_components.polygonal_zones.utils.general.aiohttp.ClientSession",
+            return_value=session,
+        ),
+        patch(
+            "custom_components.polygonal_zones.utils.general._PublicOnlyResolver",
+            return_value=MagicMock(),
+        ),
+    ):
+        await load_data(
+            "http://local-polygonal-zones:8000/zones.json",
+            _hass(tmp_path),
+            allow_private_urls=True,
+            token="s3cr3t",
+            trusted_host=True,
+        )
+
+    assert session.get_kwargs["headers"] == {"X-Save-Token": "s3cr3t"}
+
+
+async def test_an_ordinary_lan_hostname_gets_no_token(tmp_path) -> None:
+    """The flag must not become a blanket "send the token to any name"."""
+    session = _FakeSession(_FakeResponse())
+    with (
+        patch(
+            "custom_components.polygonal_zones.utils.general.aiohttp.ClientSession",
+            return_value=session,
+        ),
+        patch(
+            "custom_components.polygonal_zones.utils.general._PublicOnlyResolver",
+            return_value=MagicMock(),
+        ),
+    ):
+        await load_data(
+            "http://nas.lan:8000/zones.json",
+            _hass(tmp_path),
+            allow_private_urls=True,
+            token="s3cr3t",
+        )
+
+    assert session.get_kwargs["headers"] is None

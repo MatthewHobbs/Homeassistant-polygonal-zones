@@ -195,10 +195,16 @@ def test_changed_latitude_triggers() -> None:
     assert event_should_trigger(event, "device_tracker.me") is True
 
 
-def test_no_prior_state_does_not_trigger() -> None:
-    """A truly first-ever event (old_state is None) does not trigger — covered instead
-    by the entity's own initial-load path, not this per-event listener."""
+def test_no_prior_state_with_gps_triggers() -> None:
+    """A tracker created after setup reports its first state with no old_state; it
+    must resolve now rather than waiting for the device to move."""
     event = _event("device_tracker.me", None, REQUIRED)
+    assert event_should_trigger(event, "device_tracker.me") is True
+
+
+def test_no_prior_state_without_gps_does_not_trigger() -> None:
+    """First-ever event with no usable fix: nothing to resolve yet."""
+    event = _event("device_tracker.me", None, {})
     assert event_should_trigger(event, "device_tracker.me") is False
 
 

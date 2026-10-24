@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable, Coroutine
 from typing import Any
 
@@ -10,7 +11,7 @@ from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_track_state_change_event
 
-from .utils import event_should_trigger
+from .utils import REQUIRED_ATTRIBUTES, event_should_trigger
 from .zone_source import ZoneSource
 
 
@@ -33,8 +34,11 @@ class ZoneSourceFollower(Entity):
     _entity_id: str
     _unsub: Callable[[], None] | None = None
     _unsub_source: Callable[[], None] | None = None
+    _update_lock: asyncio.Lock | None = None
 
-    async def update_location(self, latitude: float, longitude: float, gps_accuracy: float) -> None:
+    async def update_location(
+        self, latitude: float, longitude: float, gps_accuracy: float | None
+    ) -> None:
         """Publish the zone for this position (implemented by the entity)."""
         raise NotImplementedError
 
@@ -70,6 +74,18 @@ class ZoneSourceFollower(Entity):
     def _set_available(self, available: bool) -> None:
         self._attr_available = available
 
+    def _reflect_availability(self, available: bool) -> None:
+        """Store an availability change and publish it.
+
+        Both entity types are non-polling, so an availability that is only
+        stored is never seen by HA: it would keep serving the last zone name to
+        automations after the source tracker went away.
+        """
+        changed = self._attr_available != available
+        self._set_available(available)
+        if changed:
+            self.async_write_ha_state()
+
     def _handle_state_change_builder(self) -> Callable[[Any], Coroutine[Any, Any, None]]:
         """Build the listener that acts only on events that change the position."""
 
@@ -80,13 +96,23 @@ class ZoneSourceFollower(Entity):
         return func
 
     async def _update_state(self) -> None:
-        # Only the success path writes HA state; the early returns just flip
-        # availability for the next successful write to pick up.
-        #
+        """Resolve the current position and publish it, one update at a time.
+
+        Every state change and every source reload schedules this, and each run
+        awaits executor-backed geometry work. Without the lock two runs can
+        interleave and the one that started first but finished last would win,
+        publishing an older position than the one before it.
+        """
+        if self._update_lock is None:
+            self._update_lock = asyncio.Lock()
+        async with self._update_lock:
+            await self._resolve_and_publish()
+
+    async def _resolve_and_publish(self) -> None:
         # Zones not (yet) loaded, or the shared load exhausted its retries: reflect
         # unavailable rather than acting on an empty or stale zone set.
         if not self._source.loaded_ok:
-            self._set_available(False)
+            self._reflect_availability(False)
             return
 
         entity_state = self.hass.states.get(self._entity_id)
@@ -96,19 +122,26 @@ class ZoneSourceFollower(Entity):
         # attributes for one update, common for wifi-only trackers between fixes, is
         # handled below without flipping availability.)
         if entity_state is None or entity_state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-            self._set_available(False)
+            self._reflect_availability(False)
             return
 
-        if not all(
-            key in entity_state.attributes for key in ["latitude", "longitude", "gps_accuracy"]
-        ):
+        if not all(key in entity_state.attributes for key in REQUIRED_ATTRIBUTES):
             return
 
-        await self.update_location(
-            entity_state.attributes["latitude"],
-            entity_state.attributes["longitude"],
-            entity_state.attributes["gps_accuracy"],
-        )
+        try:
+            latitude = float(entity_state.attributes["latitude"])
+            longitude = float(entity_state.attributes["longitude"])
+        except TypeError, ValueError:
+            # Keys present but null or non-numeric: no usable fix, which is not
+            # the same as an unavailable tracker. Keep the last zone.
+            return
+        raw_accuracy = entity_state.attributes["gps_accuracy"]
+        try:
+            gps_accuracy = float(raw_accuracy) if raw_accuracy is not None else None
+        except TypeError, ValueError:
+            return
+
+        await self.update_location(latitude, longitude, gps_accuracy)
         self._set_available(True)
 
         self.async_write_ha_state()

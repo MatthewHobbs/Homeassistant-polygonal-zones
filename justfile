@@ -6,7 +6,11 @@
 # NOT covered locally, and remaining remote-only gates: Hassfest, HACS and Prettier.
 
 # Local CI gate - the same commands remote CI runs, for the checks it covers.
-ci: lint test
+ci: lint test comments
+
+# One rule, measured: no code comment block over 50 words. Docstrings are docs.
+comments:
+    python3 scripts/check_comment_length.py custom_components tests tests_hass
 
 venv:
     #!/usr/bin/env bash

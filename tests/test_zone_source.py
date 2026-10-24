@@ -7,7 +7,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from shapely.geometry import Polygon
 
-from custom_components.polygonal_zones.utils.zones import Zone, ZoneFileCorrupt, ZoneLoadResult
+from custom_components.polygonal_zones.utils.zones import (
+    Zone,
+    ZoneFileCorrupt,
+    ZoneLoadResult,
+    zone_key,
+)
 from custom_components.polygonal_zones.zone_source import ZoneSource
 
 _ZONES = [Zone(name="Home", geometry=Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]), priority=0)]
@@ -413,3 +418,80 @@ async def test_a_run_nobody_awaits_any_more_is_still_evicted_when_it_fails() -> 
         await asyncio.sleep(0)  # let its done-callbacks run
 
     assert src._resolved == {}
+
+
+async def test_home_zone_matches_a_name_on_an_id_bearing_zone() -> None:
+    """README contract: id or exact name. The add-on stamps an id on every
+    feature, so a name-only configuration has to keep working."""
+    zone = Zone(
+        name="Home",
+        geometry=Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]),
+        properties={"id": "abc123"},
+    )
+    src = ZoneSource("entry-1", ["http://x"], False, False, home_zone_id="Home")
+    src.zones = [zone]
+
+    assert src.home_zone_matches(zone_key(zone), zone.name) is True
+
+
+async def test_home_zone_id_wins_over_another_zones_name() -> None:
+    """One configured value must not designate two zones: when some zone carries
+    it as an id, a different zone's name does not also match."""
+    by_id = Zone(
+        name="Flat",
+        geometry=Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]),
+        properties={"id": "Home"},
+    )
+    by_name = Zone(
+        name="Home",
+        geometry=Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]),
+        properties={"id": "xyz"},
+    )
+    src = ZoneSource("entry-1", ["http://x"], False, False, home_zone_id="Home")
+    src.zones = [by_id, by_name]
+
+    assert src.home_zone_matches(zone_key(by_id), by_id.name) is True
+    assert src.home_zone_matches(zone_key(by_name), by_name.name) is False
+
+
+async def test_load_clears_the_home_zone_issue_when_the_name_matches() -> None:
+    """Regression: a name configured against an add-on zone (which always carries
+    an id) raised home_zone_missing and never set in_zones."""
+    zone = Zone(
+        name="Home",
+        geometry=Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]),
+        properties={"id": "abc123"},
+    )
+    src = ZoneSource("entry-1", ["http://x"], False, False, home_zone_id="Home")
+    with (
+        patch(
+            "custom_components.polygonal_zones.zone_source.load_zones",
+            new=AsyncMock(return_value=ZoneLoadResult(zones=[zone])),
+        ),
+        patch("custom_components.polygonal_zones.zone_source.ir.async_delete_issue"),
+        patch(
+            "custom_components.polygonal_zones.zone_source.ir.async_create_issue"
+        ) as create_issue,
+    ):
+        await src._async_initial_load(_hass())
+
+    create_issue.assert_not_called()
+
+
+async def test_async_reload_retires_an_armed_retry_timer() -> None:
+    """A stale retry armed by a failed initial load must not fire after a manual
+    reload fixed the problem."""
+    src = _source()
+    unsub = MagicMock()
+    src._unsub_retry = unsub
+    with (
+        patch(
+            "custom_components.polygonal_zones.zone_source.load_zones",
+            new=AsyncMock(return_value=ZoneLoadResult(zones=_ZONES)),
+        ),
+        patch("custom_components.polygonal_zones.zone_source.ir.async_delete_issue"),
+    ):
+        await src.async_reload(_hass())
+
+    unsub.assert_called_once()
+    assert src._unsub_retry is None

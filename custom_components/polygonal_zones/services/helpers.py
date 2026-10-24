@@ -1,20 +1,19 @@
 """Helper functions for the services for the polygonal zones integration."""
 
-import asyncio
 from collections.abc import Callable, Iterator
 import contextlib
 import json
 import logging
+from pathlib import Path
 import time
 from typing import Any
 
-import aiohttp
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import device_registry as dr
 
 from ..const import DOMAIN
 from ..device_tracker import PolygonalZoneEntity
-from ..utils.general import load_data, safe_config_path
+from ..utils.general import read_local_file, safe_config_path
 from ..utils.limits import (
     MAX_FEATURES_PER_COLLECTION,
     MAX_TOTAL_VERTICES_PER_COLLECTION,
@@ -26,21 +25,26 @@ from ..utils.limits import (
 from ..utils.local_zones import (
     LOCK_ACQUIRE_TIMEOUT,
     dump_feature_collection,
-    get_file_lock,
-    save_zones,
+    file_lock,
+    write_zones,
 )
-from .errors import InvalidZoneData, RateLimited, ZoneFileNotEditable
+from ..utils.zones import UnsupportedSchemaVersion, ZoneFileCorrupt, validate_zone_document
+from .errors import (
+    InvalidZoneData,
+    RateLimited,
+    ZoneAlreadyExists,
+    ZoneFileNotEditable,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
 MAX_ZONE_JSON_BYTES = 1_048_576
 MAX_ZONE_NAME_LEN = 200
-# Declared top-level feature property keys. Anything else is preserved through
-# round-trip but logged at WARNING so drift is visible. New producer-specific
-# fields belong under ``properties.polygonal_zones_ext``. See docs/ZONES_FORMAT.md.
-# ``id`` is the editor add-on's stable per-feature handle (uuid4 hex) used to
-# bind automations across renames — it appears on every add-on-produced file,
-# so it is a known key, not drift (otherwise every mutation logs a WARNING).
+# Declared top-level feature keys; anything else is preserved but logged at
+# WARNING so drift shows. Producer-specific fields belong under
+# ``properties.polygonal_zones_ext``. ``id`` is known, not drift: the add-on
+# stamps it on every file to bind automations across renames.
+# See docs/ZONES_FORMAT.md.
 KNOWN_FEATURE_PROPERTY_KEYS = frozenset({"name", "priority", "id", "polygonal_zones_ext"})
 
 # Minimum seconds between mutation-service calls for a single config entry.
@@ -199,10 +203,80 @@ def get_zone_idx(name: str, existing_zones: dict[str, Any]) -> int | None:
          int | None: the index if the name is found. otherwise None
 
     """
-    for idx, zone in enumerate(existing_zones["features"]):
-        if zone["properties"]["name"] == name:
+    for idx, zone in enumerate(zone_features(existing_zones)):
+        properties = zone.get("properties") if isinstance(zone, dict) else None
+        if isinstance(properties, dict) and properties.get("name") == name:
             return idx
     return None
+
+
+def zone_features(collection: Any) -> list[Any]:
+    """The feature list of a zone document, or ``InvalidZoneData`` if it has none.
+
+    Indexing it unguarded turned a readable but malformed file (``{}``, an array,
+    a null ``properties``) into a raw ``KeyError``/``TypeError`` escaping the
+    service call instead of a translated validation error.
+    """
+    features = collection.get("features") if isinstance(collection, dict) else None
+    if not isinstance(features, list):
+        raise InvalidZoneData("Zone file has no 'features' array")
+    return features
+
+
+def ensure_unique_zone(features: list[Any]) -> None:
+    """Refuse a collection where two zones share a name, or two share an id.
+
+    A name is how the add/edit/delete actions select a zone and an id is how
+    automations bind to one, so neither may be ambiguous: with duplicates,
+    ``get_zone_idx`` returns the first match and the wrong polygon is edited or
+    deleted. The add-on enforces both on save; this is the integration's half of
+    the same contract.
+    """
+    for key in ("name", "id"):
+        seen: set[str] = set()
+        for zone in features:
+            properties = zone.get("properties") if isinstance(zone, dict) else None
+            value = properties.get(key) if isinstance(properties, dict) else None
+            if not isinstance(value, str) or not value:
+                continue
+            if value in seen:
+                raise ZoneAlreadyExists(f'The zone {key} "{value}" is already used by another zone')
+            seen.add(value)
+
+
+def ensure_loadable(content: str) -> None:
+    """Refuse to persist a document the loader would reject.
+
+    The per-feature checks validate what a call hands in; this validates the
+    whole document that would be written — cumulative caps included — with the
+    parser the loader uses. Without it a mutation can report success, leave the
+    in-memory zones untouched (the post-write reload is allowed to fail), and
+    only fail on the next start, when every zone stops loading.
+
+    Sync: it runs inside the mutation's executor job, where the polygon parsing
+    belongs anyway.
+    """
+    try:
+        validate_zone_document(content)
+    except (ZoneFileCorrupt, UnsupportedSchemaVersion) as err:
+        raise InvalidZoneData(str(err)) from err
+
+
+@contextlib.contextmanager
+def locked(path: Path) -> Iterator[None]:
+    """Hold the file's write lock, or give up after ``LOCK_ACQUIRE_TIMEOUT``.
+
+    Both mutation paths need this, and the timeout has to cover the lock wait
+    only: the write that follows cannot be cancelled, so a caller that gave up
+    during it would leave another mutation free to read the pre-write file.
+    """
+    lock = file_lock(path)
+    if not lock.acquire(timeout=LOCK_ACQUIRE_TIMEOUT):
+        raise TimeoutError("Timed out waiting for zone file lock")
+    try:
+        yield
+    finally:
+        lock.release()
 
 
 async def sync_entities_after_write(entities: list[PolygonalZoneEntity]) -> None:
@@ -266,8 +340,6 @@ def zone_file_errors(value_error: str = "Zone file content or path is invalid") 
         raise InvalidZoneData(
             "Timed out waiting for zone file lock; another operation may be in progress"
         ) from err
-    except aiohttp.ClientError as err:
-        raise InvalidZoneData("Failed to fetch zone file") from err
     except OSError as err:
         raise InvalidZoneData("Failed to access zone file") from err
     except ValueError as err:
@@ -280,15 +352,27 @@ async def modify_zone_file(
     entity: PolygonalZoneEntity,
     mutate: Callable[[dict[str, Any]], None],
 ) -> None:
-    """Read the zone file under its lock, apply ``mutate`` in place, save, then reload."""
+    """Read the zone file under its lock, apply ``mutate`` in place, save, then reload.
+
+    The whole read-modify-write is one executor job: a thread lock outlives a
+    cancelled caller, so no later mutation can read the file mid-write.
+    """
     filename = entity.zone_urls[0]
-    with zone_file_errors():
-        filepath = safe_config_path(hass.config.config_dir, filename)
-        async with asyncio.timeout(LOCK_ACQUIRE_TIMEOUT), get_file_lock(filepath):
-            existing_zones = json.loads(await load_data(filename, hass))
+    config_dir = hass.config.config_dir
+
+    def _apply() -> None:
+        path = safe_config_path(config_dir, filename)
+        with locked(path):
+            existing_zones = json.loads(read_local_file(config_dir, filename))
             mutate(existing_zones)
             new_content = dump_feature_collection(
-                existing_zones["features"], existing=existing_zones
+                zone_features(existing_zones), existing=existing_zones
             )
-            await save_zones(new_content, filepath, hass)
-            await sync_entities_after_write(entities)
+            ensure_loadable(new_content)
+            write_zones(new_content, path)
+
+    with zone_file_errors():
+        await hass.async_add_executor_job(_apply)
+    # Outside the lock: the reload may fetch remote URLs, and a slow fetch must
+    # not hold the file or turn a mutation that already committed into an error.
+    await sync_entities_after_write(entities)

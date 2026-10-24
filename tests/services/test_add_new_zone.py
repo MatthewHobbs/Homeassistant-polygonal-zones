@@ -8,9 +8,14 @@ import pytest
 
 from custom_components.polygonal_zones.services.add_new_zone import action_builder
 from custom_components.polygonal_zones.services.errors import (
+    InvalidZoneData,
     ZoneAlreadyExists,
     ZoneFileNotEditable,
 )
+from custom_components.polygonal_zones.services.helpers import reset_mutation_rate_limit
+from custom_components.polygonal_zones.utils.limits import MAX_FEATURES_PER_COLLECTION
+
+MAX_FEATURES = MAX_FEATURES_PER_COLLECTION
 
 
 def _polygon_feature(name: str) -> dict:
@@ -201,3 +206,81 @@ async def test_add_zone_non_editable_raises(tmp_path) -> None:
         pytest.raises(ZoneFileNotEditable),
     ):
         await action_builder(_make_hass(tmp_path))(call)
+
+
+def _fake_entity() -> SimpleNamespace:
+    return SimpleNamespace(
+        editable_file=True,
+        zone_urls=["zones.json"],
+        _source=SimpleNamespace(async_reload=AsyncMock(), entry_id="entry-id"),
+        _config_entry_id="entry-id",
+        hass=None,
+    )
+
+
+def _write(path, features) -> None:
+    path.write_text(json.dumps({"type": "FeatureCollection", "features": features}))
+
+
+async def _run(tmp_path, zone: dict) -> None:
+    action = action_builder(_make_hass(tmp_path))
+    call = SimpleNamespace(data={"device_id": "fake-device-id", "zone": json.dumps(zone)})
+    with patch(
+        "custom_components.polygonal_zones.services.helpers.get_entities_from_device_id",
+        return_value=[_fake_entity()],
+    ):
+        await action(call)
+
+
+async def test_add_beyond_the_feature_cap_is_refused(tmp_path) -> None:
+    """The write is validated as a whole document: feature 501 would be written
+    fine and then stop every zone from loading on the next start."""
+    reset_mutation_rate_limit()
+    zones_file = tmp_path / "zones.json"
+    _write(zones_file, [_polygon_feature(f"Zone {i}") for i in range(MAX_FEATURES)])
+
+    with pytest.raises(InvalidZoneData, match="limit is 500"):
+        await _run(tmp_path, _polygon_feature("One Too Many"))
+
+    assert len(json.loads(zones_file.read_text())["features"]) == MAX_FEATURES
+
+
+async def test_add_with_a_non_integer_priority_is_refused(tmp_path) -> None:
+    """`priority` decides which of two overlapping zones wins; a value the loader
+    cannot read must not reach the file."""
+    reset_mutation_rate_limit()
+    zones_file = tmp_path / "zones.json"
+    _write(zones_file, [_polygon_feature("Home")])
+    broken = _polygon_feature("Work")
+    broken["properties"]["priority"] = "high"
+
+    with pytest.raises(InvalidZoneData):
+        await _run(tmp_path, broken)
+
+    assert [f["properties"]["name"] for f in json.loads(zones_file.read_text())["features"]] == [
+        "Home"
+    ]
+
+
+async def test_add_with_a_duplicate_id_is_refused(tmp_path) -> None:
+    reset_mutation_rate_limit()
+    zones_file = tmp_path / "zones.json"
+    home = _polygon_feature("Home")
+    home["properties"]["id"] = "dup-id"
+    _write(zones_file, [home])
+    work = _polygon_feature("Work")
+    work["properties"]["id"] = "dup-id"
+
+    with pytest.raises(ZoneAlreadyExists, match="dup-id"):
+        await _run(tmp_path, work)
+
+    assert len(json.loads(zones_file.read_text())["features"]) == 1
+
+
+async def test_add_on_a_malformed_file_raises_invalid_zone_data(tmp_path) -> None:
+    """A readable but malformed document is a validation failure, not a KeyError."""
+    reset_mutation_rate_limit()
+    (tmp_path / "zones.json").write_text("{}")
+
+    with pytest.raises(InvalidZoneData):
+        await _run(tmp_path, _polygon_feature("Home"))

@@ -1,6 +1,12 @@
 """Constants for polygonal zones integration."""
 
 CONF_ALLOW_PRIVATE_URLS = "allow_private_urls"
+# Set when the entry was created from the editor add-on's Supervisor discovery
+# message. Its URL is a single-label add-on hostname, which
+# ``is_local_add_on_host`` cannot classify without a DNS lookup, and the add-on
+# refuses non-ingress reads without the token — so the flag is what authorises
+# sending it.
+CONF_DISCOVERED_BY_ADDON = "discovered_by_addon"
 CONF_CONSENT_CONFIRMED_AT = "consent_confirmed_at"
 CONF_DOWNLOAD_ZONES = "download_zones"
 CONF_EXPOSE_COORDINATES = "expose_coordinates"

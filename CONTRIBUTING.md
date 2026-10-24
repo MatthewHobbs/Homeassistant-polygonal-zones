@@ -4,7 +4,7 @@ This is a community-maintained fork (see the [README](README.md)). Pull requests
 
 ## Run the checks
 
-`just ci` runs Ruff, Mypy and the tests with the 98% coverage floor, in a Python 3.14 `.venv` that it creates with `uv`. Without `just`:
+`just ci` runs Ruff, Mypy, the tests with the 98% coverage floor, and the 50-word comment check, in a Python 3.14 `.venv` that it creates with `uv`. Without `just`:
 
 ```bash
 python -m venv .venv
@@ -20,16 +20,26 @@ Prettier, Hassfest and HACS run only in CI. Check JSON, Markdown and YAML locall
 
 `just test-hass` runs `tests_hass/` against a real Home Assistant in a separate `.venv-hass`. Keep it out of the main `.venv`: `pytest-homeassistant-custom-component` pins one exact Home Assistant version. This suite is not part of `just ci` and has no coverage gate.
 
+## Trying a branch on a real instance
+
+HACS installs releases, so a branch is tested by copying the component:
+
+1. Copy `custom_components/polygonal_zones/` from the branch into `/config/custom_components/`, replacing the HACS copy.
+2. Restart Home Assistant.
+3. To try the editor add-on from its branch as well, follow "Manual: live HA OS" in the add-on's `TESTING.md`. It needs the branch folder in `/addons` with its `image:` line removed, or the Supervisor installs the published image instead of building the branch.
+
+Use a scratch instance. Discovery and the save-then-reload behaviour need both branches together.
+
 ## CI
 
-`validate.yml` runs on every pull request. These jobs must pass to merge: `Pytest`, `Pytest (HA floor)`, `Hassfest`, `HACS`, `Ruff (lint + format)`, `Prettier` and `Mypy`. `Pytest (real hass)` and `HA floor within lag bound` also run but do not block.
+`validate.yml` runs on every pull request. These jobs must pass to merge: `Pytest`, `Pytest (HA floor)`, `Hassfest`, `HACS`, `Ruff (lint + format)`, `Prettier`, `Comment length` and `Mypy`. `Pytest (real hass)` and `HA floor within lag bound` also run but do not block.
 
 `Pytest (HA floor)` installs the Home Assistant version in `hacs.json`, so do not use APIs newer than that floor.
 
 ## Tests
 
 - Unit tests run without Home Assistant: `pyproject.toml` passes `-p no:homeassistant` and tests use `SimpleNamespace` and `MagicMock` stubs. `pytest-asyncio` is in auto mode, so write `async def test_*` without a decorator. Anything that needs a real Home Assistant goes in `tests_hass/`.
-- Each test asserts an observable effect (state, exception, log line, written file, mock call) and would fail on a plausible regression. Do not add tests only to cover a line.
+- Each test asserts an observable effect (state, exception, log line, written file, mock call) and would fail on a plausible regression. Do not add tests only to cover a line, and do not patch out the very thing the test is meant to observe.
 - `tests/conftest.py` has an autouse fixture that resets module-level state (the action and `reload_zones` rate limits). Extend it when you add module-level state.
 - Fake entities in action tests need a `_config_entry_id` attribute; the actions read it for audit logging and rate limiting.
 

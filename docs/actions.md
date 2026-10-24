@@ -26,6 +26,16 @@ target:
 response_variable: zones
 ```
 
+## `reload_all_zones`
+
+Reloads the zones of every entry at once. It takes no target. The editor add-on calls it after each save, so you only need it yourself if you change a zone file by hand.
+
+```yaml
+action: polygonal_zones.reload_all_zones
+```
+
+It waits for the 2 second limit instead of failing, so a second call in quick succession still reloads.
+
 ## `add_new_zone`
 
 ```yaml

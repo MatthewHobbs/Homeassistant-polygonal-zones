@@ -89,14 +89,19 @@ async def test_reload_zones_service_all_uris_failed_raises() -> None:
 
 
 async def test_update_state_unavailable_when_source_not_loaded() -> None:
-    """Zones not yet loaded (or load exhausted) → the mirror is unavailable."""
+    """Zones not yet loaded (or load exhausted) are published as unavailable.
+
+    Asserting the attribute alone passed while the entity never told Home
+    Assistant, which left the last zone name on screen.
+    """
     entity = _make_entity(loaded_ok=False)
     entity._attr_available = True
     entity.hass = SimpleNamespace(states=SimpleNamespace(get=MagicMock(return_value=None)))
 
-    with patch.object(PolygonalZoneEntity, "async_write_ha_state", lambda self: None):
-        await entity._update_state()
+    await entity._update_state()
+
     assert entity._attr_available is False
+    entity.async_write_ha_state.assert_called_once()
 
 
 async def test_update_state_skips_when_source_state_missing() -> None:

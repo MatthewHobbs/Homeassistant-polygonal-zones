@@ -14,13 +14,10 @@ MAX_FEATURES_PER_COLLECTION = 500
 # state_changed — a 1 MiB JSON file can otherwise encode ~50k vertices.
 MAX_TOTAL_VERTICES_PER_COLLECTION = 10_000
 
-# The only geometry types this integration resolves. Enforced identically on the
-# mutation-service write path (``services/helpers.py``) and the URI/file read
-# path (``utils/zones.py``). Kept here (not in ``services``) so both layers share
-# one source of truth without a ``utils`` -> ``services`` dependency. Crucially,
-# ``count_geometry_vertices`` only counts Polygon/MultiPolygon rings, so a
-# non-Polygon geometry (e.g. a huge ``LineString``) counts as 0 vertices and
-# would slip past the vertex cap — rejecting the type closes that bypass.
+# The only geometry types resolved. Enforced on both the mutation write path
+# and the read path, and kept here so neither imports the other. Needed:
+# ``count_geometry_vertices`` counts only polygons, so a huge LineString counts
+# as zero vertices and would slip past the cap.
 SUPPORTED_GEOMETRY_TYPES = {"Polygon", "MultiPolygon"}
 
 
