@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.16.1 — 2026-10-25
+
+A documentation update, and the two corrections the writing of it turned up.
+
+The install guide now leads with the automatic path: install the app, install this
+integration, confirm the discovered entry, then pick your devices. The by-hand path
+sits below it, under a heading that says it is only for what automatic setup cannot
+cover. The guide also has a short section for using a zones file you already have,
+and says plainly that the app needs a 64-bit installation.
+
+Fixed:
+
+- **Two entries reading the same editor are told apart.** New entries are titled
+  after the editor they read, and an entry whose editor another entry also reads
+  raises a repair issue naming that entry. Removing the duplicate clears the
+  remaining entry's warning too.
+- The documentation for a corrupt zones file now says what repairs it:
+  `replace_all_zones`, which never reads the file it replaces.
+
 ## 1.16.0 — 2026-10-24
 
 Automatic setup with the editor app, and a set of fixes found by testing.
