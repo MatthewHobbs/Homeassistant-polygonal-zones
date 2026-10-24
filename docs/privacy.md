@@ -42,9 +42,9 @@ When a **Home zone** is set, the mirror entity's `in_zones` attribute lists `zon
 This option decides whether latitude, longitude, GPS accuracy, `matched_zones` and `zone_uris` are written to entity attributes. An attribute is a named value that Home Assistant keeps next to an entity.
 
 - New installs: off. Only the zone name is published, plus the values that are always published.
-- Entries made before this option existed: on. Home Assistant shows a repair issue until you save the setting. Change it under **Settings → Devices & services → Polygonal Zones → ⋮ → Reconfigure**.
+- Entries made before this option existed: on. Home Assistant shows a repair issue until you save the setting. Change it under **Settings → Devices & services → Polygonal Zones → ⋮ → Configure**.
 
-While it is on, Home Assistant's recorder keeps a location history for every tracked device, in its database and in your backups. Untick it under **⋮ → Reconfigure** to stop that.
+While it is on, Home Assistant's recorder keeps a location history for every tracked device, in its database and in your backups. Untick it under **⋮ → Configure** to stop that.
 
 ### Recorder history
 

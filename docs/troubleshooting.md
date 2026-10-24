@@ -33,7 +33,7 @@ The app announces itself to Home Assistant each time it starts. Automatic setup 
 2. If nothing appears, open the app log and look for what it sent to Home Assistant.
 3. If it still does not appear, use the manual setup in the [install guide](install.md).
 
-An entry that already points at the app by URL is not offered a second time. Edit that entry instead, under **⋮ → Reconfigure**.
+An entry that already points at the app by URL is not offered a second time. Edit that entry instead, under **⋮ → Configure**.
 
 ---
 

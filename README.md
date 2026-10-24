@@ -94,7 +94,7 @@ App setup and post-install checks: [install guide](https://matthewhobbs.github.i
 
 `home_zone_id` takes the zone's `id` before its `name`, so one value never designates two zones. A match publishes `in_zones` containing `zone.home` on the mirror, whether or not coordinates are exposed. See [Privacy](https://matthewhobbs.github.io/Homeassistant-polygonal-zones/privacy/).
 
-To change these settings, open **Settings → Devices & services → Polygonal Zones → ⋮ → Reconfigure**. Adding trackers there asks for the tracking notice again.
+To change these settings, open **Settings → Devices & services → Polygonal Zones → ⋮ → Configure**. The trackers, and the tracking notice, are under **⋮ → Reconfigure** instead.
 
 ## Usage
 
