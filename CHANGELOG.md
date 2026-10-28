@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.16.3 — 2026-10-28
+
+- **The consent toggle is visible when you first open Reconfigure.** Adding a
+  `device_tracker` under **Reconfigure** can now be confirmed in one step instead of
+  requiring a failed save before the toggle appears.
+
 ## 1.16.2 — 2026-10-28
 
 Automatic setup with the editor app stays correct when the app restarts or moves.
