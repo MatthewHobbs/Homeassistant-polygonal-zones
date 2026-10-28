@@ -14,9 +14,10 @@ name via location_name) before anything in the migration changes it.
 import json
 from pathlib import Path
 
-from homeassistant.core import HomeAssistant
+from homeassistant.const import EVENT_STATE_CHANGED
+from homeassistant.core import Event, HomeAssistant, State, callback
 from homeassistant.setup import async_setup_component
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import MockConfigEntry, mock_restore_cache
 
 from custom_components.polygonal_zones.const import DOMAIN
 
@@ -120,3 +121,70 @@ async def test_companion_sensor_reflects_same_zone_via_real_hass(hass: HomeAssis
     assert sensor is not None
     assert mirror.state == "Home"
     assert sensor.state == "Home"
+
+
+async def test_mirror_restart_publishes_unavailable_then_resolved_state(
+    hass: HomeAssistant,
+) -> None:
+    """Across entry setup on restart, the mirror first writes unavailable with none
+    of the restored location attributes, then writes its resolved state."""
+    zones_path = hass.config.path("polygonal_zones_test_restart.geojson")
+    await hass.async_add_executor_job(
+        Path(zones_path).write_text, json.dumps(_ZONE_GEOJSON), "utf-8"
+    )
+
+    mirror_id = "device_tracker.polygonal_zones_test_phone_restart"
+    mock_restore_cache(
+        hass,
+        [
+            State(
+                mirror_id,
+                "School",
+                {
+                    "latitude": 51.5,
+                    "longitude": -0.1,
+                    "zone_uris": ["https://example.test/zones.geojson"],
+                    "matched_zones": ["School"],
+                },
+            )
+        ],
+    )
+
+    hass.states.async_set(
+        "device_tracker.test_phone_restart",
+        "not_home",
+        {"latitude": 51.5125, "longitude": -0.13, "gps_accuracy": 5},
+    )
+
+    recorded: list[State] = []
+
+    @callback
+    def _record(event: Event) -> None:
+        if event.data.get("entity_id") == mirror_id:
+            new_state = event.data.get("new_state")
+            if new_state is not None:
+                recorded.append(new_state)
+
+    unsub = hass.bus.async_listen(EVENT_STATE_CHANGED, _record)
+    try:
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            data={
+                "zone_urls": ["polygonal_zones_test_restart.geojson"],
+                "entities": ["device_tracker.test_phone_restart"],
+                "download_zones": False,
+                "expose_coordinates": True,
+                "consent_confirmed_at": "2026-09-27T00:00:00+00:00",
+            },
+        )
+        entry.add_to_hass(hass)
+
+        assert await async_setup_component(hass, DOMAIN, {})
+        await hass.async_block_till_done(wait_background_tasks=True)
+    finally:
+        unsub()
+
+    assert [s.state for s in recorded] == ["unavailable", "Home"]
+    first = recorded[0]
+    for attr in ("latitude", "longitude", "zone_uris", "matched_zones"):
+        assert attr not in first.attributes
