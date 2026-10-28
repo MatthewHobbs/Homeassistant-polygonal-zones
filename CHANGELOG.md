@@ -5,6 +5,10 @@
 - **The consent toggle is visible when you first open Reconfigure.** Adding a
   `device_tracker` under **Reconfigure** can now be confirmed in one step instead of
   requiring a failed save before the toggle appears.
+- The repair notice and the README now say that `sensor.polygonal_zones_*` already
+  holds the zone name and that anything reading the zone name from the tracker's own
+  state should move to the sensor now, because the tracker's state will change to
+  Home Assistant's standard `home` / `not_home` in a future release.
 
 ## 1.16.2 — 2026-10-28
 
