@@ -51,7 +51,6 @@ class ZoneSource:
         allow_private_urls: bool = False,
         token: str | None = None,
         home_zone_id: str | None = None,
-        trusted_host: bool = False,
         addon_url: str | None = None,
     ) -> None:
         """Initialise the source (does not load — see ``async_schedule_initial_load``)."""
@@ -61,9 +60,9 @@ class ZoneSource:
         self.editable_file = editable_file
         self.allow_private_urls = allow_private_urls
         self.token = token
-        # An entry created by the add-on's discovery: its host is an add-on, so
-        # the token may go there even though the hostname is not a literal.
-        self.trusted_host = trusted_host
+        # The URL announced by the companion add-on, if this entry came from
+        # discovery: only that URL may receive ``token`` when its hostname is
+        # not a literal local add-on host.
         self.addon_url = addon_url
         # The zone whose ``id`` — or, when no zone carries it as an id, whose
         # ``name`` — equals this counts as "home" for in_zones; blank/unset
@@ -257,7 +256,6 @@ class ZoneSource:
             self.prioritize,
             allow_private_urls=self.allow_private_urls,
             token=self.token,
-            trusted_host=self.trusted_host,
             addon_url=self.addon_url,
         )
         if self.zone_urls and not result.zones and result.failures:

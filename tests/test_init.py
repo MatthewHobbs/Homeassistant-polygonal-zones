@@ -381,17 +381,14 @@ def test_trusted_addon_url_resolves_announced_url_and_legacy_fallback() -> None:
     )
     assert _trusted_addon_url(with_url, [addon, extra]) == addon
     _, settings = _fetch_settings(with_url)
-    assert settings["trusted_host"] is True
     assert settings["addon_url"] == addon
     legacy = SimpleNamespace(data={"zone_urls": [addon], "discovered_by_addon": True})
     assert _trusted_addon_url(legacy, [addon]) == addon
     _, legacy_settings = _fetch_settings(legacy)
-    assert legacy_settings["trusted_host"] is True
     assert legacy_settings["addon_url"] == addon
     assert _trusted_addon_url(legacy, [extra]) is None
     assert _trusted_addon_url(legacy, [addon, extra]) is None
     manual = SimpleNamespace(data={"zone_urls": [addon]})
     assert _trusted_addon_url(manual, [addon]) is None
     _, manual_settings = _fetch_settings(manual)
-    assert manual_settings["trusted_host"] is False
     assert manual_settings["addon_url"] is None

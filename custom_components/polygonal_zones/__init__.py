@@ -195,13 +195,11 @@ def _trusted_addon_url(entry: PolygonalZonesConfigEntry, zone_uris: list[str]) -
 def _fetch_settings(entry: PolygonalZonesConfigEntry) -> tuple[list[str], dict[str, Any]]:
     """The configured zone URIs and how to fetch them, as stored on the entry."""
     zone_uris = [uri for uri in entry.data.get(CONF_ZONES_URL) or [] if uri]
-    addon_url = _trusted_addon_url(entry, zone_uris)
     return zone_uris, {
         "prioritize": bool(entry.data.get(CONF_PRIORITIZE_ZONE_FILES)),
         "allow_private_urls": bool(entry.data.get(CONF_ALLOW_PRIVATE_URLS, False)),
         "token": entry.data.get(CONF_ZONE_SOURCE_TOKEN) or None,
-        "trusted_host": addon_url is not None,
-        "addon_url": addon_url,
+        "addon_url": _trusted_addon_url(entry, zone_uris),
     }
 
 
@@ -229,7 +227,6 @@ def _build_zone_source(entry: PolygonalZonesConfigEntry) -> ZoneSource:
         allow_private_urls=fetch["allow_private_urls"],
         token=fetch["token"],
         home_zone_id=home_zone_id,
-        trusted_host=fetch["trusted_host"],
         addon_url=fetch["addon_url"],
     )
 
@@ -263,7 +260,6 @@ async def _async_bootstrap_zone_snapshot(
             hass,
             allow_private_urls=fetch["allow_private_urls"],
             token=fetch["token"],
-            trusted_host=fetch["trusted_host"],
             addon_url=fetch["addon_url"],
         )
     except UnsupportedSchemaVersion as err:

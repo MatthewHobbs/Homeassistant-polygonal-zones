@@ -48,8 +48,7 @@ def action_builder(hass: HomeAssistant) -> Callable[[ServiceCall], Coroutine[Any
             try:
                 await source.async_reload(hass)
             except Exception as err:
-                entry_data = getattr(entry, "data", None) or {}
-                if entry_data.get(CONF_DISCOVERED_BY_ADDON):
+                if entry.data.get(CONF_DISCOVERED_BY_ADDON):
                     failures.append((entry.entry_id, err))
                 else:
                     _LOGGER.warning("Could not reload zones for entry %s: %s", entry.entry_id, err)

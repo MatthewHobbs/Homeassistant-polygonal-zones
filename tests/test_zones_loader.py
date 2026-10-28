@@ -479,7 +479,6 @@ async def test_load_zones_binds_token_and_trust_only_to_the_announced_url() -> N
             _make_hass(),
             False,
             token="s3cr3t",
-            trusted_host=True,
             addon_url=addon_url,
         )
 
