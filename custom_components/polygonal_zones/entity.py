@@ -17,12 +17,12 @@ from .zone_source import ZoneSource
 
 def zone_device_info(entry_id: str) -> DeviceInfo:
     """The one device every entity of a config entry hangs off."""
-    return {
-        "identifiers": {("polygonal_zones", entry_id)},
-        "name": "Polygonal Zones",
-        "manufacturer": "Polygonal Zones Community",
-        "entry_type": DeviceEntryType.SERVICE,
-    }
+    return DeviceInfo(
+        identifiers={("polygonal_zones", entry_id)},
+        name="Polygonal Zones",
+        manufacturer="Polygonal Zones Community",
+        entry_type=DeviceEntryType.SERVICE,
+    )
 
 
 class ZoneSourceFollower(Entity):
