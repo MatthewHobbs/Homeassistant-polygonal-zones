@@ -209,7 +209,7 @@
     },
     "location_name_removal_coming": {
       "title": "Polygonal Zones: a future update will change how state is reported",
-      "description": "Home Assistant is removing the `location_name` property this integration currently uses to show the matched zone name as \"{title}\"'s device_tracker state (HA 2027.7). A future release of this integration will move the zone name to a companion sensor (`sensor.polygonal_zones_*`) and change the device_tracker's own state to the standard `home`/`not_home`. If you have automations or dashboards keyed on the tracker's state being a zone name, plan to migrate them to the new sensor before that release ships. No action is needed yet — this is advance notice."
+      "description": "Home Assistant is removing the `location_name` property this integration currently uses to show the matched zone name as \"{title}\"'s device_tracker state (HA 2027.7). The companion sensor (`sensor.polygonal_zones_*`) already holds the zone name (or `away`), and a future release of this integration will change the device_tracker's own state to the standard `home`/`not_home`. Anything reading the zone name from the tracker's state should be moved to `sensor.polygonal_zones_*` now."
     },
     "duplicate_source": {
       "title": "Polygonal Zones: two entries read the same editor",

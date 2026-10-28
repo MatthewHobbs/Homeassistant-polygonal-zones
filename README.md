@@ -90,14 +90,14 @@ device_tracker.alice_phone        →  device_tracker.polygonal_zones_alice_phon
                                    →  sensor.polygonal_zones_alice_phone
 ```
 
-The mirror's state is the name of the zone the source device is inside, or `away`:
+The zone sensor `sensor.polygonal_zones_*` holds the name of the zone the source device is inside, or `away` when it is outside every zone, as a plain string:
 
 ```yaml
 automation:
   - alias: "Notify when Alice arrives at school"
     triggers:
       - trigger: state
-        entity_id: device_tracker.polygonal_zones_alice_phone
+        entity_id: sensor.polygonal_zones_alice_phone
         to: "School"
     actions:
       - action: notify.mobile_app
@@ -109,7 +109,7 @@ The mirror always exposes `source_entity`, `last_load_result` and `last_zones_lo
 
 With **Expose GPS coordinates** on, it also writes `latitude`, `longitude` and `gps_accuracy`. It publishes `zone_uris` with credentials and query strings removed, and `matched_zones`, which lists every zone the point intersects. Those two stay off without the option, because they reveal LAN hostnames or fine-grained location.
 
-`sensor.polygonal_zones_*` holds the same zone name, or `away`, as a plain string. It resolves independently of the mirror. Read the zone name from this sensor rather than from the `device_tracker` state. See the deprecation notice below.
+The mirror `device_tracker.polygonal_zones_*` still has the zone name, or `away`, as its state today, but it will change to Home Assistant's standard `home` / `not_home`. Read the zone name from `sensor.polygonal_zones_*`, which resolves independently of the mirror, rather than from the `device_tracker` state. See the deprecation notice below.
 
 ### Detecting a silent tracker
 
@@ -139,9 +139,9 @@ Use your own device's notify service. `request_location_update` is a Companion a
 >
 > The integration uses Home Assistant's `location_name` property to publish the zone name as the mirror's `state`. Home Assistant removes that property in **2027.7**. The integration raises a repair issue in **Settings → Repairs**.
 >
-> Today `state` is still the zone name. Once the property is removed, `state` becomes Home Assistant's standard `home` / `not_home`, and automations that read the zone name from it break. No date is set for that change. To prepare:
+> Today the mirror's `state` is still the zone name. Once the override is removed, `state` becomes Home Assistant's standard `home` / `not_home`, and automations or dashboards that read the zone name from the mirror's `state` break. Move them now:
 >
-> - Read the zone name from `sensor.polygonal_zones_*` instead. It carries the same value now.
+> - Read the zone name from `sensor.polygonal_zones_*` instead. The sensor already exists and holds the zone name (or `away`).
 > - Set `home_zone_id` in the integration's options to use Home Assistant's own zone occupancy, such as the person count of `zone.home`. It publishes `in_zones` on the mirror.
 >
 > Progress: [issue #86](https://github.com/MatthewHobbs/Homeassistant-polygonal-zones/issues/86).
