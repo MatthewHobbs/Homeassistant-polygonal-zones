@@ -117,10 +117,16 @@ async def download_zones(
     *,
     allow_private_urls: bool = False,
     token: str | None = None,
+    trusted_host: str | bool = False,
 ) -> None:
     """Download the zones in sources_uris to."""
     zones = await get_zones(
-        source_uris, hass, prioritize, allow_private_urls=allow_private_urls, token=token
+        source_uris,
+        hass,
+        prioritize,
+        allow_private_urls=allow_private_urls,
+        token=token,
+        trusted_host=trusted_host,
     )
     geo_json = zones_to_geojson(zones)
 

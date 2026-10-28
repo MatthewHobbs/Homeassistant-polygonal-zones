@@ -51,7 +51,7 @@ class ZoneSource:
         allow_private_urls: bool = False,
         token: str | None = None,
         home_zone_id: str | None = None,
-        trusted_host: bool = False,
+        trusted_host: str | bool = False,
     ) -> None:
         """Initialise the source (does not load — see ``async_schedule_initial_load``)."""
         self.entry_id = entry_id

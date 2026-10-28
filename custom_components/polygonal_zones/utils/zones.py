@@ -257,7 +257,7 @@ async def load_zones(
     *,
     allow_private_urls: bool = False,
     token: str | None = None,
-    trusted_host: bool = False,
+    trusted_host: str | bool = False,
 ) -> ZoneLoadResult:
     """Load every URI independently; return successes plus per-URI failure records.
 
@@ -268,12 +268,19 @@ async def load_zones(
 
     ``allow_private_urls`` relaxes the SSRF resolver for RFC-1918 / ULA
     addresses so a user can point the integration at a LAN-installed source.
-    ``token`` is only ever sent to a URI that classifies as a local add-on
-    host, or when ``trusted_host`` says the entry came from the add-on's own
-    discovery (see :func:`load_data`) — never to any other configured source.
+    ``token`` is only ever sent to the exact URL the add-on announced (when
+    ``trusted_host`` names that URL), or to a URI that classifies as a local
+    add-on host on a hand-configured entry (see :func:`load_data`) — never to
+    any other configured source.
     """
     result = ZoneLoadResult()
     for idx, uri in enumerate(uris):
+        if isinstance(trusted_host, str):
+            uri_trusted = uri == trusted_host
+            uri_token = token if uri_trusted else None
+        else:
+            uri_trusted = bool(trusted_host)
+            uri_token = token
         try:
             result.zones.extend(
                 await _load_zones_from_uri(
@@ -282,8 +289,8 @@ async def load_zones(
                     prioritize,
                     hass,
                     allow_private_urls=allow_private_urls,
-                    token=token,
-                    trusted_host=trusted_host,
+                    token=uri_token,
+                    trusted_host=uri_trusted,
                 )
             )
         except UnsupportedSchemaVersion:
@@ -312,6 +319,7 @@ async def get_zones(
     *,
     allow_private_urls: bool = False,
     token: str | None = None,
+    trusted_host: str | bool = False,
 ) -> list[Zone]:
     """Load every URI; return successful zones or raise if all URIs failed.
 
@@ -322,7 +330,12 @@ async def get_zones(
     with the first failure's message so existing retry/backoff logic keeps working.
     """
     result = await load_zones(
-        uris, hass, prioritize, allow_private_urls=allow_private_urls, token=token
+        uris,
+        hass,
+        prioritize,
+        allow_private_urls=allow_private_urls,
+        token=token,
+        trusted_host=trusted_host,
     )
     if uris and not result.zones and result.failures:
         first_uri, first_msg = result.failures[0]

@@ -1,5 +1,6 @@
 """Constants for polygonal zones integration."""
 
+CONF_ADDON_URL = "addon_url"
 CONF_ALLOW_PRIVATE_URLS = "allow_private_urls"
 # Set when the entry was created from the editor add-on's Supervisor discovery
 # message. Its URL is a single-label add-on hostname, which

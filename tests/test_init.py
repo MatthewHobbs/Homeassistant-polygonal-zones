@@ -369,3 +369,18 @@ def test_migration_leaves_a_suffixed_row_to_its_own_tracker() -> None:
         "sensor.polygonal_zones_phone_2", new_unique_id="e1_device_tracker.phone_2_zone"
     )
     registry.async_remove.assert_not_called()
+
+
+def test_trusted_addon_url_resolves_announced_url_and_legacy_fallback() -> None:
+    from custom_components.polygonal_zones import _trusted_addon_url
+
+    addon = "http://local-polygonal-zones:8000/zones.json"
+    extra = "https://example.org/z.json"
+    with_url = SimpleNamespace(data={"addon_url": addon, "discovered_by_addon": True})
+    assert _trusted_addon_url(with_url, [addon, extra]) == addon
+    legacy = SimpleNamespace(data={"discovered_by_addon": True})
+    assert _trusted_addon_url(legacy, [addon]) == addon
+    assert _trusted_addon_url(legacy, [extra]) is False
+    assert _trusted_addon_url(legacy, [addon, extra]) is False
+    manual = SimpleNamespace(data={})
+    assert _trusted_addon_url(manual, [addon]) is False

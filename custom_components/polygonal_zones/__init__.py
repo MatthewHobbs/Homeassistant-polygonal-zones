@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 import logging
 import re
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlparse
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ENTITIES, Platform
@@ -15,6 +16,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 
 from .const import (
+    CONF_ADDON_URL,
     CONF_ALLOW_PRIVATE_URLS,
     CONF_DISCOVERED_BY_ADDON,
     CONF_DOWNLOAD_ZONES,
@@ -26,7 +28,7 @@ from .const import (
 )
 from .services import register_services
 from .services.reload_all_zones import action_builder as reload_all_zones
-from .utils.general import download_zone_relative_path, safe_config_path
+from .utils.general import download_zone_relative_path, is_local_add_on_host, safe_config_path
 from .utils.local_zones import download_zones
 from .utils.zones import UnsupportedSchemaVersion
 from .zone_source import ZoneSource, async_check_duplicate_source
@@ -167,6 +169,29 @@ def _migrate_zone_sensor_unique_ids(hass: HomeAssistant, entry: ConfigEntry) -> 
     )
 
 
+def _is_announced_addon_url(uri: str) -> bool:
+    """Whether ``uri`` has the shape of an add-on URL announced by Supervisor."""
+    parsed = urlparse(uri)
+    if parsed.scheme != "http" or not parsed.hostname:
+        return False
+    return is_local_add_on_host(uri) or "." not in parsed.hostname
+
+
+def _trusted_addon_url(entry: PolygonalZonesConfigEntry, zone_uris: list[str]) -> str | bool:
+    """The announced add-on URL for this entry, or False when hand-configured."""
+    if addon_url := entry.data.get(CONF_ADDON_URL):
+        return str(addon_url)
+    # 1.16.0/1.16.1 stored only the boolean flag; single-URL entries keep working
+    # before the add-on's next start writes CONF_ADDON_URL.
+    if (
+        entry.data.get(CONF_DISCOVERED_BY_ADDON)
+        and len(zone_uris) == 1
+        and _is_announced_addon_url(zone_uris[0])
+    ):
+        return zone_uris[0]
+    return False
+
+
 def _fetch_settings(entry: PolygonalZonesConfigEntry) -> tuple[list[str], dict[str, Any]]:
     """The configured zone URIs and how to fetch them, as stored on the entry."""
     zone_uris = [uri for uri in entry.data.get(CONF_ZONES_URL) or [] if uri]
@@ -174,7 +199,7 @@ def _fetch_settings(entry: PolygonalZonesConfigEntry) -> tuple[list[str], dict[s
         "prioritize": bool(entry.data.get(CONF_PRIORITIZE_ZONE_FILES)),
         "allow_private_urls": bool(entry.data.get(CONF_ALLOW_PRIVATE_URLS, False)),
         "token": entry.data.get(CONF_ZONE_SOURCE_TOKEN) or None,
-        "trusted_host": bool(entry.data.get(CONF_DISCOVERED_BY_ADDON)),
+        "trusted_host": _trusted_addon_url(entry, zone_uris),
     }
 
 
@@ -235,6 +260,7 @@ async def _async_bootstrap_zone_snapshot(
             hass,
             allow_private_urls=fetch["allow_private_urls"],
             token=fetch["token"],
+            trusted_host=fetch["trusted_host"],
         )
     except UnsupportedSchemaVersion as err:
         # The source file's format is newer than this integration understands.

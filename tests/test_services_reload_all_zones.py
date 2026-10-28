@@ -4,6 +4,9 @@ import time
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from homeassistant.exceptions import HomeAssistantError
+import pytest
+
 from custom_components.polygonal_zones.const import DOMAIN
 from custom_components.polygonal_zones.services import reload_all_zones
 
@@ -80,3 +83,19 @@ async def test_outside_the_floor_it_does_not_wait() -> None:
 
     sleep.assert_not_awaited()
     source.async_reload.assert_awaited_once_with(hass)
+
+
+async def test_a_failing_entry_does_not_stop_later_entries_from_reloading() -> None:
+    """One broken hand-configured entry must not prevent the add-on's entry
+    from reloading, and the failure is still reported once all entries finish."""
+    _fresh()
+    broken = AsyncMock()
+    broken.async_reload.side_effect = RuntimeError("dead host")
+    healthy = AsyncMock()
+    hass = _hass(_entry("dead", broken), _entry("addon", healthy))
+
+    with pytest.raises(HomeAssistantError, match=r"dead: dead host"):
+        await reload_all_zones.action_builder(hass)(SimpleNamespace())
+
+    broken.async_reload.assert_awaited_once_with(hass)
+    healthy.async_reload.assert_awaited_once_with(hass)

@@ -6,6 +6,7 @@ import time
 from typing import Any
 
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import HomeAssistantError
 
 from ..const import DOMAIN
 
@@ -26,6 +27,7 @@ def action_builder(hass: HomeAssistant) -> Callable[[ServiceCall], Coroutine[Any
     """
 
     async def action(_call: ServiceCall) -> None:
+        failures: list[tuple[str, Exception]] = []
         for entry in hass.config_entries.async_loaded_entries(DOMAIN):
             source = getattr(entry.runtime_data, "source", None)
             if source is None:
@@ -36,6 +38,14 @@ def action_builder(hass: HomeAssistant) -> Callable[[ServiceCall], Coroutine[Any
                 if wait > 0:
                     await asyncio.sleep(wait)
             _last_reload[entry.entry_id] = time.monotonic()
-            await source.async_reload(hass)
+            # Best-effort per entry: one dead source must not stop the
+            # companion add-on's entry from reloading in the same call.
+            try:
+                await source.async_reload(hass)
+            except Exception as err:
+                failures.append((entry.entry_id, err))
+        if failures:
+            summary = "; ".join(f"{eid}: {err}" for eid, err in failures)
+            raise HomeAssistantError(f"Could not reload zones ({summary})") from failures[0][1]
 
     return action

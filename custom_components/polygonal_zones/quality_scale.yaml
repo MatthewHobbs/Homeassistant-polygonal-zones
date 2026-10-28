@@ -38,7 +38,7 @@ rules:
   parallel-updates: done
   reauthentication-flow:
     status: exempt
-    comment: The only credential is a static shared token the user sets by hand; a rejected token surfaces as a failed zone load, with no reauth flow.
+    comment: The only credential is the companion app's shared token (handed over by discovery or set by hand); a rejected token is refreshed on the next discovery or surfaces as a failed zone load, with no reauth flow.
   test-coverage: done
 
   # --------- Gold ---------

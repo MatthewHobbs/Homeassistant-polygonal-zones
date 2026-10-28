@@ -71,8 +71,9 @@ async def test_discovery_asks_once_then_creates_the_entry(hass: HomeAssistant) -
     assert created["data"]["download_zones"] is False
     assert created["data"]["entities"] == []
     # The add-on's hostname is neither an IP literal nor `.local`, so this flag
-    # is the only thing that lets the fetch carry the token the add-on needs.
+    # and the announced URL let the fetch carry the token there and nowhere else.
     assert created["data"]["discovered_by_addon"] is True
+    assert created["data"]["addon_url"] == "http://local-polygonal-zones:8000/zones.json"
     # Explicit, or the entry counts as legacy and exposes coordinates by default.
     assert created["data"]["expose_coordinates"] is False
 
@@ -163,7 +164,7 @@ async def test_reconfigure_keeps_the_token_trust(hass: HomeAssistant) -> None:
     submitted = {
         key: value
         for key, value in entry.data.items()
-        if key not in ("consent_confirmed_at", "discovered_by_addon")
+        if key not in ("addon_url", "consent_confirmed_at", "discovered_by_addon")
     }
     submitted["entities"] = ["device_tracker.phone"]
     done = await hass.config_entries.flow.async_configure(result["flow_id"], submitted)
@@ -175,4 +176,113 @@ async def test_reconfigure_keeps_the_token_trust(hass: HomeAssistant) -> None:
 
     updated = hass.config_entries.async_get_entry(entry.entry_id)
     assert updated.data["discovered_by_addon"] is True
+    assert updated.data["addon_url"] == "http://local-polygonal-zones:8000/zones.json"
     assert updated.data["entities"] == ["device_tracker.phone"]
+
+
+async def test_a_pending_discovery_card_is_replaced_when_the_addon_restarts(
+    hass: HomeAssistant,
+) -> None:
+    """If the add-on restarts before the user confirms the Discovered card,
+    confirming the pending card must store the new token and address."""
+    await _start(hass, _info(config={"token": "token-a"}))
+    second = await _start(hass, _info(config={"host": "172.30.32.2", "token": "token-b"}))
+
+    assert second["type"] == FlowResultType.FORM
+    progress = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+    assert [flow["flow_id"] for flow in progress] == [second["flow_id"]]
+
+    created = await hass.config_entries.flow.async_configure(second["flow_id"], {})
+    assert created["type"] == FlowResultType.CREATE_ENTRY
+    assert created["data"]["zone_source_token"] == "token-b"
+    assert created["data"]["zone_urls"] == ["http://172.30.32.2:8000/zones.json"]
+    assert created["data"]["addon_url"] == "http://172.30.32.2:8000/zones.json"
+
+
+async def test_reconfigure_extra_url_survives_rediscovery_and_receives_no_token(
+    hass: HomeAssistant,
+) -> None:
+    """A second URL added through Reconfigure survives rediscovery, and the
+    add-on token is sent only to the URL the add-on announced."""
+    from unittest.mock import MagicMock
+
+    from custom_components.polygonal_zones import _build_zone_source
+
+    entry = await _create(hass, _info())
+    extra_url = "https://example.org/z.json"
+
+    with patch(
+        "custom_components.polygonal_zones.config_flow.validate_zone_urls",
+        new=AsyncMock(return_value={}),
+    ):
+        reconf = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": "reconfigure", "entry_id": entry.entry_id},
+            data=None,
+        )
+        submitted = {
+            key: value
+            for key, value in entry.data.items()
+            if key not in ("addon_url", "consent_confirmed_at", "discovered_by_addon")
+        }
+        submitted["zone_urls"] = [entry.data["addon_url"], extra_url]
+        done = await hass.config_entries.flow.async_configure(reconf["flow_id"], submitted)
+        assert done["type"] == FlowResultType.ABORT
+
+    await _start(hass, _info(config={"host": "172.30.32.2", "token": "rotated"}))
+    updated = hass.config_entries.async_get_entry(entry.entry_id)
+    new_addon_url = "http://172.30.32.2:8000/zones.json"
+    assert updated.data["zone_urls"] == [new_addon_url, extra_url]
+    assert updated.data["addon_url"] == new_addon_url
+
+    calls: dict[str, dict | None] = {}
+
+    class _FakeResp:
+        status = 200
+        content_length = 43
+        charset = "utf-8"
+
+        def raise_for_status(self) -> None:
+            return None
+
+        @property
+        def content(self):
+            async def _iter(_n: int):
+                yield b'{"type":"FeatureCollection","features":[]}'
+
+            return MagicMock(iter_chunked=_iter)
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+    class _FakeSession:
+        def get(self, uri: str, **kwargs):
+            calls[uri] = kwargs.get("headers")
+            return _FakeResp()
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+    source = _build_zone_source(updated)
+    with (
+        patch(
+            "custom_components.polygonal_zones.utils.general.aiohttp.ClientSession",
+            return_value=_FakeSession(),
+        ),
+        patch(
+            "custom_components.polygonal_zones.utils.general._PublicOnlyResolver",
+            return_value=MagicMock(),
+        ),
+    ):
+        await source.async_reload(hass)
+
+    assert calls == {
+        new_addon_url: {"X-Save-Token": "rotated"},
+        extra_url: None,
+    }
