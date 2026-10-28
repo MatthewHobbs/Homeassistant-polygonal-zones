@@ -13,6 +13,9 @@ on:
 permissions:
   contents: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 # See validate.yml for why the key includes github.workflow. Never
 # push/pull_request-triggered, so cancel-in-progress is unconditionally false.
 concurrency:
@@ -33,7 +36,7 @@ jobs:
   pytest-beta:
     name: Pytest (HA beta)
     needs: [gate]
-    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || needs.gate.outputs.changed == 'true') }}
+    if: ${{ !cancelled() && needs.gate.result == 'success' && (github.event_name == 'workflow_dispatch' || needs.gate.outputs.changed == 'true') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -60,8 +63,10 @@ jobs:
   pytest-hass-beta:
     name: Pytest (real hass, HA beta)
     needs: [gate]
-    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || needs.gate.outputs.changed == 'true') }}
+    if: ${{ !cancelled() && needs.gate.result == 'success' && (github.event_name == 'workflow_dispatch' || needs.gate.outputs.changed == 'true') }}
     runs-on: ubuntu-latest
+    outputs:
+      executed: ${{ steps.install.outputs.compatible }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
@@ -78,11 +83,7 @@ jobs:
           sed -E 's/^(pytest-homeassistant-custom-component|homeassistant)==.*/\1/' requirements_test_hass.txt > /tmp/requirements_test_hass.unpinned.txt
           pip install -r /tmp/requirements_test_hass.unpinned.txt
           pip install "$(grep -E '^shapely' requirements_test.txt)"
-          if ! pip install "homeassistant==${EXPECTED_HA}"; then
-            echo "::notice::Could not install homeassistant==${EXPECTED_HA} alongside pytest-homeassistant-custom-component; skipping tests_hass."
-            echo "compatible=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
+          pip install "homeassistant==${EXPECTED_HA}"
           pip show homeassistant pytest-homeassistant-custom-component
           python -c 'import os, homeassistant.const as c; assert c.__version__ == os.environ["EXPECTED_HA"], (c.__version__, os.environ["EXPECTED_HA"])'
           if ! python -c 'import pytest_homeassistant_custom_component.plugins, pytest_homeassistant_custom_component.common'; then
@@ -98,7 +99,7 @@ jobs:
   mypy-beta:
     name: Mypy (HA beta)
     needs: [gate]
-    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || needs.gate.outputs.changed == 'true') }}
+    if: ${{ !cancelled() && needs.gate.result == 'success' && (github.event_name == 'workflow_dispatch' || needs.gate.outputs.changed == 'true') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -125,7 +126,7 @@ jobs:
   # and going silently green.
   record:
     needs: [gate, pytest-beta, pytest-hass-beta, mypy-beta]
-    if: ${{ needs.gate.outputs.changed == 'true' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+    if: ${{ needs.gate.outputs.changed == 'true' && needs.pytest-hass-beta.outputs.executed == 'true' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
     runs-on: ubuntu-latest
     steps:
       - run: echo "${{ needs.gate.outputs.cache_key }}" > .upstream-fingerprint
