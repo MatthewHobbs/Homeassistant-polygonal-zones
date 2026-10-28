@@ -463,7 +463,7 @@ def test_unsupported_schema_version_message_is_redacted() -> None:
 
 
 async def test_load_zones_binds_token_and_trust_only_to_the_announced_url() -> None:
-    """When trusted_host is the announced add-on URL, no other URL on the entry
+    """When addon_url is set on a discovered entry, no other URL on the entry
     receives the token or the trusted_host flag."""
     seen: list[tuple[str, str | None, bool]] = []
 
@@ -479,7 +479,8 @@ async def test_load_zones_binds_token_and_trust_only_to_the_announced_url() -> N
             _make_hass(),
             False,
             token="s3cr3t",
-            trusted_host=addon_url,
+            trusted_host=True,
+            addon_url=addon_url,
         )
 
     assert seen == [

@@ -2,13 +2,16 @@
 
 import asyncio
 from collections.abc import Callable, Coroutine
+import logging
 import time
 from typing import Any
 
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError
 
-from ..const import DOMAIN
+from ..const import CONF_DISCOVERED_BY_ADDON, DOMAIN
+
+_LOGGER = logging.getLogger(__name__)
 
 # One reload per entry this often, matching the mutation budget the rest of the
 # integration enforces. A request inside the window waits for it instead of
@@ -39,11 +42,17 @@ def action_builder(hass: HomeAssistant) -> Callable[[ServiceCall], Coroutine[Any
                     await asyncio.sleep(wait)
             _last_reload[entry.entry_id] = time.monotonic()
             # Best-effort per entry: one dead source must not stop the
-            # companion add-on's entry from reloading in the same call.
+            # companion add-on's entry from reloading, and a broken unrelated
+            # entry logs a warning rather than turning the add-on's save into
+            # a false "Home Assistant did not re-read them" warning.
             try:
                 await source.async_reload(hass)
             except Exception as err:
-                failures.append((entry.entry_id, err))
+                entry_data = getattr(entry, "data", None) or {}
+                if entry_data.get(CONF_DISCOVERED_BY_ADDON):
+                    failures.append((entry.entry_id, err))
+                else:
+                    _LOGGER.warning("Could not reload zones for entry %s: %s", entry.entry_id, err)
         if failures:
             summary = "; ".join(f"{eid}: {err}" for eid, err in failures)
             raise HomeAssistantError(f"Could not reload zones ({summary})") from failures[0][1]

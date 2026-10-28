@@ -177,8 +177,8 @@ def _is_announced_addon_url(uri: str) -> bool:
     return is_local_add_on_host(uri) or "." not in parsed.hostname
 
 
-def _trusted_addon_url(entry: PolygonalZonesConfigEntry, zone_uris: list[str]) -> str | bool:
-    """The announced add-on URL for this entry, or False when hand-configured."""
+def _trusted_addon_url(entry: PolygonalZonesConfigEntry, zone_uris: list[str]) -> str | None:
+    """The announced add-on URL for this entry, or None when hand-configured."""
     if addon_url := entry.data.get(CONF_ADDON_URL):
         return str(addon_url)
     # 1.16.0/1.16.1 stored only the boolean flag; single-URL entries keep working
@@ -189,17 +189,19 @@ def _trusted_addon_url(entry: PolygonalZonesConfigEntry, zone_uris: list[str]) -
         and _is_announced_addon_url(zone_uris[0])
     ):
         return zone_uris[0]
-    return False
+    return None
 
 
 def _fetch_settings(entry: PolygonalZonesConfigEntry) -> tuple[list[str], dict[str, Any]]:
     """The configured zone URIs and how to fetch them, as stored on the entry."""
     zone_uris = [uri for uri in entry.data.get(CONF_ZONES_URL) or [] if uri]
+    addon_url = _trusted_addon_url(entry, zone_uris)
     return zone_uris, {
         "prioritize": bool(entry.data.get(CONF_PRIORITIZE_ZONE_FILES)),
         "allow_private_urls": bool(entry.data.get(CONF_ALLOW_PRIVATE_URLS, False)),
         "token": entry.data.get(CONF_ZONE_SOURCE_TOKEN) or None,
-        "trusted_host": _trusted_addon_url(entry, zone_uris),
+        "trusted_host": addon_url is not None,
+        "addon_url": addon_url,
     }
 
 
@@ -228,6 +230,7 @@ def _build_zone_source(entry: PolygonalZonesConfigEntry) -> ZoneSource:
         token=fetch["token"],
         home_zone_id=home_zone_id,
         trusted_host=fetch["trusted_host"],
+        addon_url=fetch["addon_url"],
     )
 
 
@@ -261,6 +264,7 @@ async def _async_bootstrap_zone_snapshot(
             allow_private_urls=fetch["allow_private_urls"],
             token=fetch["token"],
             trusted_host=fetch["trusted_host"],
+            addon_url=fetch["addon_url"],
         )
     except UnsupportedSchemaVersion as err:
         # The source file's format is newer than this integration understands.

@@ -618,6 +618,14 @@ def test_updated_zone_urls_replaces_only_the_addon_url() -> None:
     assert _updated_zone_urls({"zone_urls": [old, extra], "addon_url": old}, new) == [new, extra]
     assert _updated_zone_urls({"zone_urls": [new, extra]}, new) == [new, extra]
     assert _updated_zone_urls({"zone_urls": [old]}, new) == [new]
+
+
+def test_updated_zone_urls_restores_removed_addon_url_before_existing_urls() -> None:
+    """When addon_url is set on a discovered entry but was removed from zone_urls,
+    rediscovery prepends the announced URL ahead of the remaining URLs."""
+    old = "http://172.30.32.1:8000/zones.json"
+    new = "http://172.30.32.2:8000/zones.json"
+    extra = "https://example.org/z.json"
     assert _updated_zone_urls({"zone_urls": [extra], "addon_url": old}, new) == [new, extra]
 
 
@@ -691,3 +699,61 @@ async def test_hassio_step_replaces_pending_flow_and_updates_existing_entry(tmp_
         "http://172.30.32.2:8000/zones.json",
         "https://example.org/z.json",
     ]
+
+
+async def test_submitting_a_pending_discovery_card_aborted_by_rediscovery_raises_unknown_flow() -> (
+    None
+):
+    """Aborting a stale pending card means an already-open confirm dialog for
+    the old flow_id fails with UnknownFlow; the active card has the new flow_id."""
+    from unittest.mock import AsyncMock
+
+    from homeassistant.data_entry_flow import FlowManager, UnknownFlow
+    from homeassistant.helpers.service_info.hassio import HassioServiceInfo
+
+    from custom_components.polygonal_zones.const import DOMAIN
+
+    flows: dict[str, ConfigFlow] = {}
+
+    class _Manager(FlowManager):
+        async def async_create_flow(self, handler_key, *, context=None, data=None):
+            flow = ConfigFlow()
+            flow.hass = self.hass
+            flow.init_step = (context or {}).get("source", "user")
+            flow.async_set_unique_id = AsyncMock(return_value=None)
+            flow._abort_if_unique_id_configured = MagicMock()
+            flows[flow.flow_id] = flow
+            return flow
+
+        async def async_finish_flow(self, flow, result):
+            return result
+
+    hass = SimpleNamespace()
+    manager = _Manager(hass)
+    hass.config_entries = SimpleNamespace(
+        async_entries=lambda _d: [],
+        flow=manager,
+    )
+    first = await manager.async_init(
+        DOMAIN,
+        context={"source": "hassio", "unique_id": "addon_polygonal_zones"},
+        data=HassioServiceInfo(
+            config={"host": "172.30.32.1", "port": 8000, "path": "/zones.json", "token": "a"},
+            name="Polygonal Zones",
+            slug="polygonal_zones",
+            uuid="u1",
+        ),
+    )
+    second = await manager.async_init(
+        DOMAIN,
+        context={"source": "hassio", "unique_id": "addon_polygonal_zones"},
+        data=HassioServiceInfo(
+            config={"host": "172.30.32.2", "port": 8000, "path": "/zones.json", "token": "b"},
+            name="Polygonal Zones",
+            slug="polygonal_zones",
+            uuid="u1",
+        ),
+    )
+    assert second["type"] == "form"
+    with pytest.raises(UnknownFlow):
+        await manager.async_configure(first["flow_id"], {})

@@ -263,6 +263,8 @@ def _updated_zone_urls(entry_data: Mapping[str, Any], new_url: str) -> list[str]
         return existing
     if not old_addon_url and len(existing) <= 1:
         return [new_url]
+    # A discovered entry tracks the add-on: if the user deleted its URL in
+    # Reconfigure, the next add-on announcement restores it alongside any extras.
     return [new_url, *existing]
 
 
@@ -318,7 +320,8 @@ class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
         if existing_entry is not None:
             self._discovery_update[CONF_ZONES_URL] = _updated_zone_urls(existing_entry.data, url)
         # The add-on re-posts on every start: update the configured entry, or
-        # replace any stale pending card so confirming it uses the latest token.
+        # abort any stale pending card (submitting an already-open dialog for it
+        # raises UnknownFlow) so confirming the active card uses the latest token.
         self._abort_if_unique_id_configured(updates=self._discovery_update)
         for progress in self._async_in_progress(
             include_uninitialized=True, match_context={"unique_id": unique_id}
