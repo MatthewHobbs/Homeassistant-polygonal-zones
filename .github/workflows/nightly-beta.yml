@@ -85,7 +85,7 @@ jobs:
           fi
           pip show homeassistant pytest-homeassistant-custom-component
           python -c 'import os, homeassistant.const as c; assert c.__version__ == os.environ["EXPECTED_HA"], (c.__version__, os.environ["EXPECTED_HA"])'
-          if ! python -c 'import pytest_homeassistant_custom_component.common, pytest_homeassistant_custom_component.plugins'; then
+          if ! python -c 'import pytest_homeassistant_custom_component.plugins, pytest_homeassistant_custom_component.common'; then
             echo "::notice::No pytest-homeassistant-custom-component release supports homeassistant==${EXPECTED_HA} yet; skipping tests_hass."
             echo "compatible=false" >> "$GITHUB_OUTPUT"
             exit 0
