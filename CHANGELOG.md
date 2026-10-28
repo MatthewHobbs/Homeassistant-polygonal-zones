@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.16.2 — 2026-10-28
+
+Automatic setup with the editor app stays correct when the app restarts or moves.
+
+- **The app's password goes only to the app.** An entry set up by the app sends the
+  password to the address the app announced, and to no other URL on that entry. A
+  source you added yourself under **Reconfigure** never receives it.
+- **A waiting discovery card is replaced, not left stale.** When the app starts
+  again, any card still waiting is replaced by the new one, so confirming it uses the
+  app's current address and password. A card you have open when this happens stops
+  working: close it and open the new one.
+- **Rediscovery changes only the app's address.** Extra URLs you added, your devices
+  and your choices are kept. An entry made by 1.16.0 or 1.16.1 with a single URL keeps
+  working until the app next starts.
+- **One broken source no longer blocks the others.** `polygonal_zones.reload_all_zones`
+  reloads every entry even when one fails. It reports an error only when the app's own
+  entry could not be reloaded, so the editor's warning after a save is accurate. A
+  failure in any other entry is written to the log.
+- The app's address is hidden in diagnostics, like your other URLs.
+
 ## 1.16.1 — 2026-10-25
 
 A documentation update, and the two corrections the writing of it turned up.
