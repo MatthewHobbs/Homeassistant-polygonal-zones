@@ -50,7 +50,7 @@ from .utils.general import download_zone_relative_path, is_local_add_on_host
 _LOGGER = logging.getLogger(__name__)
 
 # Shown next to the tracking-consent checkbox on both the initial setup form
-# and the reconfigure form (when a new tracker is being added).
+# and the reconfigure form.
 _CONSENT_NOTICE = (
     "This integration continuously monitors the GPS position of the "
     "device_tracker entities you select. Please ensure everyone whose "
@@ -451,18 +451,14 @@ class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
                 return self.async_update_reload_and_abort(entry, data=data)
 
         defaults = user_input if user_input is not None else dict(entry.data)
-        schema = build_create_flow(defaults)
-        description_placeholders: dict[str, str] | None = None
-        if adding_entities:
-            schema = schema.extend(
-                {vol.Required("consent", default=False): selector.BooleanSelector()}
-            )
-            description_placeholders = {"consent_notice": _CONSENT_NOTICE}
+        schema = build_create_flow(defaults).extend(
+            {vol.Optional("consent", default=False): selector.BooleanSelector()}
+        )
         return self.async_show_form(
             step_id="reconfigure",
             data_schema=schema,
             errors=errors,
-            description_placeholders=description_placeholders,
+            description_placeholders={"consent_notice": _CONSENT_NOTICE},
         )
 
     @staticmethod

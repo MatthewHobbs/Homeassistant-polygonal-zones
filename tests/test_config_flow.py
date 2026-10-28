@@ -394,6 +394,22 @@ async def test_reconfigure_flow_valid_input_calls_update_reload_and_abort(tmp_pa
     assert data["consent_confirmed_at"]
 
 
+async def test_reconfigure_flow_initial_render_includes_consent_toggle(tmp_path) -> None:
+    """The initial Reconfigure form includes the consent toggle so adding a tracker works on the first submit."""
+    flow = ConfigFlow()
+    flow.hass = _hass(tmp_path)
+    fake_entry = SimpleNamespace(
+        data={"zone_urls": ["https://x"], "entities": ["device_tracker.alice"]}
+    )
+    flow._get_reconfigure_entry = MagicMock(return_value=fake_entry)
+    flow.async_show_form = MagicMock(return_value={"type": "form"})
+
+    result = await flow.async_step_reconfigure(None)
+    assert result == {"type": "form"}
+    schema = flow.async_show_form.call_args.kwargs["data_schema"]
+    assert "consent" in {str(k) for k in schema.schema}
+
+
 async def test_reconfigure_flow_adding_entity_without_consent_is_refused(tmp_path) -> None:
     """Growing the tracked-entity set re-applies the consent gate."""
     flow = ConfigFlow()

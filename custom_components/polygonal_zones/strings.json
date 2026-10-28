@@ -50,7 +50,7 @@
           "allow_private_urls": "Turn this on only if your zone source is on your local network — e.g. the companion editor app at http://192.168.x.x:8000/zones.json. Public https:// URLs and files in /config work without it. Loopback, link-local, and cloud-metadata addresses stay blocked either way.",
           "zone_source_token": "The app's save_token, if it has one configured. Sent as X-Save-Token only on requests to a local/LAN app URL above — never to a public https:// source.",
           "home_zone_id": "The zone's id (preferred, survives a rename) or exact name — see the zone file's `properties.id`/`properties.name`. Blank means no zone counts as home; state stays not_home for that case.",
-          "consent": "Shown only when you add a device_tracker that wasn't already tracked. This integration continuously records the GPS location of the entities you select. Tick to confirm before continuing."
+          "consent": "Required when you add a device_tracker that wasn't already tracked. This integration continuously records the GPS location of the entities you select. Tick to confirm before continuing."
         }
       },
       "hassio_confirm": {
