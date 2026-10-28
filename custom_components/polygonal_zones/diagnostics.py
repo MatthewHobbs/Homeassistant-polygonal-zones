@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 # (`entities`, `zone_urls`), the add-on token (`zone_source_token`, a real
 # secret), the home zone (`home_zone_id`, usually a place name) and the
 # personalised entry `title`.
-TO_REDACT_DATA = {"entities", "zone_urls", "zone_source_token", "home_zone_id"}
+TO_REDACT_DATA = {"addon_url", "entities", "zone_urls", "zone_source_token", "home_zone_id"}
 TO_REDACT_ENTRY_FIELDS = {"title"}
 
 

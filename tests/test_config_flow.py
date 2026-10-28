@@ -9,6 +9,7 @@ from custom_components.polygonal_zones.config_flow import (
     ConfigFlow,
     OptionsFlowHandler,
     _entry_title,
+    _updated_zone_urls,
     build_create_flow,
     build_options_flow,
 )
@@ -607,3 +608,152 @@ def test_entry_title_names_the_editor_it_reads() -> None:
     assert _entry_title(["http://10.0.0.5:8099/zones.json"]) == ("Polygonal Zones (10.0.0.5:8099)")
     assert _entry_title(["seed.geojson"]) == "Polygonal Zones"
     assert _entry_title([]) == "Polygonal Zones"
+
+
+def test_updated_zone_urls_replaces_only_the_addon_url() -> None:
+    """Rediscovery replaces the add-on's own URL and keeps user-added URLs."""
+    old = "http://172.30.32.1:8000/zones.json"
+    new = "http://172.30.32.2:8000/zones.json"
+    extra = "https://example.org/z.json"
+    assert _updated_zone_urls({"zone_urls": [old, extra], "addon_url": old}, new) == [new, extra]
+    assert _updated_zone_urls({"zone_urls": [new, extra]}, new) == [new, extra]
+    assert _updated_zone_urls({"zone_urls": [old]}, new) == [new]
+
+
+def test_updated_zone_urls_restores_removed_addon_url_before_existing_urls() -> None:
+    """When addon_url is set on a discovered entry but was removed from zone_urls,
+    rediscovery prepends the announced URL ahead of the remaining URLs."""
+    old = "http://172.30.32.1:8000/zones.json"
+    new = "http://172.30.32.2:8000/zones.json"
+    extra = "https://example.org/z.json"
+    assert _updated_zone_urls({"zone_urls": [extra], "addon_url": old}, new) == [new, extra]
+
+
+async def test_reconfigure_carries_forward_addon_url_and_discovery_flag(tmp_path) -> None:
+    """Reconfigure preserves both discovery markers even though neither is on the form."""
+    flow = ConfigFlow()
+    flow.hass = _hass(tmp_path)
+    fake_entry = SimpleNamespace(
+        data={
+            "zone_urls": ["http://172.30.32.1:8000/zones.json"],
+            "addon_url": "http://172.30.32.1:8000/zones.json",
+            "discovered_by_addon": True,
+            "entities": ["device_tracker.alice"],
+        }
+    )
+    flow._get_reconfigure_entry = MagicMock(return_value=fake_entry)
+    flow.async_update_reload_and_abort = MagicMock(return_value={"type": "reload"})
+
+    await flow.async_step_reconfigure(
+        {
+            "zone_urls": ["http://172.30.32.1:8000/zones.json", "https://example.org/z.json"],
+            "entities": ["device_tracker.alice"],
+            "allow_private_urls": True,
+        }
+    )
+    data = flow.async_update_reload_and_abort.call_args.kwargs["data"]
+    assert data["discovered_by_addon"] is True
+    assert data["addon_url"] == "http://172.30.32.1:8000/zones.json"
+
+
+async def test_hassio_step_replaces_pending_flow_and_updates_existing_entry(tmp_path) -> None:
+    """async_step_hassio aborts any prior pending flow for the same slug, and
+    when an entry already exists it replaces only the add-on's URL."""
+    from unittest.mock import AsyncMock
+
+    from homeassistant.helpers.service_info.hassio import HassioServiceInfo
+
+    flow = ConfigFlow()
+    abort_mock = MagicMock()
+    flow.hass = SimpleNamespace(
+        config_entries=SimpleNamespace(
+            async_entries=lambda _d: [],
+            flow=SimpleNamespace(async_abort=abort_mock),
+        )
+    )
+    flow.async_set_unique_id = AsyncMock(return_value=None)
+    flow._abort_if_unique_id_configured = MagicMock()
+    flow._async_in_progress = MagicMock(return_value=[{"flow_id": "stale-flow"}])
+    flow.async_show_form = MagicMock(return_value={"type": "form"})
+    flow.async_create_entry = MagicMock(return_value={"type": "create_entry"})
+    info = HassioServiceInfo(
+        config={"host": "172.30.32.2", "port": 8000, "path": "/zones.json", "token": "tok"},
+        name="Polygonal Zones",
+        slug="polygonal_zones",
+        uuid="u1",
+    )
+
+    assert await flow.async_step_hassio(info) == {"type": "form"}
+    abort_mock.assert_called_once_with("stale-flow")
+    assert await flow.async_step_hassio_confirm({}) == {"type": "create_entry"}
+
+    existing = SimpleNamespace(
+        data={
+            "zone_urls": ["http://172.30.32.1:8000/zones.json", "https://example.org/z.json"],
+            "addon_url": "http://172.30.32.1:8000/zones.json",
+        }
+    )
+    flow.async_set_unique_id = AsyncMock(return_value=existing)
+    await flow.async_step_hassio(info)
+    assert flow._discovery_update["zone_urls"] == [
+        "http://172.30.32.2:8000/zones.json",
+        "https://example.org/z.json",
+    ]
+
+
+async def test_submitting_a_pending_discovery_card_aborted_by_rediscovery_raises_unknown_flow() -> (
+    None
+):
+    """Aborting a stale pending card means an already-open confirm dialog for
+    the old flow_id fails with UnknownFlow; the active card has the new flow_id."""
+    from unittest.mock import AsyncMock
+
+    from homeassistant.data_entry_flow import FlowManager, UnknownFlow
+    from homeassistant.helpers.service_info.hassio import HassioServiceInfo
+
+    from custom_components.polygonal_zones.const import DOMAIN
+
+    flows: dict[str, ConfigFlow] = {}
+
+    class _Manager(FlowManager):
+        async def async_create_flow(self, handler_key, *, context=None, data=None):
+            flow = ConfigFlow()
+            flow.hass = self.hass
+            flow.init_step = (context or {}).get("source", "user")
+            flow.async_set_unique_id = AsyncMock(return_value=None)
+            flow._abort_if_unique_id_configured = MagicMock()
+            flows[flow.flow_id] = flow
+            return flow
+
+        async def async_finish_flow(self, flow, result):
+            return result
+
+    hass = SimpleNamespace()
+    manager = _Manager(hass)
+    hass.config_entries = SimpleNamespace(
+        async_entries=lambda _d: [],
+        flow=manager,
+    )
+    first = await manager.async_init(
+        DOMAIN,
+        context={"source": "hassio", "unique_id": "addon_polygonal_zones"},
+        data=HassioServiceInfo(
+            config={"host": "172.30.32.1", "port": 8000, "path": "/zones.json", "token": "a"},
+            name="Polygonal Zones",
+            slug="polygonal_zones",
+            uuid="u1",
+        ),
+    )
+    second = await manager.async_init(
+        DOMAIN,
+        context={"source": "hassio", "unique_id": "addon_polygonal_zones"},
+        data=HassioServiceInfo(
+            config={"host": "172.30.32.2", "port": 8000, "path": "/zones.json", "token": "b"},
+            name="Polygonal Zones",
+            slug="polygonal_zones",
+            uuid="u1",
+        ),
+    )
+    assert second["type"] == "form"
+    with pytest.raises(UnknownFlow):
+        await manager.async_configure(first["flow_id"], {})

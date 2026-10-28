@@ -369,3 +369,26 @@ def test_migration_leaves_a_suffixed_row_to_its_own_tracker() -> None:
         "sensor.polygonal_zones_phone_2", new_unique_id="e1_device_tracker.phone_2_zone"
     )
     registry.async_remove.assert_not_called()
+
+
+def test_trusted_addon_url_resolves_announced_url_and_legacy_fallback() -> None:
+    from custom_components.polygonal_zones import _fetch_settings, _trusted_addon_url
+
+    addon = "http://local-polygonal-zones:8000/zones.json"
+    extra = "https://example.org/z.json"
+    with_url = SimpleNamespace(
+        data={"zone_urls": [addon, extra], "addon_url": addon, "discovered_by_addon": True}
+    )
+    assert _trusted_addon_url(with_url, [addon, extra]) == addon
+    _, settings = _fetch_settings(with_url)
+    assert settings["addon_url"] == addon
+    legacy = SimpleNamespace(data={"zone_urls": [addon], "discovered_by_addon": True})
+    assert _trusted_addon_url(legacy, [addon]) == addon
+    _, legacy_settings = _fetch_settings(legacy)
+    assert legacy_settings["addon_url"] == addon
+    assert _trusted_addon_url(legacy, [extra]) is None
+    assert _trusted_addon_url(legacy, [addon, extra]) is None
+    manual = SimpleNamespace(data={"zone_urls": [addon]})
+    assert _trusted_addon_url(manual, [addon]) is None
+    _, manual_settings = _fetch_settings(manual)
+    assert manual_settings["addon_url"] is None

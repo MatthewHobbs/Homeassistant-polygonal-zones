@@ -2,12 +2,16 @@
 
 import asyncio
 from collections.abc import Callable, Coroutine
+import logging
 import time
 from typing import Any
 
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import HomeAssistantError
 
-from ..const import DOMAIN
+from ..const import CONF_DISCOVERED_BY_ADDON, DOMAIN
+
+_LOGGER = logging.getLogger(__name__)
 
 # One reload per entry this often, matching the mutation budget the rest of the
 # integration enforces. A request inside the window waits for it instead of
@@ -26,6 +30,7 @@ def action_builder(hass: HomeAssistant) -> Callable[[ServiceCall], Coroutine[Any
     """
 
     async def action(_call: ServiceCall) -> None:
+        failures: list[tuple[str, Exception]] = []
         for entry in hass.config_entries.async_loaded_entries(DOMAIN):
             source = getattr(entry.runtime_data, "source", None)
             if source is None:
@@ -36,6 +41,19 @@ def action_builder(hass: HomeAssistant) -> Callable[[ServiceCall], Coroutine[Any
                 if wait > 0:
                     await asyncio.sleep(wait)
             _last_reload[entry.entry_id] = time.monotonic()
-            await source.async_reload(hass)
+            # Best-effort per entry: one dead source must not stop the
+            # companion add-on's entry from reloading, and a broken unrelated
+            # entry logs a warning rather than turning the add-on's save into
+            # a false "Home Assistant did not re-read them" warning.
+            try:
+                await source.async_reload(hass)
+            except Exception as err:
+                if entry.data.get(CONF_DISCOVERED_BY_ADDON):
+                    failures.append((entry.entry_id, err))
+                else:
+                    _LOGGER.warning("Could not reload zones for entry %s: %s", entry.entry_id, err)
+        if failures:
+            summary = "; ".join(f"{eid}: {err}" for eid, err in failures)
+            raise HomeAssistantError(f"Could not reload zones ({summary})") from failures[0][1]
 
     return action

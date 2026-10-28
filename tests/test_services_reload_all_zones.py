@@ -4,13 +4,17 @@ import time
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from custom_components.polygonal_zones.const import DOMAIN
+from homeassistant.exceptions import HomeAssistantError
+import pytest
+
+from custom_components.polygonal_zones.const import CONF_DISCOVERED_BY_ADDON, DOMAIN
 from custom_components.polygonal_zones.services import reload_all_zones
 
 
-def _entry(entry_id: str, source=None, *, runtime_data=True):
+def _entry(entry_id: str, source=None, *, runtime_data=True, discovered=False):
     data = SimpleNamespace(source=source) if runtime_data else None
-    return SimpleNamespace(entry_id=entry_id, runtime_data=data)
+    entry_data = {CONF_DISCOVERED_BY_ADDON: True} if discovered else {}
+    return SimpleNamespace(entry_id=entry_id, data=entry_data, runtime_data=data)
 
 
 def _hass(*entries) -> SimpleNamespace:
@@ -80,3 +84,42 @@ async def test_outside_the_floor_it_does_not_wait() -> None:
 
     sleep.assert_not_awaited()
     source.async_reload.assert_awaited_once_with(hass)
+
+
+async def test_a_failing_manual_entry_warns_without_raising_when_addon_entry_succeeds(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A broken hand-configured entry must not make the add-on's save fail."""
+    _fresh()
+    broken = AsyncMock()
+    broken.async_reload.side_effect = RuntimeError("dead host")
+    healthy = AsyncMock()
+    hass = _hass(
+        _entry("manual", broken, discovered=False),
+        _entry("addon", healthy, discovered=True),
+    )
+
+    await reload_all_zones.action_builder(hass)(SimpleNamespace())
+
+    broken.async_reload.assert_awaited_once_with(hass)
+    healthy.async_reload.assert_awaited_once_with(hass)
+    assert "Could not reload zones for entry manual: dead host" in caplog.text
+
+
+async def test_a_failing_addon_entry_raises_after_reloading_other_entries() -> None:
+    """When the add-on-discovered entry fails to reload, the call raises so
+    the add-on reports that Home Assistant could not re-read the zones."""
+    _fresh()
+    broken_addon = AsyncMock()
+    broken_addon.async_reload.side_effect = RuntimeError("addon down")
+    healthy_manual = AsyncMock()
+    hass = _hass(
+        _entry("addon", broken_addon, discovered=True),
+        _entry("manual", healthy_manual, discovered=False),
+    )
+
+    with pytest.raises(HomeAssistantError, match=r"addon: addon down"):
+        await reload_all_zones.action_builder(hass)(SimpleNamespace())
+
+    broken_addon.async_reload.assert_awaited_once_with(hass)
+    healthy_manual.async_reload.assert_awaited_once_with(hass)

@@ -460,3 +460,29 @@ def test_unsupported_schema_version_message_is_redacted() -> None:
 
     assert "pa55" not in str(err.value)
     assert "s3cr3t" not in str(err.value)
+
+
+async def test_load_zones_binds_token_and_trust_only_to_the_announced_url() -> None:
+    """When addon_url is set on a discovered entry, no other URL on the entry
+    receives the token or the trusted_host flag."""
+    seen: list[tuple[str, str | None, bool]] = []
+
+    async def fake_load(uri: str, _hass, *, token=None, trusted_host=False, **_kwargs) -> str:
+        seen.append((uri, token, trusted_host))
+        return '{"type": "FeatureCollection", "features": []}'
+
+    addon_url = "http://local-polygonal-zones:8000/zones.json"
+    extra_url = "https://example.org/z.json"
+    with patch("custom_components.polygonal_zones.utils.zones.load_data", side_effect=fake_load):
+        await load_zones(
+            [addon_url, extra_url],
+            _make_hass(),
+            False,
+            token="s3cr3t",
+            addon_url=addon_url,
+        )
+
+    assert seen == [
+        (addon_url, "s3cr3t", True),
+        (extra_url, None, False),
+    ]

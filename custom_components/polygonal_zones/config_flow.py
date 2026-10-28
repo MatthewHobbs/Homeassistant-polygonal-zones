@@ -1,5 +1,6 @@
 """Config flow for Polygonal zones integrations."""
 
+from collections.abc import Mapping
 import logging
 import pathlib
 from types import MappingProxyType
@@ -32,6 +33,7 @@ else:
     import voluptuous as vol
 
 from .const import (
+    CONF_ADDON_URL,
     CONF_ALLOW_PRIVATE_URLS,
     CONF_CONSENT_CONFIRMED_AT,
     CONF_DISCOVERED_BY_ADDON,
@@ -250,6 +252,22 @@ def _entry_title(zone_urls: list[str]) -> str:
     return "Polygonal Zones"
 
 
+def _updated_zone_urls(entry_data: Mapping[str, Any], new_url: str) -> list[str]:
+    """Replace only the add-on's own URL on rediscovery, keeping user-added ones."""
+    existing = [u for u in (entry_data.get(CONF_ZONES_URL) or []) if u]
+    old_addon_url = entry_data.get(CONF_ADDON_URL)
+    if old_addon_url and old_addon_url in existing:
+        replaced = [new_url if u == old_addon_url else u for u in existing]
+        return list(dict.fromkeys(replaced))
+    if new_url in existing:
+        return existing
+    if not old_addon_url and len(existing) <= 1:
+        return [new_url]
+    # A discovered entry tracks the add-on: if the user deleted its URL in
+    # Reconfigure, the next add-on announcement restores it alongside any extras.
+    return [new_url, *existing]
+
+
 class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
     """Config flow handler."""
 
@@ -275,9 +293,10 @@ class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
         url = f"http://{config['host']}:{config['port']}{config.get('path', '/zones.json')}"
         self._discovery_url = url
         # Only the producer's address and token may be rewritten when it
-        # announces itself again: entities, consent and the download/exposure
-        # choices belong to the user.
+        # announces itself again: entities, consent, extra URLs and the
+        # download/exposure choices belong to the user.
         self._discovery_update = {
+            CONF_ADDON_URL: url,
             CONF_ZONES_URL: [url],
             CONF_ZONE_SOURCE_TOKEN: config["token"],
         }
@@ -296,10 +315,18 @@ class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
             f"{discovery_info.name or 'Polygonal Zones'} ({config['host']}:{config['port']})"
         )
 
-        await self.async_set_unique_id(f"addon_{discovery_info.slug}")
-        # The add-on re-posts on every start with a fresh token: update the one
-        # entry rather than adding a second, and let the reload pick it up.
+        unique_id = f"addon_{discovery_info.slug}"
+        existing_entry = await self.async_set_unique_id(unique_id, raise_on_progress=False)
+        if existing_entry is not None:
+            self._discovery_update[CONF_ZONES_URL] = _updated_zone_urls(existing_entry.data, url)
+        # The add-on re-posts on every start: update the configured entry, or
+        # abort any stale pending card (submitting an already-open dialog for it
+        # raises UnknownFlow) so confirming the active card uses the latest token.
         self._abort_if_unique_id_configured(updates=self._discovery_update)
+        for progress in self._async_in_progress(
+            include_uninitialized=True, match_context={"unique_id": unique_id}
+        ):
+            self.hass.config_entries.flow.async_abort(progress["flow_id"])
 
         # A hand-configured entry may already point at this add-on; a second
         # one would double the fetches and the entities.
@@ -404,11 +431,16 @@ class ConfigFlow(EntryConfigFlow, domain=DOMAIN):
                 errors[CONF_ENTITIES] = "own_entities"
             if not errors:
                 data = {k: v for k, v in user_input.items() if k != "consent"}
-                # The form cannot carry this: it is set by add-on discovery, and
-                # dropping it stops the token being sent to the app's hostname,
-                # so every later zone load would be refused with 403.
+                # The form cannot carry these: they are set by add-on discovery,
+                # and dropping them stops the token being sent to the app's URL.
                 if entry.data.get(CONF_DISCOVERED_BY_ADDON):
                     data[CONF_DISCOVERED_BY_ADDON] = True
+                if entry.data.get(CONF_ADDON_URL):
+                    data[CONF_ADDON_URL] = entry.data[CONF_ADDON_URL]
+                elif entry.data.get(CONF_DISCOVERED_BY_ADDON):
+                    old_urls = [u for u in (entry.data.get(CONF_ZONES_URL) or []) if u]
+                    if len(old_urls) == 1:
+                        data[CONF_ADDON_URL] = old_urls[0]
                 if adding_entities:
                     # New subject introduced — record a fresh attestation.
                     data[CONF_CONSENT_CONFIRMED_AT] = dt_util.utcnow().isoformat()
