@@ -9,7 +9,10 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from homeassistant.components.device_tracker import TrackerEntity
+from homeassistant.core import State
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.entity import Entity
 from homeassistant.util import dt as dt_util
 import pytest
 from shapely.geometry import Polygon
@@ -455,3 +458,33 @@ async def test_a_fix_without_an_accuracy_figure_still_resolves() -> None:
     assert entity._attr_location_name == "Home"
     assert entity.available is True
     entity.async_write_ha_state.assert_called_once()
+
+
+async def test_tracker_entity_write_ha_state_calculates_state_from_in_zones() -> None:
+    """Run the real TrackerEntity._async_write_ha_state and assert public state."""
+    entity = _make_entity(zones=[_HOME], home_zone_id="Home")
+    home_state = State("zone.home", "0", {"radius": 100.0})
+    entity.hass = _make_hass()
+    entity.hass.states.get = MagicMock(
+        side_effect=lambda eid: home_state if eid == "zone.home" else None
+    )
+
+    with patch.object(Entity, "_async_write_ha_state"):
+        # Before any resolution: in_zones is None and there are no coordinates.
+        TrackerEntity._async_write_ha_state(entity)
+        assert entity.state is None
+
+        # Match the configured home zone. Today the mirror still sets
+        # _attr_location_name; clear it here to exercise the base-class
+        # in_zones derivation that the mirror will rely on once location_name
+        # is removed.
+        await entity.update_location(latitude=0.5, longitude=0.5, gps_accuracy=10)
+        entity._attr_location_name = None
+        TrackerEntity._async_write_ha_state(entity)
+        assert entity.state == "home"
+
+        # Outside every zone: in_zones is [] -> not_home.
+        await entity.update_location(latitude=10.0, longitude=10.0, gps_accuracy=10)
+        entity._attr_location_name = None
+        TrackerEntity._async_write_ha_state(entity)
+        assert entity.state == "not_home"
