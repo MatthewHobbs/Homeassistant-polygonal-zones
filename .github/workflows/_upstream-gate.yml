@@ -17,6 +17,11 @@ on:
         required: false
         type: boolean
         default: false
+      ha_range:
+        description: "Optional override for the homeassistant specifier from requirements_test.txt"
+        required: false
+        type: string
+        default: ""
     outputs:
       changed:
         description: "true when this upstream fingerprint has not yet been recorded as passing"
@@ -50,7 +55,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m pip install --quiet --disable-pip-version-check packaging
-          fp=$(INCLUDE_PRERELEASES="${{ inputs.include_prereleases }}" python3 - <<'PY'
+          fp=$(INCLUDE_PRERELEASES="${{ inputs.include_prereleases }}" HA_RANGE="${{ inputs.ha_range }}" python3 - <<'PY'
           import json, os, urllib.request
           from packaging.requirements import Requirement
           from packaging.specifiers import SpecifierSet
@@ -95,7 +100,8 @@ jobs:
           # Option A: "dropping the is_prerelease filter for this one
           # query") - shapely is never beta-tested here.
           include_prereleases = os.environ.get("INCLUDE_PRERELEASES") == "true"
-          ha = latest("homeassistant", specs["homeassistant"], allow_prerelease=include_prereleases)
+          ha_spec = os.environ.get("HA_RANGE") or specs["homeassistant"]
+          ha = latest("homeassistant", ha_spec, allow_prerelease=include_prereleases)
           sh = latest("shapely", specs["shapely"])
           print(f"ha{ha}-sh{sh}")
           PY

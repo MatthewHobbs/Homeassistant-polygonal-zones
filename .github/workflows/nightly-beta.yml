@@ -32,6 +32,9 @@ jobs:
     with:
       cache_prefix: nightly-beta
       include_prereleases: true
+      # A cap here only hides the next major's beta, while the main CI keeps its
+      # cap so that Renovate's widening PR stays the gate on a new stable.
+      ha_range: ">=2026.9.1"
 
   pytest-beta:
     name: Pytest (HA beta)
