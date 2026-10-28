@@ -161,6 +161,7 @@ async def test_reconfigure_keeps_the_token_trust(hass: HomeAssistant) -> None:
         data=None,
     )
     assert result["type"] == FlowResultType.FORM
+    assert "consent" in {str(k) for k in result["data_schema"].schema}
     submitted = {
         key: value
         for key, value in entry.data.items()
@@ -169,6 +170,7 @@ async def test_reconfigure_keeps_the_token_trust(hass: HomeAssistant) -> None:
     submitted["entities"] = ["device_tracker.phone"]
     done = await hass.config_entries.flow.async_configure(result["flow_id"], submitted)
     assert done["type"] == FlowResultType.FORM  # the consent step
+    assert done["errors"] == {"consent": "consent_required"}
     done = await hass.config_entries.flow.async_configure(
         result["flow_id"], {**submitted, "consent": True}
     )
@@ -178,6 +180,24 @@ async def test_reconfigure_keeps_the_token_trust(hass: HomeAssistant) -> None:
     assert updated.data["discovered_by_addon"] is True
     assert updated.data["addon_url"] == "http://local-polygonal-zones:8000/zones.json"
     assert updated.data["entities"] == ["device_tracker.phone"]
+
+    # Adding another tracker with consent ticked on the first submit succeeds immediately.
+    second = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": "reconfigure", "entry_id": entry.entry_id},
+        data=None,
+    )
+    done = await hass.config_entries.flow.async_configure(
+        second["flow_id"],
+        {
+            **submitted,
+            "entities": ["device_tracker.phone", "device_tracker.tablet"],
+            "consent": True,
+        },
+    )
+    assert done["type"] == FlowResultType.ABORT
+    updated = hass.config_entries.async_get_entry(entry.entry_id)
+    assert updated.data["entities"] == ["device_tracker.phone", "device_tracker.tablet"]
 
 
 async def test_a_pending_discovery_card_is_replaced_when_the_addon_restarts(
