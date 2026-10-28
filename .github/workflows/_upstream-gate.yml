@@ -52,10 +52,13 @@ jobs:
 
       - name: Resolve upstream fingerprint (latest in-range homeassistant + shapely)
         id: fp
+        env:
+          INCLUDE_PRERELEASES: ${{ inputs.include_prereleases }}
+          HA_RANGE: ${{ inputs.ha_range }}
         run: |
           set -euo pipefail
           python3 -m pip install --quiet --disable-pip-version-check packaging
-          fp=$(INCLUDE_PRERELEASES="${{ inputs.include_prereleases }}" HA_RANGE="${{ inputs.ha_range }}" python3 - <<'PY'
+          fp=$(python3 - <<'PY'
           import json, os, urllib.request
           from packaging.requirements import Requirement
           from packaging.specifiers import SpecifierSet
