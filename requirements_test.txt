@@ -17,8 +17,8 @@
 homeassistant>=2026.9.1,<2027
 # The test tools are pinned exactly, so CI runs the versions Renovate has tested instead
 # of whatever PyPI serves that day. No --hash lines: Renovate here cannot regenerate them.
-mypy==2.4.0
-pytest==9.1.1
-pytest-asyncio==1.4.0
+mypy==2.4.1
+pytest==9.2.0
+pytest-asyncio==1.4.1
 pytest-cov==7.1.0
 shapely>=2.1.2,<3
