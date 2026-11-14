@@ -43,7 +43,7 @@ jobs:
       # The upstream action runs ghcr.io/home-assistant/hassfest with no tag, so a SHA
       # pin on it fixes nothing. Run the image by digest instead (its :latest on
       # 2026-10-22); bump the digest by hand when hassfest needs a newer rule set.
-      - uses: docker://ghcr.io/home-assistant/hassfest@sha256:fed7efe49609f5bd289a2ddfbae28fa49965882b4cf158eb88828f0c0674e41b
+      - uses: docker://ghcr.io/home-assistant/hassfest@sha256:c538e4a67a711292bd40a7d84e5fec254043dc78627d14a8dbd2aa053eb1cd6b
 
   hacs:
     name: HACS
