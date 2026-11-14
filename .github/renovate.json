@@ -43,6 +43,16 @@
       "enabled": false
     },
     {
+      "description": "node-version in the workflows (setup-node, for the pinned Prettier run) follows the Node major Home Assistant's own tooling uses, not the newest release. Bump it by hand when HA moves.",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchDepNames": [
+        "node"
+      ],
+      "enabled": false
+    },
+    {
       "description": "One PR for the Python test/tooling dependencies.",
       "matchManagers": [
         "pep621",
